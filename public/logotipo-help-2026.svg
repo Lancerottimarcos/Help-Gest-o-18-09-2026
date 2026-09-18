@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 110" width="380" height="110" fill="none">
+  <!-- Hand Icon (Left) -->
+  <g transform="translate(5, 4)">
+    <!-- Outer palm U-shape -->
+    <path 
+      d="M 14 34 L 14 74 C 14 96 34 102 54 102 C 74 102 94 96 94 74 L 94 60" 
+      stroke="#FAB518" 
+      stroke-width="10" 
+      stroke-linecap="round" 
+      stroke-linejoin="round" 
+    />
+    <!-- Inner Finger 1 -->
+    <line x1="34" y1="18" x2="34" y2="74" stroke="#FAB518" stroke-width="10" stroke-linecap="round" />
+    <!-- Inner Finger 2 (Tallest) -->
+    <line x1="54" y1="5" x2="54" y2="71" stroke="#FAB518" stroke-width="10" stroke-linecap="round" />
+    <!-- Inner Finger 3 -->
+    <line x1="74" y1="24" x2="74" y2="74" stroke="#FAB518" stroke-width="10" stroke-linecap="round" />
+  </g>
+
+  <!-- Wordmark 'Help' -->
+  <text x="122" y="78" font-family="'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif" font-size="76" font-weight="900" fill="#142142" letter-spacing="-2.5">Hel</text>
+
+  <!-- Custom 'p' with descender extending down beside 'ideias digitais' -->
+  <g transform="translate(262, 16)">
+    <circle cx="30" cy="40" r="23" fill="#142142" />
+    <circle cx="30" cy="40" r="12" fill="#ffffff" />
+    <rect x="0" y="8" width="13.5" height="90" fill="#142142" />
+  </g>
+
+  <!-- Subtitle 'ideias digitais' -->
+  <text x="123" y="99" font-family="'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif" font-size="18.5" font-weight="700" fill="#142142" letter-spacing="-0.2">ideias digitais</text>
+</svg>

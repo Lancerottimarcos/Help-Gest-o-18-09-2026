@@ -1,0 +1,604 @@
+@import "tailwindcss";
+
+@import url('https://fonts.cdnfonts.com/css/sofia-pro');
+
+/* Sofia Pro Font Family Declarations */
+@font-face {
+  font-family: 'Sofia Pro';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Sofia Pro Regular'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Regular Az.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Sofia Pro';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: local('Sofia Pro Medium'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Medium Az.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Sofia Pro';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Sofia Pro Semi Bold'), local('Sofia Pro SemiBold'), local('Sofia Pro-SemiBold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Semi Bold Az.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Sofia Pro';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Sofia Pro Bold'), local('Sofia Pro-Bold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Bold Az.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Sofia Pro';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: local('Sofia Pro Bold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Bold Az.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Sofia Pro';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: local('Sofia Pro Black'), local('Sofia Pro-Black'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Black Az.woff') format('woff');
+}
+
+/* Explicit Named Font-Family Aliases for Sofia Pro Regular, SemiBold, and Bold */
+@font-face {
+  font-family: 'Sofia Pro Regular';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Sofia Pro Regular'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Regular Az.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Sofia Pro SemiBold';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Sofia Pro Semi Bold'), local('Sofia Pro SemiBold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Semi Bold Az.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Sofia Pro SEmibold';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Sofia Pro Semi Bold'), local('Sofia Pro SemiBold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Semi Bold Az.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'Sofia Pro Bold';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Sofia Pro Bold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Bold Az.woff') format('woff');
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand-navy: #142142;
+  --color-brand-navy-light: #1D2E56;
+  --color-brand-navy-dark: #0A1224;
+  --color-brand-gold: #FAB518;
+  --color-brand-gold-warm: #E29F11;
+  --color-brand-gold-hover: #D6940A;
+  --color-brand-gold-light: #FEF7E8;
+  --color-brand-gray: #F2F2F2;
+  --color-brand-gray-dark: #E6E6E6;
+  --color-brand-text: #142142;
+  --font-sans: 'Sofia Pro', 'Sofia Pro Regular', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  --bg-app: #F4F5F8;
+  --surface-card: #FFFFFF;
+  --surface-card-hover: #FDFEFE;
+  --surface-subtle: #F8F9FB;
+  --border-subtle: rgba(226, 232, 240, 0.9);
+  --border-card-highlight: rgba(255, 255, 255, 0.85);
+  --color-navy-primary: #142142;
+  --color-gold-primary: #FAB518;
+  --shadow-elevation-1: 0 1px 3px rgba(20, 33, 66, 0.04), 0 1px 2px rgba(20, 33, 66, 0.03);
+  --shadow-elevation-2: 0 4px 14px -2px rgba(20, 33, 66, 0.06), 0 2px 6px -1px rgba(20, 33, 66, 0.04);
+}
+
+html.dark {
+  --bg-app: #080d1a;
+  --surface-card: #0f172a;
+  --surface-card-hover: #131c33;
+  --surface-subtle: #0b1325;
+  --border-subtle: #1c2942;
+  --border-card-highlight: rgba(255, 255, 255, 0.05);
+  --color-navy-primary: #f8fafc;
+  --color-gold-primary: #FAB518;
+  --shadow-elevation-1: 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-elevation-2: 0 8px 24px -4px rgba(0, 0, 0, 0.5);
+}
+
+*, ::before, ::after {
+  font-family: inherit;
+}
+
+html, body, button {
+  font-family: 'Sofia Pro', 'Sofia Pro Regular', var(--font-sans);
+}
+
+/* User requirement: Informações inseridas nos campos utilizam fonte Sofia Pro Regular */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select,
+input::placeholder,
+textarea::placeholder,
+.form-input-sofia-regular {
+  font-family: 'Sofia Pro Regular', 'Sofia Pro', var(--font-sans) !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+}
+
+body {
+  background-color: var(--bg-app);
+  color: #142142;
+  font-family: 'Sofia Pro', 'Sofia Pro Regular', var(--font-sans);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Subtle architectural dot canvas texture avoiding sterile AI flat white */
+.app-texture-canvas {
+  background-image: radial-gradient(rgba(20, 33, 66, 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+html.dark .app-texture-canvas {
+  background-image: radial-gradient(rgba(250, 181, 24, 0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Tabular mono figures for currency, codes and metrics */
+.tabular-numbers,
+.tabular-nums {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Explicit Sofia Pro Weights Utility Classes */
+.font-sofia {
+  font-family: 'Sofia Pro', var(--font-sans);
+}
+.font-sofia-regular {
+  font-family: 'Sofia Pro', 'Sofia Pro Regular', var(--font-sans);
+  font-weight: 400;
+}
+.font-sofia-semibold {
+  font-family: 'Sofia Pro', 'Sofia Pro SemiBold', var(--font-sans);
+  font-weight: 600;
+}
+.font-sofia-bold {
+  font-family: 'Sofia Pro', 'Sofia Pro Bold', var(--font-sans);
+  font-weight: 700;
+}
+
+/* Tactile motion buttons and cards */
+.card-elevation-subtle {
+  box-shadow: var(--shadow-elevation-1);
+  box-shadow: inset 0 1px 0 var(--border-card-highlight), var(--shadow-elevation-1);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.card-elevation-subtle:hover {
+  box-shadow: inset 0 1px 0 var(--border-card-highlight), var(--shadow-elevation-2);
+}
+
+/* Interactive button press response */
+button:active:not(:disabled),
+a:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+html.dark body {
+  background-color: #0b1325;
+  color: #f1f5f9;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(20, 33, 66, 0.15);
+  border-radius: 9999px;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(250, 181, 24, 0.25);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(20, 33, 66, 0.3);
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(250, 181, 24, 0.5);
+}
+
+/* High visibility horizontal scrollbar for Kanban */
+.kanban-scrollbar-x {
+  scrollbar-width: auto;
+  scrollbar-color: #fab518 #E2E8F0;
+}
+html.dark .kanban-scrollbar-x {
+  scrollbar-color: #fab518 #142142;
+}
+.kanban-scrollbar-x::-webkit-scrollbar {
+  height: 12px;
+}
+.kanban-scrollbar-x::-webkit-scrollbar-track {
+  background: #E2E8F0;
+  border-radius: 9999px;
+  margin: 0 4px;
+}
+html.dark .kanban-scrollbar-x::-webkit-scrollbar-track {
+  background: #142142;
+}
+.kanban-scrollbar-x::-webkit-scrollbar-thumb {
+  background: #fab518;
+  border-radius: 9999px;
+  border: 2px solid #E2E8F0;
+  box-shadow: 0 1px 3px rgba(250, 181, 24, 0.4);
+}
+html.dark .kanban-scrollbar-x::-webkit-scrollbar-thumb {
+  border-color: #142142;
+}
+.kanban-scrollbar-x::-webkit-scrollbar-thumb:hover {
+  background: #e29f11;
+}
+
+/* Vertical scrollbar for Kanban columns */
+.kanban-column-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #fab518 #E2E8F0;
+}
+html.dark .kanban-column-scrollbar {
+  scrollbar-color: #fab518 #1e293b;
+}
+.kanban-column-scrollbar::-webkit-scrollbar {
+  width: 7px;
+}
+.kanban-column-scrollbar::-webkit-scrollbar-track {
+  background: #E2E8F0;
+  border-radius: 9999px;
+  margin: 14px 0;
+}
+html.dark .kanban-column-scrollbar::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+.kanban-column-scrollbar::-webkit-scrollbar-thumb {
+  background: #fab518;
+  border-radius: 9999px;
+  border: 1.5px solid #E2E8F0;
+}
+html.dark .kanban-column-scrollbar::-webkit-scrollbar-thumb {
+  border-color: #1e293b;
+}
+.kanban-column-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #e29f11;
+}
+
+/* -------------------------------------------------------------
+   Refined Dark Mode Color Scheme
+   ------------------------------------------------------------- */
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background-color: #080d1a;
+  color: #f1f5f9;
+}
+
+/* Card surfaces & panels */
+html.dark .bg-white {
+  background-color: #0f172a;
+}
+
+html.dark .bg-\[\#F2F2F2\] {
+  background-color: #080d1a;
+}
+
+html.dark .bg-\[\#F8F9FA\] {
+  background-color: #0c1322;
+}
+
+html.dark .bg-slate-50 {
+  background-color: #131d33;
+}
+
+html.dark .bg-slate-100 {
+  background-color: #16223b;
+}
+
+html.dark .bg-slate-200,
+html.dark .bg-slate-200\/80 {
+  background-color: #1d2b48;
+}
+
+/* Subtle, crisp border hierarchy */
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-200\/60,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-200\/90 {
+  border-color: #1c2942;
+}
+
+html.dark .border-slate-300 {
+  border-color: #243555;
+}
+
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1c2942;
+}
+
+/* Typography contrast */
+html.dark .text-slate-900,
+html.dark .text-slate-800,
+html.dark .text-slate-700 {
+  color: #f1f5f9;
+}
+
+html.dark .text-slate-600 {
+  color: #cbd5e1;
+}
+
+html.dark .text-slate-500 {
+  color: #94a3b8;
+}
+
+html.dark .text-slate-400 {
+  color: #64748b;
+}
+
+/* Navy text to bright white, except inside brand gold */
+html.dark .text-\[\#142142\] {
+  color: #f8fafc;
+}
+
+/* Hover background states */
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-50\/80:hover {
+  background-color: #15223a !important;
+}
+
+html.dark .hover\:bg-slate-100:hover,
+html.dark .hover\:bg-slate-100\/90:hover {
+  background-color: #192744 !important;
+}
+
+html.dark .hover\:bg-slate-200\/60:hover {
+  background-color: #1d2c4c !important;
+}
+
+/* -------------------------------------------------------------
+   Luminous Status Badges & Chips (Dark Mode)
+   ------------------------------------------------------------- */
+/* Amber / Warning / Pending Approval */
+html.dark .bg-amber-50,
+html.dark .bg-yellow-50 {
+  background-color: rgba(245, 158, 11, 0.16) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+html.dark .text-amber-700,
+html.dark .text-amber-800,
+html.dark .text-amber-600,
+html.dark .text-yellow-700 {
+  color: #fbbf24 !important;
+}
+html.dark .border-amber-200,
+html.dark .border-amber-200\/60,
+html.dark .border-amber-200\/80 {
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+/* Emerald / Green / Active / Paid / Completed */
+html.dark .bg-emerald-50,
+html.dark .bg-green-50 {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+html.dark .text-emerald-700,
+html.dark .text-emerald-800,
+html.dark .text-emerald-600,
+html.dark .text-green-700 {
+  color: #34d399 !important;
+}
+html.dark .border-emerald-200,
+html.dark .border-emerald-200\/60,
+html.dark .border-emerald-100 {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+/* Blue / In Progress / Info */
+html.dark .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.16) !important;
+  color: #60a5fa !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+html.dark .text-blue-700,
+html.dark .text-blue-600 {
+  color: #60a5fa !important;
+}
+html.dark .border-blue-100,
+html.dark .border-blue-200 {
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+/* Rose / Red / Urgent */
+html.dark .bg-rose-50,
+html.dark .bg-red-50 {
+  background-color: rgba(244, 63, 94, 0.16) !important;
+  color: #fb7185 !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+html.dark .text-rose-700,
+html.dark .text-red-700,
+html.dark .text-rose-600,
+html.dark .text-red-600 {
+  color: #fb7185 !important;
+}
+html.dark .border-rose-200,
+html.dark .border-rose-200\/60,
+html.dark .border-red-200 {
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+
+/* Purple / Production */
+html.dark .bg-purple-50 {
+  background-color: rgba(168, 85, 247, 0.16) !important;
+  color: #c084fc !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+html.dark .text-purple-700,
+html.dark .text-purple-600 {
+  color: #c084fc !important;
+}
+html.dark .border-purple-200,
+html.dark .border-purple-100 {
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+
+/* Pink / Social Media */
+html.dark .bg-pink-50 {
+  background-color: rgba(236, 72, 153, 0.16) !important;
+  color: #f472b6 !important;
+  border-color: rgba(236, 72, 153, 0.35) !important;
+}
+html.dark .text-pink-700,
+html.dark .text-pink-600 {
+  color: #f472b6 !important;
+}
+
+/* -------------------------------------------------------------
+   Active Buttons & Primary Interactive Elements
+   ------------------------------------------------------------- */
+/* Active filter buttons / pills with #142142 turn into radiant Gold in dark mode */
+html.dark button.bg-\[\#142142\],
+html.dark a.bg-\[\#142142\],
+html.dark [role="button"].bg-\[\#142142\] {
+  background-color: #fab518 !important;
+  color: #0a1122 !important;
+  border-color: #fab518 !important;
+  box-shadow: 0 4px 14px rgba(250, 181, 24, 0.25) !important;
+}
+
+html.dark button.bg-\[\#142142\] *,
+html.dark a.bg-\[\#142142\] *,
+html.dark [role="button"].bg-\[\#142142\] * {
+  color: #0a1122 !important;
+}
+
+/* Keep gold buttons perfectly readable */
+html.dark .bg-\[\#fab518\],
+html.dark .bg-\[\#fab518\] * {
+  color: #0a1122 !important;
+}
+
+/* Subtle glow on gold hovers */
+html.dark .hover\:border-\[\#fab518\]:hover,
+html.dark .hover\:border-\[\#fab518\]\/70:hover {
+  border-color: #fab518 !important;
+  box-shadow: 0 0 16px rgba(250, 181, 24, 0.18) !important;
+}
+
+/* -------------------------------------------------------------
+   Kanban Columns & Cards
+   ------------------------------------------------------------- */
+html.dark [id^="kanban-column-"] {
+  background-color: #0c1426 !important;
+  border-color: #1a2742 !important;
+}
+
+html.dark [id^="demand-card-"] {
+  background-color: #121c33 !important;
+  border-color: #1c2b48 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+html.dark [id^="demand-card-"]:hover {
+  background-color: #162442 !important;
+  border-color: rgba(250, 181, 24, 0.7) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Drag over column */
+html.dark .bg-amber-50\/80 {
+  background-color: rgba(250, 181, 24, 0.12) !important;
+}
+
+/* -------------------------------------------------------------
+   Forms, Inputs, Textareas & Selects
+   ------------------------------------------------------------- */
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: #121d33 !important;
+  color: #f8fafc !important;
+  border-color: #223558 !important;
+}
+
+html.dark input:not([type="checkbox"]):not([type="radio"]):focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #fab518 !important;
+  box-shadow: 0 0 0 2px rgba(250, 181, 24, 0.25) !important;
+  background-color: #16243f !important;
+}
+
+html.dark select option {
+  background-color: #121d33;
+  color: #f8fafc;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* -------------------------------------------------------------
+   Tables
+   ------------------------------------------------------------- */
+html.dark thead {
+  background-color: #0b1325 !important;
+  border-color: #1c2942 !important;
+}
+
+html.dark thead th {
+  color: #94a3b8 !important;
+}
+
+html.dark tbody tr {
+  border-color: #17243c !important;
+}
+
+html.dark tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+
