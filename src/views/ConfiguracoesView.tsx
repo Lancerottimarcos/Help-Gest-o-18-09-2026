@@ -40,7 +40,7 @@ import { BrowserNotificationSettingsCard } from '../components/BrowserNotificati
 import { SupabaseConnectionTab } from '../components/SupabaseConnectionTab';
 import { useTwoFactor } from '../context/TwoFactorContext';
 import { BackupEnvelope } from '../utils/backupManager';
-import { DemandItem, Client, Service, BudgetProposal, Invoice } from '../types';
+import { DemandItem, Client, Service, BudgetProposal, Invoice, TeamMember, KanbanColumn } from '../types';
 import { SUPABASE_SQL_SCHEMA } from '../services/supabaseService';
 
 export interface ConfiguracoesViewProps {
@@ -50,7 +50,17 @@ export interface ConfiguracoesViewProps {
   services?: Service[];
   proposals?: BudgetProposal[];
   invoices?: Invoice[];
-  onSyncSupabaseData?: (demands: DemandItem[], clients: Client[]) => void;
+  teamMembers?: TeamMember[];
+  kanbanColumns?: KanbanColumn[];
+  onSyncSupabaseData?: (
+    demands: DemandItem[], 
+    clients: Client[],
+    services?: Service[],
+    proposals?: BudgetProposal[],
+    invoices?: Invoice[],
+    teamMembers?: TeamMember[],
+    kanbanColumns?: KanbanColumn[]
+  ) => void;
 }
 
 export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ 
@@ -60,6 +70,8 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
   services = [],
   proposals = [],
   invoices = [],
+  teamMembers = [],
+  kanbanColumns = [],
   onSyncSupabaseData
 }) => {
   const { request2Fa } = useTwoFactor();
@@ -386,6 +398,8 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
           services={services}
           proposals={proposals}
           invoices={invoices}
+          teamMembers={teamMembers}
+          kanbanColumns={kanbanColumns}
           onDataImported={onSyncSupabaseData}
         />
       ) : activeTab === 'auditoria' ? (

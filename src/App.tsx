@@ -168,12 +168,22 @@ export function Layout({ children, onLogout }: LayoutProps) {
     if (!isSilent) setSupabaseSyncStatus('syncing');
 
     try {
-      const [remoteDemands, remoteClients, remoteServices, remoteProposals, remoteInvoices] = await Promise.all([
+      const [
+        remoteDemands, 
+        remoteClients, 
+        remoteServices, 
+        remoteProposals, 
+        remoteInvoices,
+        remoteTeamMembers,
+        remoteColumns
+      ] = await Promise.all([
         supabaseService.fetchDemands(),
         supabaseService.fetchClients(),
         supabaseService.fetchServices(),
         supabaseService.fetchProposals(),
         supabaseService.fetchInvoices(),
+        supabaseService.fetchTeamMembers(),
+        supabaseService.fetchKanbanColumns(),
       ]);
 
       // Se o Supabase tiver clientes cadastrados na nuvem, atualiza imediatamente a visualização
@@ -216,6 +226,22 @@ export function Layout({ children, onLogout }: LayoutProps) {
         setInvoices(remoteInvoices);
         try {
           localStorage.setItem('agency_invoices', JSON.stringify(remoteInvoices));
+        } catch {}
+      }
+
+      // Se o Supabase tiver membros da equipe (CEO, colaboradores)
+      if (remoteTeamMembers && Array.isArray(remoteTeamMembers) && remoteTeamMembers.length > 0) {
+        setTeamMembers(remoteTeamMembers);
+        try {
+          localStorage.setItem('agency_team_members', JSON.stringify(remoteTeamMembers));
+        } catch {}
+      }
+
+      // Se o Supabase tiver colunas do kanban personalizadas
+      if (remoteColumns && Array.isArray(remoteColumns) && remoteColumns.length > 0) {
+        setKanbanColumns(remoteColumns);
+        try {
+          localStorage.setItem('agency_kanban_columns', JSON.stringify(remoteColumns));
         } catch {}
       }
 
@@ -415,6 +441,9 @@ export function Layout({ children, onLogout }: LayoutProps) {
       } catch {}
       return updated;
     });
+    if (supabaseService.isConfigured()) {
+      supabaseService.upsertKanbanColumn(newCol);
+    }
   };
 
   const handleUpdateColumn = (updatedCol: KanbanColumn) => {
@@ -425,6 +454,9 @@ export function Layout({ children, onLogout }: LayoutProps) {
       } catch {}
       return updated;
     });
+    if (supabaseService.isConfigured()) {
+      supabaseService.upsertKanbanColumn(updatedCol);
+    }
   };
 
   const handleDeleteColumn = (colId: string) => {
@@ -435,6 +467,9 @@ export function Layout({ children, onLogout }: LayoutProps) {
       } catch {}
       return updated;
     });
+    if (supabaseService.isConfigured()) {
+      supabaseService.deleteKanbanColumn(colId);
+    }
     // Move any demands in this deleted column to 'ideias'
     setDemands((prev) =>
       prev.map((d) => (d.columnId === colId ? { ...d, columnId: 'ideias' } : d))
@@ -914,6 +949,9 @@ export function Layout({ children, onLogout }: LayoutProps) {
       } catch {}
       return updated;
     });
+    if (supabaseService.isConfigured()) {
+      supabaseService.upsertTeamMember(newMember);
+    }
   };
 
   const handleUpdateTeamMember = (updatedMember: TeamMember) => {
@@ -924,6 +962,9 @@ export function Layout({ children, onLogout }: LayoutProps) {
       } catch {}
       return updated;
     });
+    if (supabaseService.isConfigured()) {
+      supabaseService.upsertTeamMember(updatedMember);
+    }
   };
 
   const handleDeleteTeamMember = (memberId: string) => {
@@ -934,6 +975,9 @@ export function Layout({ children, onLogout }: LayoutProps) {
       } catch {}
       return updated;
     });
+    if (supabaseService.isConfigured()) {
+      supabaseService.deleteTeamMember(memberId);
+    }
   };
 
   const renderCurrentView = () => {
@@ -1055,9 +1099,24 @@ export function Layout({ children, onLogout }: LayoutProps) {
             services={services}
             proposals={proposals}
             invoices={invoices}
-            onSyncSupabaseData={(newDemands, newClients) => {
+            teamMembers={teamMembers}
+            kanbanColumns={kanbanColumns}
+            onSyncSupabaseData={(
+              newDemands, 
+              newClients, 
+              newServices, 
+              newProposals, 
+              newInvoices, 
+              newTeamMembers, 
+              newColumns
+            ) => {
               if (newDemands && newDemands.length > 0) setDemands(newDemands);
               if (newClients && newClients.length > 0) setClients(newClients);
+              if (newServices && newServices.length > 0) setServices(newServices);
+              if (newProposals && newProposals.length > 0) setProposals(newProposals);
+              if (newInvoices && newInvoices.length > 0) setInvoices(newInvoices);
+              if (newTeamMembers && newTeamMembers.length > 0) setTeamMembers(newTeamMembers);
+              if (newColumns && newColumns.length > 0) setKanbanColumns(newColumns);
             }}
           />
         );

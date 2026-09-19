@@ -38,7 +38,7 @@ import {
   SUPABASE_SQL_SCHEMA, 
   SUPABASE_MIGRATION_SQL 
 } from '../services/supabaseService';
-import { DemandItem, Client, Service, BudgetProposal, Invoice } from '../types';
+import { DemandItem, Client, Service, BudgetProposal, Invoice, TeamMember, KanbanColumn } from '../types';
 
 interface SupabaseConnectionTabProps {
   demands?: DemandItem[];
@@ -46,7 +46,17 @@ interface SupabaseConnectionTabProps {
   services?: Service[];
   proposals?: BudgetProposal[];
   invoices?: Invoice[];
-  onDataImported?: (demands: DemandItem[], clients: Client[]) => void;
+  teamMembers?: TeamMember[];
+  kanbanColumns?: KanbanColumn[];
+  onDataImported?: (
+    demands: DemandItem[], 
+    clients: Client[],
+    services?: Service[],
+    proposals?: BudgetProposal[],
+    invoices?: Invoice[],
+    teamMembers?: TeamMember[],
+    kanbanColumns?: KanbanColumn[]
+  ) => void;
 }
 
 interface SyncFeedbackState {
@@ -62,6 +72,8 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
   services = [],
   proposals = [],
   invoices = [],
+  teamMembers = [],
+  kanbanColumns = [],
   onDataImported
 }) => {
   const [url, setUrl] = useState(() => getSupabaseUrl());
@@ -153,6 +165,30 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
     } catch {}
     return [];
   }, [invoices]);
+
+  const effectiveTeamMembers = useMemo(() => {
+    if (teamMembers && teamMembers.length > 0) return teamMembers;
+    try {
+      const saved = localStorage.getItem('agency_team_members');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  }, [teamMembers]);
+
+  const effectiveKanbanColumns = useMemo(() => {
+    if (kanbanColumns && kanbanColumns.length > 0) return kanbanColumns;
+    try {
+      const saved = localStorage.getItem('agency_kanban_columns');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  }, [kanbanColumns]);
 
   const handleSave = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -285,7 +321,9 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
         cleanKey,
         effectiveServices,
         effectiveProposals,
-        effectiveInvoices
+        effectiveInvoices,
+        effectiveTeamMembers,
+        effectiveKanbanColumns
       );
 
       if (result.errors.length > 0) {
@@ -302,11 +340,18 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
           action: isTableMissing ? 'copy-sql' : isColumnMissing ? 'copy-migration-sql' : 'none',
         });
       } else {
-        const totalItems = result.clientsUploaded + result.demandsUploaded + result.servicesUploaded + result.proposalsUploaded + result.invoicesUploaded;
+        const totalItems = 
+          result.clientsUploaded + 
+          result.demandsUploaded + 
+          result.servicesUploaded + 
+          result.proposalsUploaded + 
+          result.invoicesUploaded +
+          result.teamMembersUploaded +
+          result.kanbanColumnsUploaded;
         setSyncFeedback({
           type: 'success',
-          title: 'Migração Concluída com Sucesso!',
-          message: `${totalItems} registros sincronizados no banco Supabase: ${result.clientsUploaded} clientes, ${result.demandsUploaded} demandas, ${result.servicesUploaded} serviços, ${result.proposalsUploaded} orçamentos e ${result.invoicesUploaded} faturas.`,
+          title: 'Sincronização Completa Concluída com Sucesso!',
+          message: `${totalItems} registros sincronizados no banco Supabase: ${result.clientsUploaded} clientes, ${result.demandsUploaded} demandas, ${result.teamMembersUploaded} colaboradores da equipe, ${result.servicesUploaded} serviços, ${result.proposalsUploaded} orçamentos e ${result.invoicesUploaded} faturas.`,
         });
       }
     } catch (e: any) {
@@ -344,19 +389,49 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
     });
 
     try {
-      const [remoteDemands, remoteClients] = await Promise.all([
+      const [
+        remoteDemands, 
+        remoteClients,
+        remoteServices,
+        remoteProposals,
+        remoteInvoices,
+        remoteTeamMembers,
+        remoteColumns
+      ] = await Promise.all([
         supabaseService.fetchDemands(),
         supabaseService.fetchClients(),
+        supabaseService.fetchServices(),
+        supabaseService.fetchProposals(),
+        supabaseService.fetchInvoices(),
+        supabaseService.fetchTeamMembers(),
+        supabaseService.fetchKanbanColumns(),
       ]);
 
-      if (remoteDemands !== null && remoteClients !== null) {
+      if (remoteDemands !== null || remoteClients !== null) {
         if (onDataImported) {
-          onDataImported(remoteDemands, remoteClients);
+          onDataImported(
+            remoteDemands || [], 
+            remoteClients || [],
+            remoteServices || undefined,
+            remoteProposals || undefined,
+            remoteInvoices || undefined,
+            remoteTeamMembers || undefined,
+            remoteColumns || undefined
+          );
         }
+        const totalItems = 
+          (remoteClients?.length || 0) + 
+          (remoteDemands?.length || 0) + 
+          (remoteServices?.length || 0) + 
+          (remoteProposals?.length || 0) + 
+          (remoteInvoices?.length || 0) +
+          (remoteTeamMembers?.length || 0) +
+          (remoteColumns?.length || 0);
+
         setSyncFeedback({
           type: 'success',
           title: 'Download Realizado com Sucesso!',
-          message: `Carregadas ${remoteDemands.length} demandas e ${remoteClients.length} clientes diretamente do Supabase PostgreSQL.`,
+          message: `${totalItems} registros carregados diretamente do Supabase: ${remoteClients?.length || 0} clientes, ${remoteDemands?.length || 0} demandas, ${remoteTeamMembers?.length || 0} colaboradores, ${remoteServices?.length || 0} serviços, ${remoteProposals?.length || 0} orçamentos e ${remoteInvoices?.length || 0} faturas.`,
         });
       } else {
         setSyncFeedback({
@@ -719,24 +794,48 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
                 <span>Registros Prontos para Nuvem:</span>
                 <span className="text-[10px] text-slate-400 font-normal">Armazenamento Local</span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-center">
-                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                  <div className="text-lg font-black text-[#142142] dark:text-[#fab518]">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                  <div className="text-base font-black text-[#142142] dark:text-[#fab518]">
                     {effectiveClients.length}
                   </div>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase">Clientes</div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase">Clientes</div>
                 </div>
-                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                  <div className="text-lg font-black text-[#142142] dark:text-[#fab518]">
+                <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                  <div className="text-base font-black text-[#142142] dark:text-[#fab518]">
                     {effectiveDemands.length}
                   </div>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase">Demandas</div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase">Demandas</div>
+                </div>
+                <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                  <div className="text-base font-black text-[#142142] dark:text-[#fab518]">
+                    {effectiveTeamMembers.length}
+                  </div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase">Equipe (CEO)</div>
+                </div>
+                <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                  <div className="text-base font-black text-[#142142] dark:text-[#fab518]">
+                    {effectiveServices.length}
+                  </div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase">Serviços</div>
+                </div>
+                <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                  <div className="text-base font-black text-[#142142] dark:text-[#fab518]">
+                    {effectiveProposals.length}
+                  </div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase">Orçamentos</div>
+                </div>
+                <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                  <div className="text-base font-black text-[#142142] dark:text-[#fab518]">
+                    {effectiveInvoices.length}
+                  </div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase">Faturas</div>
                 </div>
               </div>
             </div>
 
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Clique no botão abaixo para migrar os dados do Help Ideias diretamente para as tabelas PostgreSQL do seu Supabase.
+              Clique no botão abaixo para sincronizar todo o ecossistema do Help Ideias (clientes, demandas, equipe com cargo de CEO, serviços, faturas e colunas) diretamente no PostgreSQL do Supabase.
             </p>
           </div>
 
@@ -750,7 +849,7 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
               className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#fab518] via-amber-400 to-amber-500 hover:opacity-95 text-[#142142] font-black text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 active:scale-98"
             >
               <CloudUpload size={18} className={isSyncing ? 'animate-bounce text-[#142142]' : ''} />
-              <span>{isSyncing ? 'Gravando no Supabase...' : 'Migrar Dados Locais p/ Supabase'}</span>
+              <span>{isSyncing ? 'Gravando no Supabase...' : 'Sincronizar Todo o Sistema p/ Supabase'}</span>
             </button>
 
             {/* Puxar do Banco */}

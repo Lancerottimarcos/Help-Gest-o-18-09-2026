@@ -361,6 +361,39 @@ export const Header: React.FC<HeaderProps> = ({
           />
         </div>
 
+        {/* Supabase Cloud Status & Sync Trigger */}
+        <button
+          type="button"
+          id="btn-header-supabase-sync"
+          onClick={() => {
+            if (onRefreshSupabase) {
+              onRefreshSupabase();
+            } else if (onNavigate) {
+              onNavigate('configuracoes');
+            }
+          }}
+          title={
+            supabaseSyncStatus === 'syncing'
+              ? 'Sincronizando com Supabase...'
+              : isSupabaseOnline
+              ? 'Conectado ao Supabase PostgreSQL (Clique para sincronizar agora)'
+              : 'Supabase Offline ou Não Conectado (Clique para configurar)'
+          }
+          className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+            supabaseSyncStatus === 'syncing'
+              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+              : isSupabaseOnline
+              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-800 dark:hover:text-slate-200'
+          }`}
+        >
+          <Database size={13} className={supabaseSyncStatus === 'syncing' ? 'animate-spin' : isSupabaseOnline ? 'text-emerald-500' : ''} />
+          <span className="text-[11px] font-semibold">
+            {supabaseSyncStatus === 'syncing' ? 'Sincronizando...' : isSupabaseOnline ? 'Supabase Nuvem' : 'Supabase'}
+          </span>
+          <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+        </button>
+
         {/* Theme Toggle Button (Light/Dark Mode) */}
         <ThemeToggle variant="icon" />
 

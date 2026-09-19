@@ -25,6 +25,8 @@ export interface SyncResult {
   servicesUploaded: number;
   proposalsUploaded: number;
   invoicesUploaded: number;
+  teamMembersUploaded: number;
+  kanbanColumnsUploaded: number;
   errors: string[];
 }
 
@@ -84,7 +86,16 @@ ALTER TABLE public.demands ADD COLUMN IF NOT EXISTS client_id TEXT;
 ALTER TABLE public.demands ADD COLUMN IF NOT EXISTS client_project TEXT;
 ALTER TABLE public.demands ADD COLUMN IF NOT EXISTS service_category TEXT DEFAULT 'Social Media';
 
--- 3. Notificar o PostgREST para recarregar o cache de schema imediatamente
+-- 3. Novas colunas na tabela de equipe (team_members)
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS function_role TEXT;
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS password TEXT;
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS created_by TEXT;
+
+-- 4. Novas colunas na tabela de colunas kanban
+ALTER TABLE public.kanban_columns ADD COLUMN IF NOT EXISTS position_order INTEGER DEFAULT 0;
+
+-- 5. Notificar o PostgREST para recarregar o cache de schema imediatamente
 NOTIFY pgrst, 'reload schema';
 `;
 
@@ -336,13 +347,23 @@ CREATE TABLE IF NOT EXISTS public.team_members (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     role TEXT NOT NULL,
+    function_role TEXT,
     email TEXT NOT NULL,
     avatar TEXT,
     active_tasks INTEGER DEFAULT 0,
     status TEXT DEFAULT 'Disponível',
     specialties JSONB DEFAULT '[]'::jsonb,
+    username TEXT,
+    password TEXT,
+    created_by TEXT,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Assegura adição de novas colunas em team_members
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS function_role TEXT;
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS password TEXT;
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS created_by TEXT;
 
 -- --------------------------------------------------------------------
 -- 9. CONFIGURAÇÃO DE SEGURANÇA: ROW LEVEL SECURITY (RLS)
@@ -877,7 +898,141 @@ export const supabaseService = {
   },
 
   // ==================================================================
-  // MIGRAÇÃO E SINCRONIZAÇÃO COMPLETA
+  // MEMBROS DA EQUIPE
+  // ==================================================================
+  async fetchTeamMembers(): Promise<TeamMember[] | null> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.warn('Erro ao buscar membros no Supabase:', error);
+        return null;
+      }
+
+      return (data || []).map((row: any): TeamMember => ({
+        id: row.id,
+        name: row.name,
+        role: row.role,
+        functionRole: row.function_role || row.role,
+        email: row.email,
+        avatar: row.avatar || '',
+        activeTasks: Number(row.active_tasks) || 0,
+        status: (row.status as any) || 'Disponível',
+        specialties: Array.isArray(row.specialties) ? row.specialties : [],
+        username: row.username || undefined,
+        password: row.password || undefined,
+        createdBy: row.created_by || undefined,
+        createdAt: row.created_at || undefined,
+      }));
+    } catch {
+      return null;
+    }
+  },
+
+  async upsertTeamMember(member: TeamMember): Promise<boolean> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return false;
+
+    try {
+      const payload = {
+        id: member.id,
+        name: member.name,
+        role: member.role,
+        function_role: member.functionRole || member.role,
+        email: member.email,
+        avatar: member.avatar || '',
+        active_tasks: member.activeTasks || 0,
+        status: member.status || 'Disponível',
+        specialties: member.specialties || [],
+        username: member.username || null,
+        password: member.password || null,
+        created_by: member.createdBy || null,
+      };
+      const { error } = await resilientSupabaseUpsert(supabase, 'team_members', payload);
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  async deleteTeamMember(id: string): Promise<boolean> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return false;
+    try {
+      const { error } = await supabase.from('team_members').delete().eq('id', id);
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  // ==================================================================
+  // COLUNAS DO KANBAN
+  // ==================================================================
+  async fetchKanbanColumns(): Promise<KanbanColumn[] | null> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('kanban_columns')
+        .select('*')
+        .order('position_order', { ascending: true });
+
+      if (error) return null;
+
+      return (data || []).map((row: any): KanbanColumn => ({
+        id: row.id,
+        title: row.title,
+        count: 0,
+        color: row.color,
+        buttonBg: row.button_bg,
+        isCustom: Boolean(row.is_custom),
+      }));
+    } catch {
+      return null;
+    }
+  },
+
+  async upsertKanbanColumn(column: KanbanColumn, positionOrder = 0): Promise<boolean> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return false;
+
+    try {
+      const payload = {
+        id: column.id,
+        title: column.title,
+        color: column.color,
+        button_bg: column.buttonBg,
+        is_custom: Boolean(column.isCustom),
+        position_order: positionOrder,
+      };
+      const { error } = await resilientSupabaseUpsert(supabase, 'kanban_columns', payload);
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  async deleteKanbanColumn(id: string): Promise<boolean> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return false;
+    try {
+      const { error } = await supabase.from('kanban_columns').delete().eq('id', id);
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  // ==================================================================
+  // MIGRAÇÃO E SINCRONIZAÇÃO COMPLETA DE TODO O SISTEMA
   // ==================================================================
   async syncAllLocalDataToSupabase(
     demands: DemandItem[], 
@@ -886,15 +1041,19 @@ export const supabaseService = {
     customKey?: string,
     services?: Service[],
     proposals?: BudgetProposal[],
-    invoices?: Invoice[]
+    invoices?: Invoice[],
+    teamMembers?: TeamMember[],
+    kanbanColumns?: KanbanColumn[]
   ): Promise<SyncResult> {
     const supabase = getSupabaseClient(customUrl, customKey);
     const result: SyncResult = { 
       clientsUploaded: 0, 
       demandsUploaded: 0, 
-      servicesUploaded: 0,
-      proposalsUploaded: 0,
-      invoicesUploaded: 0,
+      servicesUploaded: 0, 
+      proposalsUploaded: 0, 
+      invoicesUploaded: 0, 
+      teamMembersUploaded: 0,
+      kanbanColumnsUploaded: 0,
       errors: [] 
     };
 
@@ -1000,7 +1159,7 @@ export const supabaseService = {
       }
     }
 
-    // 3. Serviços (opcional)
+    // 3. Serviços (catálogo)
     if (services && services.length > 0) {
       try {
         const servicePayloads = services.map(s => ({
@@ -1019,7 +1178,7 @@ export const supabaseService = {
       } catch {}
     }
 
-    // 4. Propostas (opcional)
+    // 4. Propostas e Orçamentos
     if (proposals && proposals.length > 0) {
       try {
         const proposalPayloads = proposals.map(p => ({
@@ -1038,7 +1197,7 @@ export const supabaseService = {
       } catch {}
     }
 
-    // 5. Faturas (opcional)
+    // 5. Faturas (Financeiro)
     if (invoices && invoices.length > 0) {
       try {
         const invoicePayloads = invoices.map(i => ({
@@ -1058,7 +1217,65 @@ export const supabaseService = {
       } catch {}
     }
 
+    // 6. Membros da Equipe (incluindo CEO e colaboradores)
+    if (teamMembers && teamMembers.length > 0) {
+      try {
+        const teamPayloads = teamMembers.map(m => ({
+          id: m.id,
+          name: m.name,
+          role: m.role,
+          function_role: m.functionRole || m.role,
+          email: m.email,
+          avatar: m.avatar || '',
+          active_tasks: m.activeTasks || 0,
+          status: m.status || 'Disponível',
+          specialties: m.specialties || [],
+          username: m.username || null,
+          password: m.password || null,
+          created_by: m.createdBy || null,
+        }));
+        const { error } = await resilientSupabaseUpsert(supabase, 'team_members', teamPayloads);
+        if (error) {
+          result.errors.push(`Erro na tabela team_members: ${error.message}`);
+        } else {
+          result.teamMembersUploaded = teamMembers.length;
+        }
+      } catch (err: any) {
+        result.errors.push(`Falha no upload de equipe: ${err.message}`);
+      }
+    }
+
+    // 7. Colunas do Kanban
+    if (kanbanColumns && kanbanColumns.length > 0) {
+      try {
+        const columnPayloads = kanbanColumns.map((col, idx) => ({
+          id: col.id,
+          title: col.title,
+          color: col.color,
+          button_bg: col.buttonBg,
+          is_custom: Boolean(col.isCustom),
+          position_order: idx + 1,
+        }));
+        const { error } = await resilientSupabaseUpsert(supabase, 'kanban_columns', columnPayloads);
+        if (!error) result.kanbanColumnsUploaded = kanbanColumns.length;
+      } catch {}
+    }
+
     return result;
+  },
+
+  async syncCompleteSystem(payload: FullSyncPayload, customUrl?: string, customKey?: string): Promise<SyncResult> {
+    return this.syncAllLocalDataToSupabase(
+      payload.demands || [],
+      payload.clients || [],
+      customUrl,
+      customKey,
+      payload.services || [],
+      payload.proposals || [],
+      payload.invoices || [],
+      payload.teamMembers || [],
+      payload.kanbanColumns || []
+    );
   },
 
   /**

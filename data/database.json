@@ -146,30 +146,6 @@
   ],
   "demands": [
     {
-      "id": "demand-piloto-6670",
-      "title": "Campanha Inaugural - Presença Digital",
-      "client": "Help Ideias - Cliente Demonstração",
-      "clientProject": "Lançamento Institucional",
-      "description": "Demanda de validação conectada com sucesso ao banco PostgreSQL Supabase.",
-      "type": "Campanha",
-      "serviceCategory": "Social Media",
-      "columnId": "producao",
-      "priority": "alta",
-      "priorityBars": 3,
-      "dueDate": "Próxima semana",
-      "assignee": {
-        "name": "Marcos Lancerotti",
-        "avatar": ""
-      },
-      "statusLabel": "Em Produção",
-      "checklistTotal": 0,
-      "checklistCompleted": 0,
-      "commentsCount": 0,
-      "attachmentsCount": 0,
-      "whatsappNotified": false,
-      "attachments": []
-    },
-    {
       "id": "demand-piloto-2759",
       "title": "teste",
       "client": "Help Ideias - Cliente Demonstração",
@@ -211,5 +187,5 @@
   ],
   "proposals": [],
   "invoices": [],
-  "updatedAt": 1789832838126
+  "updatedAt": 1789835807073
 }
