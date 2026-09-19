@@ -1,6 +1,9 @@
 // Security Protocols & Real-Time Cyber Defense Engine
 // Help Ideias Digitais - Anti-Intrusion, Antivirus, and Malware Prevention Layer
 
+import { TeamMember } from '../types';
+import { initialTeamMembers } from '../data/mockData';
+
 export interface SecurityLogEntry {
   id: string;
   timestamp: string;
@@ -932,33 +935,109 @@ export async function computeSha256(text: string): Promise<string> {
   return 'hash_' + Math.abs(hash).toString(16);
 }
 
+export interface AuthenticatedUserPayload {
+  username: string;
+  name: string;
+  email: string;
+  role: 'proprietario' | 'colaborador';
+  roleLabel: string;
+  avatarUrl?: string;
+  isMaster: boolean;
+}
+
 export async function validateMasterCredentials(
   userInput: string,
   passInput: string
-): Promise<{ isValid: boolean; usernameMatched: boolean; passwordMatched: boolean }> {
-  const cleanUser = (userInput || '').trim().toLowerCase();
-  const usernameMatched = cleanUser === 'lancerotti' || cleanUser === 'lancerottirmarcos@gmail.com';
+): Promise<{ 
+  isValid: boolean; 
+  usernameMatched: boolean; 
+  passwordMatched: boolean;
+  authenticatedUser?: AuthenticatedUserPayload;
+}> {
+  const cleanUser = (userInput || '').trim().toLowerCase().replace(/^@/, '');
+  const isMarcosUser = cleanUser === 'lancerotti' || 
+                       cleanUser === 'lancerottirmarcos@gmail.com' || 
+                       cleanUser === 'marcos' || 
+                       cleanUser === 'marcos lancerotti';
 
-  if (!usernameMatched) {
-    return { isValid: false, usernameMatched: false, passwordMatched: false };
+  // 1. Verificação da Conta Mestra (Marcos Lancerotti)
+  if (isMarcosUser) {
+    const savedHash = localStorage.getItem(STORAGE_PASSWORD_HASH_KEY);
+    const inputHash = await computeSha256(passInput);
+
+    let passwordMatched = false;
+    if (savedHash) {
+      passwordMatched = inputHash === savedHash;
+    } else {
+      // Default password check
+      const defaultHash = await computeSha256(DEFAULT_RAW_PASSWORD);
+      passwordMatched = inputHash === defaultHash || passInput === DEFAULT_RAW_PASSWORD;
+    }
+
+    return {
+      isValid: passwordMatched,
+      usernameMatched: true,
+      passwordMatched,
+      authenticatedUser: passwordMatched ? {
+        username: 'lancerotti',
+        name: 'Marcos Lancerotti',
+        email: 'lancerottirmarcos@gmail.com',
+        role: 'proprietario',
+        roleLabel: 'Proprietário da Agência',
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        isMaster: true,
+      } : undefined
+    };
   }
 
-  const savedHash = localStorage.getItem(STORAGE_PASSWORD_HASH_KEY);
-  const inputHash = await computeSha256(passInput);
+  // 2. Verificação de Colaborador cadastrado na página de equipe
+  try {
+    let team: TeamMember[] = initialTeamMembers;
+    const storedTeam = localStorage.getItem('agency_team_members');
+    if (storedTeam) {
+      const parsed = JSON.parse(storedTeam);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        team = parsed;
+      }
+    }
 
-  let passwordMatched = false;
-  if (savedHash) {
-    passwordMatched = inputHash === savedHash;
-  } else {
-    // Default password check
-    const defaultHash = await computeSha256(DEFAULT_RAW_PASSWORD);
-    passwordMatched = inputHash === defaultHash || passInput === DEFAULT_RAW_PASSWORD;
+    const matchedMember = team.find((m) => {
+      const mUser = (m.username || '').trim().toLowerCase().replace(/^@/, '');
+      const mEmail = (m.email || '').trim().toLowerCase();
+      const mName = (m.name || '').trim().toLowerCase();
+      return (mUser && mUser === cleanUser) || (mEmail && mEmail === cleanUser) || (mName === cleanUser);
+    });
+
+    if (matchedMember) {
+      const inputHash = await computeSha256(passInput);
+      const configuredPassword = matchedMember.password || '123456';
+      const passwordMatched = passInput === configuredPassword || 
+                              inputHash === configuredPassword ||
+                              (configuredPassword === '123456' && passInput === '123456');
+
+      return {
+        isValid: passwordMatched,
+        usernameMatched: true,
+        passwordMatched,
+        authenticatedUser: passwordMatched ? {
+          username: matchedMember.username || matchedMember.email.split('@')[0],
+          name: matchedMember.name,
+          email: matchedMember.email,
+          role: 'colaborador',
+          roleLabel: matchedMember.role || 'Colaborador',
+          avatarUrl: matchedMember.avatar,
+          isMaster: false,
+        } : undefined
+      };
+    }
+  } catch (err) {
+    console.error('Erro na validação de credencial de colaborador:', err);
   }
 
   return {
-    isValid: usernameMatched && passwordMatched,
-    usernameMatched,
-    passwordMatched,
+    isValid: false,
+    usernameMatched: false,
+    passwordMatched: false,
   };
 }
 

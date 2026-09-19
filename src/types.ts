@@ -170,15 +170,42 @@ export interface BudgetProposal {
   servicesCount: number;
 }
 
+export type TeamMemberRole = 
+  | 'CEO'
+  | 'Gestor de tráfego'
+  | 'Social media'
+  | 'Design'
+  | 'Contador'
+  | 'Vendedor'
+  | 'Desenvolvedor web'
+  | string;
+
+export const TEAM_FUNCTION_OPTIONS = [
+  'CEO',
+  'Gestor de tráfego',
+  'Social media',
+  'Design',
+  'Contador',
+  'Vendedor',
+  'Desenvolvedor web',
+] as const;
+
+export type TeamFunctionOption = typeof TEAM_FUNCTION_OPTIONS[number];
+
 export interface TeamMember {
   id: string;
   name: string;
   role: string;
+  functionRole?: TeamFunctionOption | string;
   email: string;
   avatar: string;
   activeTasks: number;
   status: 'Disponível' | 'Ocupado' | 'Férias';
   specialties: string[];
+  username?: string;
+  password?: string;
+  createdAt?: string;
+  createdBy?: string;
 }
 
 export type ActivityType = 

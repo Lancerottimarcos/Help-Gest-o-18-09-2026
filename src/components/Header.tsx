@@ -172,6 +172,7 @@ export const Header: React.FC<HeaderProps> = ({
   const pageInfo = PAGE_TITLES[currentPage] || PAGE_TITLES.inicio;
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'security'>('all');
   const [notifications, setNotifications] = useState<AgencyNotification[]>(() => {
     try {
@@ -303,37 +304,52 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-20 w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)] lg:w-[calc(100%-2rem)] max-w-[calc(1780px-2rem)] mx-auto bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md border border-slate-200/90 dark:border-slate-800 rounded-[28px] my-3 px-5 sm:px-8 flex items-center justify-between sticky top-3 z-40 shadow-sm shadow-slate-200/40 dark:shadow-black/30 transition-all duration-300 ease-in-out">
+    <header className="h-16 sm:h-20 w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] max-w-[calc(1780px-2rem)] mx-auto bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md border border-slate-200/90 dark:border-slate-800 rounded-2xl sm:rounded-[28px] my-2 sm:my-3 px-3 sm:px-6 md:px-8 flex items-center justify-between sticky top-2 sm:top-3 z-40 shadow-sm shadow-slate-200/40 dark:shadow-black/30 transition-all duration-300 ease-in-out">
       {/* Left: Mobile hamburger & Page Title */}
-      <div className="flex items-center gap-3 sm:gap-4">
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         {/* Mobile menu open */}
         <button
           id="btn-open-sidebar"
           type="button"
           onClick={onOpenMobileSidebar}
-          className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
           aria-label="Abrir menu lateral"
         >
-          <Menu size={22} />
+          <Menu size={20} className="sm:w-[22px] sm:h-[22px]" />
         </button>
 
-        <div>
-          <h2 className="text-xl sm:text-2xl font-black text-[#142142] dark:text-white tracking-tight flex items-center gap-2">
+        <div className="min-w-0">
+          <h2 className="text-base sm:text-xl md:text-2xl font-black text-[#142142] dark:text-white tracking-tight flex items-center gap-1.5 sm:gap-2 truncate">
             {pageInfo.title}
           </h2>
-          <p className="hidden md:block text-xs font-medium text-slate-500 dark:text-slate-400">
+          <p className="hidden md:block text-xs font-medium text-slate-500 dark:text-slate-400 truncate">
             {pageInfo.subtitle}
           </p>
         </div>
       </div>
 
       {/* Right: Search + Theme Toggle + Notifications + Logout */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {/* Universal Search */}
-        <div className="relative hidden sm:block w-48 md:w-64">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {/* Mobile Search Toggle Button */}
+        <button
+          type="button"
+          onClick={() => setIsMobileSearchOpen((prev) => !prev)}
+          className={`sm:hidden p-2 rounded-xl transition-colors cursor-pointer ${
+            isMobileSearchOpen
+              ? 'bg-[#fab518] text-[#142142]'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+          title="Buscar no sistema"
+          aria-label="Abrir busca"
+        >
+          <Search size={18} />
+        </button>
+
+        {/* Universal Search (Desktop / Tablet) */}
+        <div className="relative hidden sm:block w-40 md:w-56 lg:w-64">
           <Search
-            size={16}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+            size={15}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
           />
           <input
             id="global-search-input"
@@ -341,42 +357,9 @@ export const Header: React.FC<HeaderProps> = ({
             placeholder="Buscar no sistema..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-[#F2F2F2] dark:bg-slate-800/80 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 focus:bg-white dark:focus:bg-slate-900 text-xs sm:text-sm font-medium text-[#142142] dark:text-slate-100 pl-9 pr-3.5 py-2 rounded-xl border border-transparent dark:border-slate-700 focus:border-[#fab518] focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            className="w-full bg-[#F2F2F2] dark:bg-slate-800/80 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 focus:bg-white dark:focus:bg-slate-900 text-xs sm:text-sm font-medium text-[#142142] dark:text-slate-100 pl-8 sm:pl-9 pr-3 py-1.5 sm:py-2 rounded-xl border border-transparent dark:border-slate-700 focus:border-[#fab518] focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
           />
         </div>
-
-        {/* Supabase Cloud Connection & Sync Status Indicator */}
-        <button
-          type="button"
-          id="btn-supabase-cloud-sync"
-          onClick={onRefreshSupabase}
-          disabled={supabaseSyncStatus === 'syncing'}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-            supabaseSyncStatus === 'syncing'
-              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
-              : isSupabaseOnline
-              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#fab518]'
-          }`}
-          title={
-            supabaseSyncStatus === 'syncing'
-              ? 'Sincronizando com a nuvem Supabase...'
-              : 'Banco Supabase Conectado. Clique para sincronizar agora.'
-          }
-        >
-          {supabaseSyncStatus === 'syncing' ? (
-            <RefreshCw size={13} className="animate-spin text-amber-500" />
-          ) : (
-            <Database size={13} className={isSupabaseOnline ? 'text-emerald-500' : 'text-slate-400'} />
-          )}
-          <span className="hidden xl:inline text-[11px]">
-            {supabaseSyncStatus === 'syncing'
-              ? 'Sincronizando...'
-              : isSupabaseOnline
-              ? `Supabase Conectado (${typeof clientsCount === 'number' ? clientsCount : 5})`
-              : 'Supabase Nuvem'}
-          </span>
-        </button>
 
         {/* Theme Toggle Button (Light/Dark Mode) */}
         <ThemeToggle variant="icon" />
@@ -654,22 +637,42 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </AnimatePresence>
         </div>
-
-        {/* Logout Button */}
-        {onLogout && (
-          <button
-            id="btn-header-logout"
-            type="button"
-            onClick={onLogout}
-            className="p-2.5 rounded-xl text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 dark:text-slate-400 dark:hover:text-red-400 transition-colors cursor-pointer flex items-center gap-1.5"
-            title="Sair do sistema (Logout)"
-            aria-label="Sair do sistema"
-          >
-            <LogOut size={18} />
-            <span className="hidden xl:inline text-xs font-bold">Sair</span>
-          </button>
-        )}
       </div>
+
+      {/* Mobile Search Overlay Bar */}
+      <AnimatePresence>
+        {isMobileSearchOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="absolute inset-x-2 top-full mt-2 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200/90 dark:border-slate-800 p-2.5 shadow-xl sm:hidden z-50 flex items-center gap-2"
+          >
+            <div className="relative flex-1">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Buscar clientes, demandas, propostas..."
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-xs font-medium text-[#142142] dark:text-white pl-9 pr-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#fab518]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsMobileSearchOpen(false)}
+              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              aria-label="Fechar busca"
+            >
+              <X size={18} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 };

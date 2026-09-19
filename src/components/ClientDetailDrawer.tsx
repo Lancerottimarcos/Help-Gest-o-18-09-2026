@@ -245,12 +245,12 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
             </div>
 
             {/* Tabs Navigation */}
-            <div className="flex border-b border-slate-100 pt-1 -mb-4">
+            <div className="flex items-center gap-1 border-b border-slate-100 pt-1 -mb-4 overflow-x-auto no-scrollbar whitespace-nowrap">
               <button
                 type="button"
                 id="tab-overview"
                 onClick={() => setActiveTab('overview')}
-                className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer shrink-0 ${
                   activeTab === 'overview'
                     ? 'border-[#fab518] text-[#142142]'
                     : 'border-transparent text-slate-500 hover:text-[#142142]'
@@ -262,7 +262,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                 type="button"
                 id="tab-services"
                 onClick={() => setActiveTab('services')}
-                className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
                   activeTab === 'services'
                     ? 'border-[#fab518] text-[#142142]'
                     : 'border-transparent text-slate-500 hover:text-[#142142]'
@@ -277,7 +277,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                 type="button"
                 id="tab-history"
                 onClick={() => setActiveTab('history')}
-                className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
                   activeTab === 'history'
                     ? 'border-[#fab518] text-[#142142]'
                     : 'border-transparent text-slate-500 hover:text-[#142142]'
@@ -292,7 +292,7 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                 type="button"
                 id="tab-privacy"
                 onClick={() => setActiveTab('privacy')}
-                className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
                   activeTab === 'privacy'
                     ? 'border-[#fab518] text-[#142142]'
                     : 'border-transparent text-slate-500 hover:text-[#142142]'

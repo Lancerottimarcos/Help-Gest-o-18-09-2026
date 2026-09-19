@@ -18,7 +18,7 @@ import {
   X,
   LogOut
 } from 'lucide-react';
-import { PageId } from '../types';
+import { PageId, UserProfile } from '../types';
 import { currentUser } from '../data/mockData';
 import { HelpLogo } from './HelpLogo';
 import { ThemeToggle } from './ThemeToggle';
@@ -34,6 +34,7 @@ interface SidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onLogout?: () => void;
+  currentUser?: UserProfile;
 }
 
 interface NavItemConfig {
@@ -55,7 +56,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed = false,
   onToggleCollapse,
   onLogout,
+  currentUser: externalCurrentUser,
 }) => {
+  const activeUser = externalCurrentUser || currentUser;
   const navItems: NavItemConfig[] = [
     {
       id: 'inicio',
@@ -76,8 +79,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'demandas',
       label: 'Demandas',
       icon: Kanban,
-      badge: totalActiveDemands > 0 ? totalActiveDemands : undefined,
-      badgeColor: 'bg-[#fab518] text-[#142142] font-bold',
     },
     {
       id: 'calendario',
@@ -109,8 +110,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'configuracoes',
       label: 'Configurações',
       icon: Settings,
-      badge: 'SQL',
-      badgeColor: 'bg-emerald-600 text-white font-black text-[10px]',
     },
   ];
 
@@ -311,28 +310,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Current User Card */}
           <div 
             className={`flex items-center justify-between rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors ${isCollapsed ? 'justify-center p-1.5' : 'p-2'}`}
-            title={isCollapsed ? `${currentUser.name} - ${currentUser.roleLabel}` : undefined}
+            title={isCollapsed ? `${activeUser.name} - ${activeUser.roleLabel}` : undefined}
           >
             <div className={`flex items-center min-w-0 ${isCollapsed ? 'justify-center' : 'gap-3 flex-1'}`}>
-              {currentUser.avatarUrl?.trim() ? (
+              {activeUser.avatarUrl?.trim() ? (
                 <img
-                  src={currentUser.avatarUrl}
-                  alt={currentUser.name}
+                  src={activeUser.avatarUrl}
+                  alt={activeUser.name}
                   className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[#fab518] shrink-0"
                 />
               ) : (
                 <div className="w-10 h-10 rounded-2xl bg-[#142142] text-[#fab518] text-sm font-black flex items-center justify-center ring-2 ring-[#fab518] shrink-0">
-                  {currentUser.name.charAt(0).toUpperCase()}
+                  {activeUser.name.charAt(0).toUpperCase()}
                 </div>
               )}
               {!isCollapsed && (
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-[#142142] dark:text-white truncate leading-snug">
-                    {currentUser.name}
+                    {activeUser.name}
                   </p>
                   <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
                     <ShieldCheck size={12} className="text-[#fab518] shrink-0" />
-                    <span className="truncate">{currentUser.roleLabel}</span>
+                    <span className="truncate">{activeUser.roleLabel}</span>
                   </div>
                 </div>
               )}

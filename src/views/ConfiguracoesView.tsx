@@ -19,7 +19,19 @@ import {
   Database,
   ArrowRight,
   BellRing,
-  Activity
+  Activity,
+  Globe,
+  Landmark,
+  FileText,
+  MapPin,
+  CheckCircle,
+  ExternalLink,
+  Smartphone,
+  SlidersHorizontal,
+  RefreshCw,
+  Eye,
+  Zap,
+  Info
 } from 'lucide-react';
 import { SecuritySettingsTab } from '../components/SecuritySettingsTab';
 import { SecurityAuditView } from '../components/SecurityAuditView';
@@ -51,7 +63,7 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
   onSyncSupabaseData
 }) => {
   const { request2Fa } = useTwoFactor();
-  const [activeTab, setActiveTab] = useState<'geral' | 'supabase' | 'notificacoes' | 'backup' | 'seguranca' | 'auditoria'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'fluxo' | 'supabase' | 'notificacoes' | 'seguranca' | 'backup' | 'auditoria'>('geral');
   
   // Load saved agency settings from localStorage if available
   const [agencyInfo, setAgencyInfo] = useState(() => {
@@ -61,27 +73,73 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
     } catch {}
     return {
       name: 'Help Ideias Digitais',
-      email: 'lancerottirmarcos@gmail.com',
+      email: 'contato@helpideiasdigitais.com.br',
       phone: '(11) 98765-4321',
+      website: 'https://app.helpideiasdigitais.com.br',
+      pixKey: 'financeiro@helpideiasdigitais.com.br',
+      cnpj: '45.892.102/0001-90',
+      address: 'São Paulo - SP, Brasil',
       directApproval: true,
       deadlineAlerts: true,
       lockFinance: true,
       autoEmailReports: false,
+      whatsappAutoNotify: true,
+      autoArchiveDays: 30,
     };
   });
 
-  const [directApproval, setDirectApproval] = useState(agencyInfo.directApproval);
-  const [deadlineAlerts, setDeadlineAlerts] = useState(agencyInfo.deadlineAlerts);
-  const [lockFinance, setLockFinance] = useState(agencyInfo.lockFinance);
-  const [autoEmailReports, setAutoEmailReports] = useState(agencyInfo.autoEmailReports);
+  // Agency info form fields
+  const [agencyName, setAgencyName] = useState(agencyInfo.name || 'Help Ideias Digitais');
+  const [agencyEmail, setAgencyEmail] = useState(agencyInfo.email || 'contato@helpideiasdigitais.com.br');
+  const [agencyPhone, setAgencyPhone] = useState(agencyInfo.phone || '(11) 98765-4321');
+  const [agencyWebsite, setAgencyWebsite] = useState(agencyInfo.website || 'https://app.helpideiasdigitais.com.br');
+  const [agencyPixKey, setAgencyPixKey] = useState(agencyInfo.pixKey || 'financeiro@helpideiasdigitais.com.br');
+  const [agencyCnpj, setAgencyCnpj] = useState(agencyInfo.cnpj || '45.892.102/0001-90');
+  const [agencyAddress, setAgencyAddress] = useState(agencyInfo.address || 'São Paulo - SP, Brasil');
+
+  // Flow rules
+  const [directApproval, setDirectApproval] = useState(agencyInfo.directApproval ?? true);
+  const [deadlineAlerts, setDeadlineAlerts] = useState(agencyInfo.deadlineAlerts ?? true);
+  const [lockFinance, setLockFinance] = useState(agencyInfo.lockFinance ?? true);
+  const [autoEmailReports, setAutoEmailReports] = useState(agencyInfo.autoEmailReports ?? false);
+  const [whatsappAutoNotify, setWhatsappAutoNotify] = useState(agencyInfo.whatsappAutoNotify ?? true);
+
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [copiedColor, setCopiedColor] = useState<string | null>(null);
   const [copiedGlobalSql, setCopiedGlobalSql] = useState(false);
 
-  // Agency info
-  const [agencyName, setAgencyName] = useState(agencyInfo.name);
-  const [agencyEmail, setAgencyEmail] = useState(agencyInfo.email);
-  const [agencyPhone, setAgencyPhone] = useState(agencyInfo.phone);
+  const officialColors = [
+    {
+      hex: '#142142',
+      name: 'Azul Navy Profundo',
+      role: 'Primária Corporativa',
+      description: 'Sidebars, botões principais e cabeçalhos'
+    },
+    {
+      hex: '#fab518',
+      name: 'Dourado Âmbar',
+      role: 'Destaque & Ação (Accent)',
+      description: 'Badges ativas, botões de ação e alertas'
+    },
+    {
+      hex: '#10B981',
+      name: 'Verde Esmeralda',
+      role: 'Sucesso & Aprovações',
+      description: 'Status concluído, sincronização e faturas pagas'
+    },
+    {
+      hex: '#F4F5F8',
+      name: 'Cinza Platina Light',
+      role: 'Fundo do Canvas',
+      description: 'Área de trabalho clara e descanso visual'
+    },
+    {
+      hex: '#0f172a',
+      name: 'Slate Escuro',
+      role: 'Dark Mode Surface',
+      description: 'Superfícies de cartões e modais no modo escuro'
+    },
+  ];
 
   const handleCopyColor = (color: string) => {
     navigator.clipboard.writeText(color);
@@ -98,18 +156,23 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
   const handleSave = () => {
     request2Fa({
       actionTitle: 'Salvar Configurações Globais da Agência',
-      actionDescription: `Confirmar alterações no perfil da agência "${agencyName}", diretrizes de fluxo e permissões do sistema.`,
-      riskLevel: 'high',
+      actionDescription: `Confirmar alterações no perfil da agência "${agencyName}", regras de fluxo e diretrizes operacionais.`,
+      riskLevel: 'medium',
       actionType: 'config_change',
       onVerified: () => {
         const updatedInfo = {
           name: agencyName,
           email: agencyEmail,
           phone: agencyPhone,
+          website: agencyWebsite,
+          pixKey: agencyPixKey,
+          cnpj: agencyCnpj,
+          address: agencyAddress,
           directApproval,
           deadlineAlerts,
           lockFinance,
           autoEmailReports,
+          whatsappAutoNotify,
           updatedAt: new Date().toISOString()
         };
         try {
@@ -117,117 +180,144 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
         } catch {}
         setAgencyInfo(updatedInfo);
         setSavedSuccess(true);
-        setTimeout(() => setSavedSuccess(false), 2500);
+        setTimeout(() => setSavedSuccess(false), 3000);
       }
     });
   };
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Settings Intro Header */}
-      <div className="bg-white dark:bg-[#0f172a] p-5 sm:p-6 rounded-[26px] border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-[#fab518] flex items-center gap-1.5">
-            <Sparkles size={13} />
-            <span>Preferências & Identidade</span>
-          </span>
-          <h3 className="text-xl font-black text-[#142142] dark:text-white tracking-tight mt-0.5">
-            Configurações do Sistema
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xl">
-            Personalize as informações da Help Ideias Digitais, regras de fluxo, protocolos de segurança e identidade visual.
-          </p>
-        </div>
-
-        {savedSuccess && (
-          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-xs font-bold animate-in fade-in">
-            <CheckCircle2 size={15} />
-            <span>Configurações salvas com sucesso!</span>
-          </div>
-        )}
-      </div>
-
-      {/* Quick Supabase Integration Banner */}
-      <div className="p-4 sm:p-5 rounded-[24px] bg-gradient-to-r from-[#142142] via-[#1b2b54] to-emerald-950 text-white border border-emerald-500/30 shadow-md flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold shrink-0 shadow-inner">
-            <Database size={24} className="text-emerald-400" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black tracking-wider text-emerald-400 uppercase">
-                Banco de Dados em Nuvem (PostgreSQL)
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 font-extrabold border border-emerald-400/40">
-                Supabase
-              </span>
+    <div className="space-y-6 pb-12 max-w-[1700px] mx-auto">
+      {/* Settings Cockpit Header */}
+      <div className="bg-white dark:bg-[#0f172a] p-6 sm:p-7 rounded-[26px] border border-slate-200/90 dark:border-slate-800 shadow-xs relative overflow-hidden">
+        {/* Subtle decorative background glow */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-[#fab518]/10 via-[#142142]/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#142142] to-[#1e3264] text-[#fab518] flex items-center justify-center font-black shadow-md border border-slate-700/50 shrink-0">
+              <Settings size={28} className="stroke-[2.2]" />
             </div>
-            <h4 className="text-sm sm:text-base font-black text-white mt-0.5">
-              Conexão & Sincronização com Supabase
-            </h4>
-            <p className="text-xs text-slate-300 mt-0.5 max-w-xl">
-              Crie suas tabelas SQL em segundos e sincronize todas as demandas do Kanban e clientes com o banco PostgreSQL.
-            </p>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#fab518] flex items-center gap-1.5">
+                  <Sparkles size={13} />
+                  <span>Painel de Controle Enterprise</span>
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800">
+                  v2.5 Online
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-[#142142] dark:text-white tracking-tight mt-1">
+                Configurações & Governança
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                Gerencie o perfil institucional da <strong>Help Ideias Digitais</strong>, conexão Supabase em nuvem, diretrizes do Kanban e políticas de segurança.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 self-start md:self-center shrink-0">
+            {savedSuccess && (
+              <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-xs font-bold animate-in fade-in">
+                <CheckCircle2 size={15} />
+                <span>Salvo com sucesso!</span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              id="btn-save-settings-header"
+              onClick={handleSave}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#142142] hover:bg-[#1c2c54] dark:bg-[#fab518] dark:hover:bg-[#e29f11] text-white dark:text-[#142142] text-xs font-black transition-all shadow-xs cursor-pointer active:scale-95"
+            >
+              <Save size={15} />
+              <span>Salvar Alterações</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 sm:self-center">
-          <button
-            type="button"
-            onClick={handleCopyGlobalSql}
-            className="px-4 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/90 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs active:scale-95"
-            title="Copiar o código SQL completo das tabelas"
-          >
-            {copiedGlobalSql ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
-            <span>{copiedGlobalSql ? 'Script SQL Copiado!' : 'Copiar Script SQL'}</span>
-          </button>
+        {/* Telemetry & System Health Quick Bar */}
+        <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <div className="min-w-0">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Banco PostgreSQL</span>
+              <span className="text-xs font-bold text-[#142142] dark:text-white truncate block">Supabase Sincronizado</span>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('supabase')}
-            className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-[#142142] text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
-          >
-            <Database size={15} />
-            <span>Configurar Conexão</span>
-            <ArrowRight size={14} />
-          </button>
+          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+            <ShieldCheck size={14} className="text-emerald-500 shrink-0" />
+            <div className="min-w-0">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Proteção 2FA</span>
+              <span className="text-xs font-bold text-[#142142] dark:text-white truncate block">Zero-Trust Ativo</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+            <Globe size={14} className="text-[#fab518] shrink-0" />
+            <div className="min-w-0">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Domínio da Aplicação</span>
+              <span className="text-xs font-bold text-[#142142] dark:text-white truncate block">helpideiasdigitais.com.br</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+            <Database size={14} className="text-blue-500 shrink-0" />
+            <div className="min-w-0">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Demandas & Clientes</span>
+              <span className="text-xs font-bold text-[#142142] dark:text-white truncate block">{demands.length} cards • {clients.length} contas</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 p-1.5 bg-slate-200/60 dark:bg-slate-800/60 rounded-2xl w-full overflow-x-auto scrollbar-thin border border-slate-200/80 dark:border-slate-700/80">
+      {/* Modern Segmented Navigation Tabs */}
+      <div className="flex items-center gap-1.5 p-1.5 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs overflow-x-auto no-scrollbar">
         <button
           type="button"
+          id="tab-config-geral"
           onClick={() => setActiveTab('geral')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'geral'
-              ? 'bg-white dark:bg-[#142142] text-[#142142] dark:text-white shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white'
+              ? 'bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
           }`}
         >
-          <Palette size={15} />
-          <span>Geral & Identidade</span>
+          <Building2 size={15} />
+          <span>Perfil & Identidade</span>
         </button>
 
-        {/* 2ª Aba em destaque imediato: Banco Supabase */}
+        <button
+          type="button"
+          id="tab-config-fluxo"
+          onClick={() => setActiveTab('fluxo')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+            activeTab === 'fluxo'
+              ? 'bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+          }`}
+        >
+          <SlidersHorizontal size={15} />
+          <span>Regras & Kanban</span>
+        </button>
+
         <button
           type="button"
           id="tab-supabase-db"
           onClick={() => setActiveTab('supabase')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'supabase'
-              ? 'bg-emerald-600 dark:bg-emerald-500 text-white dark:text-[#142142] shadow-sm font-black'
-              : 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30'
+              ? 'bg-emerald-600 text-white shadow-xs font-black'
+              : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
           }`}
         >
-          <Database size={15} className={activeTab === 'supabase' ? 'text-white dark:text-[#142142]' : 'text-emerald-600 dark:text-emerald-400'} />
+          <Database size={15} />
           <span>Banco Supabase</span>
           <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-            activeTab === 'supabase'
-              ? 'bg-white/20 text-white dark:text-[#142142]'
-              : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+            activeTab === 'supabase' ? 'bg-white/20 text-white' : 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
           }`}>
-            PostgreSQL
+            SQL
           </span>
         </button>
 
@@ -238,31 +328,11 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'notificacoes'
               ? 'bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white'
+              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
           }`}
         >
-          <BellRing size={15} className={activeTab === 'notificacoes' ? 'text-[#fab518] dark:text-[#142142]' : 'text-amber-500'} />
+          <BellRing size={15} />
           <span>Notificações</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-black">
-            Web API
-          </span>
-        </button>
-
-        <button
-          type="button"
-          id="tab-backup-restore"
-          onClick={() => setActiveTab('backup')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-            activeTab === 'backup'
-              ? 'bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white'
-          }`}
-        >
-          <Database size={15} className={activeTab === 'backup' ? 'text-[#fab518] dark:text-[#142142]' : 'text-cyan-600 dark:text-cyan-400'} />
-          <span>Backup JSON</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 font-black">
-            DR
-          </span>
         </button>
 
         <button
@@ -272,14 +342,25 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'seguranca'
               ? 'bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white'
+              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
           }`}
         >
-          <ShieldCheck size={15} className={activeTab === 'seguranca' ? 'text-emerald-400 dark:text-[#142142]' : 'text-emerald-600'} />
-          <span>Segurança & Protocolos</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-black">
-            Ativo
-          </span>
+          <ShieldCheck size={15} />
+          <span>Segurança & 2FA</span>
+        </button>
+
+        <button
+          type="button"
+          id="tab-backup-restore"
+          onClick={() => setActiveTab('backup')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+            activeTab === 'backup'
+              ? 'bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+          }`}
+        >
+          <Database size={15} />
+          <span>Backup JSON</span>
         </button>
 
         <button
@@ -289,17 +370,15 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'auditoria'
               ? 'bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white'
+              : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
           }`}
         >
-          <Activity size={15} className={activeTab === 'auditoria' ? 'text-[#fab518] dark:text-[#142142]' : 'text-red-500'} />
-          <span>Auditoria</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-red-500/20 text-red-600 dark:text-red-400 font-black">
-            Logs
-          </span>
+          <Activity size={15} />
+          <span>Logs & Auditoria</span>
         </button>
       </div>
 
+      {/* Tab Content Rendering */}
       {activeTab === 'supabase' ? (
         <SupabaseConnectionTab
           demands={demands}
@@ -319,224 +398,396 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
         <div className="space-y-6">
           <BrowserNotificationSettingsCard />
         </div>
-      ) : (
+      ) : activeTab === 'fluxo' ? (
+        /* Regras Operacionais & Kanban Flow */
         <div className="space-y-6">
-          {/* Quick Disaster Recovery & Backup Banner in General View */}
-          <div className="p-4 sm:p-5 rounded-[22px] bg-gradient-to-r from-slate-900 to-[#142142] text-white flex flex-wrap items-center justify-between gap-4 border border-white/10 shadow-xs">
-            <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-[#fab518]/20 text-[#fab518] flex items-center justify-center font-bold shrink-0">
-                <Database size={20} />
-              </div>
-              <div>
-                <p className="text-xs font-black tracking-wide text-white">
-                  Backup Manual & Salvaguarda Operacional
-                </p>
-                <p className="text-[11px] text-slate-300 mt-0.5">
-                  Faça downloads periódicos em JSON de todas as demandas, faturas e clientes ou restaure arquivos anteriores com verificação 2FA.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab('backup')}
-              className="px-4 py-2 rounded-xl bg-[#fab518] hover:bg-[#fab518]/90 text-[#142142] text-xs font-black flex items-center gap-2 cursor-pointer transition-all shadow-xs active:scale-95"
-            >
-              <span>Gerenciar Backups JSON</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Branding & Visual Guidelines */}
-          <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/80 dark:border-slate-800 p-6 sm:p-7 shadow-xs space-y-6">
-            <div className="flex items-center gap-2.5 text-[#142142] dark:text-white font-black text-sm">
-              <div className="w-8 h-8 rounded-lg bg-[#fab518]/20 text-[#142142] dark:text-[#fab518] flex items-center justify-center font-bold">
-                <Palette size={18} />
-              </div>
-              <span>Identidade Visual & Paleta da Agência</span>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block text-xs font-bold text-[#142142] dark:text-slate-200">
-                Nome da Agência / Sistema
-              </label>
-              <input
-                type="text"
-                value={agencyName}
-                onChange={(e) => setAgencyName(e.target.value)}
-                className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-sm font-bold text-[#142142] dark:text-white p-3 rounded-xl border border-transparent dark:border-slate-700 focus:border-[#fab518] focus:outline-none"
-              />
-            </div>
-
-            {/* Color swatches */}
-            <div className="space-y-3">
-              <label className="block text-xs font-bold text-[#142142] dark:text-slate-200">
-                Cores Oficiais (Clique para copiar o HEX)
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleCopyColor('#142142')}
-                  className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-[#fab518] dark:hover:border-[#fab518] bg-slate-50/50 dark:bg-slate-800/40 flex flex-col items-center gap-2 transition-all cursor-pointer group text-center"
-                >
-                  <div className="w-10 h-10 rounded-xl shadow-xs border border-black/10" style={{ backgroundColor: '#142142' }} />
-                  <span className="text-xs font-mono font-bold text-[#142142] dark:text-white group-hover:text-[#fab518]">
-                    {copiedColor === '#142142' ? 'Copiado!' : '#142142'}
-                  </span>
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Primária Navy</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleCopyColor('#fab518')}
-                  className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-[#fab518] dark:hover:border-[#fab518] bg-slate-50/50 dark:bg-slate-800/40 flex flex-col items-center gap-2 transition-all cursor-pointer group text-center"
-                >
-                  <div className="w-10 h-10 rounded-xl shadow-xs border border-black/10" style={{ backgroundColor: '#fab518' }} />
-                  <span className="text-xs font-mono font-bold text-[#142142] dark:text-white group-hover:text-[#fab518]">
-                    {copiedColor === '#fab518' ? 'Copiado!' : '#fab518'}
-                  </span>
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Ouro / Âmbar</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleCopyColor('#ffffff')}
-                  className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-[#fab518] dark:hover:border-[#fab518] bg-slate-50/50 dark:bg-slate-800/40 flex flex-col items-center gap-2 transition-all cursor-pointer group text-center"
-                >
-                  <div className="w-10 h-10 rounded-xl shadow-xs border border-slate-300 dark:border-slate-600" style={{ backgroundColor: '#ffffff' }} />
-                  <span className="text-xs font-mono font-bold text-[#142142] dark:text-white group-hover:text-[#fab518]">
-                    {copiedColor === '#ffffff' ? 'Copiado!' : '#ffffff'}
-                  </span>
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Cards Light</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleCopyColor('#0f172a')}
-                  className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-[#fab518] dark:hover:border-[#fab518] bg-slate-50/50 dark:bg-slate-800/40 flex flex-col items-center gap-2 transition-all cursor-pointer group text-center"
-                >
-                  <div className="w-10 h-10 rounded-xl shadow-xs border border-slate-700" style={{ backgroundColor: '#0f172a' }} />
-                  <span className="text-xs font-mono font-bold text-[#142142] dark:text-white group-hover:text-[#fab518]">
-                    {copiedColor === '#0f172a' ? 'Copiado!' : '#0f172a'}
-                  </span>
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Dark Surface</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Typography */}
-            <div className="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#142142] dark:text-white">
-                <Type size={14} className="text-[#fab518]" />
-                <span>Tipografia Cadastrada</span>
-              </div>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                Família: <strong className="text-[#142142] dark:text-white">Sofia Pro</strong> (<span className="font-normal">Regular 400</span>, <span className="font-semibold">SemiBold 600</span> e <span className="font-bold">Bold 700</span>) aplicada globalmente em toda a interface do sistema.
-              </p>
-            </div>
-          </div>
-
-          {/* Agency Information & Flow Settings */}
-          <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/80 dark:border-slate-800 p-6 sm:p-7 shadow-xs space-y-6 flex flex-col justify-between">
-            <div className="space-y-6">
-              <div className="flex items-center gap-2.5 text-[#142142] dark:text-white font-black text-sm">
-                <div className="w-8 h-8 rounded-lg bg-[#fab518]/20 text-[#142142] dark:text-[#fab518] flex items-center justify-center font-bold">
-                  <Shield size={18} />
+            {/* Card 1: Portal do Cliente & Aprovação */}
+            <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-6 sm:p-7 shadow-xs space-y-5">
+              <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                  <Smartphone size={20} />
                 </div>
-                <span>Regras do Kanban & Portal do Cliente</span>
+                <div>
+                  <h3 className="text-base font-black text-[#142142] dark:text-white">
+                    Portal do Cliente & Aprovação Externa
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Controle de links públicos, dispensas de login e automação de feedback
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Toggle 1: Aprovação Direta */}
                 <div 
                   onClick={() => setDirectApproval(!directApproval)}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 hover:border-[#fab518]/50 transition-all cursor-pointer"
+                  className="flex items-center justify-between p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 hover:border-[#fab518] transition-all cursor-pointer"
                 >
-                  <div>
-                    <p className="text-xs font-bold text-[#142142] dark:text-white">Aprovação Direta por Link Seguro</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Permite que o cliente aprove posts sem necessidade de login</p>
+                  <div className="pr-4">
+                    <p className="text-xs font-black text-[#142142] dark:text-white">
+                      Aprovação Direta por Link Seguro
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Gera um link seguro para o cliente aprovar, reprovar ou pedir ajustes sem necessidade de criar conta ou senha.
+                    </p>
                   </div>
-                  <input 
-                    type="checkbox" 
-                    checked={directApproval} 
-                    onChange={(e) => setDirectApproval(e.target.checked)}
-                    className="w-4 h-4 accent-[#fab518] rounded cursor-pointer" 
-                  />
+                  <div className={`w-12 h-6 rounded-full transition-colors flex items-center p-0.5 shrink-0 ${directApproval ? 'bg-[#fab518] justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'}`}>
+                    <div className="w-5 h-5 rounded-full bg-white shadow-xs" />
+                  </div>
                 </div>
 
+                {/* Toggle 2: Notificação WhatsApp */}
                 <div 
-                  onClick={() => setDeadlineAlerts(!deadlineAlerts)}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 hover:border-[#fab518]/50 transition-all cursor-pointer"
+                  onClick={() => setWhatsappAutoNotify(!whatsappAutoNotify)}
+                  className="flex items-center justify-between p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 hover:border-[#fab518] transition-all cursor-pointer"
                 >
-                  <div>
-                    <p className="text-xs font-bold text-[#142142] dark:text-white">Avisos de Prazos Críticos</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Notificar equipe 24h antes do prazo limite de postagem</p>
+                  <div className="pr-4">
+                    <p className="text-xs font-black text-[#142142] dark:text-white">
+                      Disparo Facilitado via WhatsApp Web
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Abre modal com mensagem formatada e botão direto para enviar a peça ao WhatsApp do cliente ao mover para "Em Aprovação".
+                    </p>
                   </div>
-                  <input 
-                    type="checkbox" 
-                    checked={deadlineAlerts} 
-                    onChange={(e) => setDeadlineAlerts(e.target.checked)}
-                    className="w-4 h-4 accent-[#fab518] rounded cursor-pointer" 
-                  />
+                  <div className={`w-12 h-6 rounded-full transition-colors flex items-center p-0.5 shrink-0 ${whatsappAutoNotify ? 'bg-[#fab518] justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'}`}>
+                    <div className="w-5 h-5 rounded-full bg-white shadow-xs" />
+                  </div>
                 </div>
 
-                <div 
-                  onClick={() => setLockFinance(!lockFinance)}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 hover:border-[#fab518]/50 transition-all cursor-pointer"
-                >
-                  <div>
-                    <p className="text-xs font-bold text-[#142142] dark:text-white">Travar Visualização Financeira para Equipe</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Apenas o perfil Proprietário visualiza lucros e faturamento</p>
-                  </div>
-                  <input 
-                    type="checkbox" 
-                    checked={lockFinance} 
-                    onChange={(e) => setLockFinance(e.target.checked)}
-                    className="w-4 h-4 accent-[#fab518] rounded cursor-pointer" 
-                  />
-                </div>
-
+                {/* Toggle 3: Relatórios Automáticos */}
                 <div 
                   onClick={() => setAutoEmailReports(!autoEmailReports)}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 hover:border-[#fab518]/50 transition-all cursor-pointer"
+                  className="flex items-center justify-between p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 hover:border-[#fab518] transition-all cursor-pointer"
                 >
-                  <div>
-                    <p className="text-xs font-bold text-[#142142] dark:text-white">Relatórios Semanais Automáticos</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Disparo automático de resumo de demandas às segundas-feiras</p>
+                  <div className="pr-4">
+                    <p className="text-xs font-black text-[#142142] dark:text-white">
+                      Relatórios Semanais de Produção
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Prepara um resumo executivo com todas as entregas concluídas às segundas-feiras.
+                    </p>
                   </div>
-                  <input 
-                    type="checkbox" 
-                    checked={autoEmailReports} 
-                    onChange={(e) => setAutoEmailReports(e.target.checked)}
-                    className="w-4 h-4 accent-[#fab518] rounded cursor-pointer" 
-                  />
+                  <div className={`w-12 h-6 rounded-full transition-colors flex items-center p-0.5 shrink-0 ${autoEmailReports ? 'bg-[#fab518] justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'}`}>
+                    <div className="w-5 h-5 rounded-full bg-white shadow-xs" />
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/60 px-3 py-1.5 rounded-full border border-slate-200/80 dark:border-slate-700/80">
-                <Lock size={12} className="text-[#fab518]" />
-                <span>Ação Crítica protegida por Verificação 2FA</span>
+            {/* Card 2: Permissões de Equipe & Prazos Críticos */}
+            <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-6 sm:p-7 shadow-xs space-y-5">
+              <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                  <Shield size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-[#142142] dark:text-white">
+                    Permissões da Equipe & Monitoramento
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Regras de sigilo de faturamento e alertas proativos de prazos
+                  </p>
+                </div>
               </div>
 
-              <button
-                type="button"
-                id="btn-save-settings"
-                onClick={handleSave}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] text-xs font-black hover:bg-[#1c2c54] dark:hover:bg-[#fab518]/90 transition-all shadow-xs cursor-pointer active:scale-95"
-              >
-                <Save size={15} />
-                <span>Salvar Alterações</span>
-              </button>
+              <div className="space-y-4">
+                {/* Toggle: Alerta de Prazos */}
+                <div 
+                  onClick={() => setDeadlineAlerts(!deadlineAlerts)}
+                  className="flex items-center justify-between p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 hover:border-[#fab518] transition-all cursor-pointer"
+                >
+                  <div className="pr-4">
+                    <p className="text-xs font-black text-[#142142] dark:text-white">
+                      Alertas Proativos de Prazos (24h de antecedência)
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Destaque em vermelho e badges urgentes nas demandas que vencem nas próximas 24 horas no Kanban.
+                    </p>
+                  </div>
+                  <div className={`w-12 h-6 rounded-full transition-colors flex items-center p-0.5 shrink-0 ${deadlineAlerts ? 'bg-[#fab518] justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'}`}>
+                    <div className="w-5 h-5 rounded-full bg-white shadow-xs" />
+                  </div>
+                </div>
+
+                {/* Toggle: Trava Financeira */}
+                <div 
+                  onClick={() => setLockFinance(!lockFinance)}
+                  className="flex items-center justify-between p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 hover:border-[#fab518] transition-all cursor-pointer"
+                >
+                  <div className="pr-4">
+                    <p className="text-xs font-black text-[#142142] dark:text-white">
+                      Sigilo Financeiro para Membros Operacionais
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Apenas perfis "Administrador" e "Proprietário" visualizam valores em faturas, métricas de MRR e propostas orçamentárias.
+                    </p>
+                  </div>
+                  <div className={`w-12 h-6 rounded-full transition-colors flex items-center p-0.5 shrink-0 ${lockFinance ? 'bg-[#fab518] justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'}`}>
+                    <div className="w-5 h-5 rounded-full bg-white shadow-xs" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                  <Lock size={13} className="text-[#fab518] shrink-0" />
+                  <span>Configurações persistidas no armazenamento seguro do navegador e sincronizadas localmente.</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+      ) : (
+        /* Geral: Perfil & Identidade da Agência */
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Column (7 cols): Agency Official Profile & Contact */}
+            <div className="lg:col-span-7 bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-6 sm:p-7 shadow-xs space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-[#142142] text-[#fab518] flex items-center justify-center font-black text-lg shadow-sm border border-slate-700">
+                    HI
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-[#142142] dark:text-white">
+                      Perfil Institucional da Agência
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Informações usadas em orçamentos, faturas, portal do cliente e cabeçalhos
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700">
+                  ID: help-ideias-01
+                </span>
+              </div>
 
-        {/* Web Notification API Settings Card */}
-        <BrowserNotificationSettingsCard />
-      </div>
-    )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Nome da Agência */}
+                <div className="sm:col-span-2 space-y-1.5">
+                  <label className="text-xs font-bold text-[#142142] dark:text-slate-200 flex items-center gap-1.5">
+                    <Building2 size={13} className="text-[#fab518]" />
+                    <span>Nome Comercial / Marca</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={agencyName}
+                    onChange={(e) => setAgencyName(e.target.value)}
+                    placeholder="Ex: Help Ideias Digitais"
+                    className="w-full bg-slate-50 dark:bg-slate-800/80 text-xs sm:text-sm font-bold text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* E-mail de Envio */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#142142] dark:text-slate-200 flex items-center gap-1.5">
+                    <Mail size={13} className="text-[#fab518]" />
+                    <span>E-mail Institucional</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={agencyEmail}
+                    onChange={(e) => setAgencyEmail(e.target.value)}
+                    placeholder="contato@helpideiasdigitais.com.br"
+                    className="w-full bg-slate-50 dark:bg-slate-800/80 text-xs sm:text-sm font-medium text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* Telefone / WhatsApp */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#142142] dark:text-slate-200 flex items-center gap-1.5">
+                    <Phone size={13} className="text-[#fab518]" />
+                    <span>WhatsApp / Telefone</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={agencyPhone}
+                    onChange={(e) => setAgencyPhone(e.target.value)}
+                    placeholder="(11) 98765-4321"
+                    className="w-full bg-slate-50 dark:bg-slate-800/80 text-xs sm:text-sm font-medium text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* Website Oficial */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#142142] dark:text-slate-200 flex items-center gap-1.5">
+                    <Globe size={13} className="text-[#fab518]" />
+                    <span>Domínio / URL Personalizada</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={agencyWebsite}
+                    onChange={(e) => setAgencyWebsite(e.target.value)}
+                    placeholder="https://app.helpideiasdigitais.com.br"
+                    className="w-full bg-slate-50 dark:bg-slate-800/80 text-xs sm:text-sm font-medium text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* Chave PIX Padrão */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#142142] dark:text-slate-200 flex items-center gap-1.5">
+                    <Landmark size={13} className="text-[#fab518]" />
+                    <span>Chave PIX para Cobranças</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={agencyPixKey}
+                    onChange={(e) => setAgencyPixKey(e.target.value)}
+                    placeholder="financeiro@helpideiasdigitais.com.br"
+                    className="w-full bg-slate-50 dark:bg-slate-800/80 text-xs sm:text-sm font-medium text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* CNPJ */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#142142] dark:text-slate-200 flex items-center gap-1.5">
+                    <FileText size={13} className="text-[#fab518]" />
+                    <span>CNPJ / Registro Cadastral</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={agencyCnpj}
+                    onChange={(e) => setAgencyCnpj(e.target.value)}
+                    placeholder="45.892.102/0001-90"
+                    className="w-full bg-slate-50 dark:bg-slate-800/80 text-xs sm:text-sm font-medium text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* Localização / Cidade */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-[#142142] dark:text-slate-200 flex items-center gap-1.5">
+                    <MapPin size={13} className="text-[#fab518]" />
+                    <span>Sede / Cidade</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={agencyAddress}
+                    onChange={(e) => setAgencyAddress(e.target.value)}
+                    placeholder="São Paulo - SP, Brasil"
+                    className="w-full bg-slate-50 dark:bg-slate-800/80 text-xs sm:text-sm font-medium text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                  <Lock size={12} className="text-[#fab518]" />
+                  <span>As alterações são verificadas pelo protocolo 2FA antes de serem salvas.</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#142142] hover:bg-[#1c2c54] dark:bg-[#fab518] dark:hover:bg-[#e29f11] text-white dark:text-[#142142] text-xs font-black transition-all shadow-xs cursor-pointer active:scale-95"
+                >
+                  <Save size={15} />
+                  <span>Salvar Dados da Agência</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Right Column (5 cols): Design System & Visual Guidelines */}
+            <div className="lg:col-span-5 space-y-6">
+              {/* Brand Colors Card */}
+              <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-6 sm:p-7 shadow-xs space-y-5">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-[#fab518] flex items-center justify-center font-bold">
+                      <Palette size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-[#142142] dark:text-white">
+                        Design System & Cores
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Paleta oficial da Help Ideias Digitais
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] uppercase font-mono font-bold text-slate-400">
+                    5 Tons
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {officialColors.map((color) => (
+                    <div
+                      key={color.hex}
+                      className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 hover:border-[#fab518]/50 transition-all group"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div 
+                          className="w-10 h-10 rounded-xl shadow-xs border border-black/10 shrink-0"
+                          style={{ backgroundColor: color.hex }}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-[#142142] dark:text-white truncate">
+                              {color.name}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-200/70 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                              {color.hex}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                            {color.role}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyColor(color.hex)}
+                        className="p-2 rounded-xl text-slate-400 hover:text-[#142142] dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0"
+                        title="Copiar código HEX"
+                      >
+                        {copiedColor === color.hex ? (
+                          <Check size={15} className="text-emerald-500" />
+                        ) : (
+                          <Copy size={15} />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Typography Preview Card */}
+              <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-6 sm:p-7 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                      <Type size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-[#142142] dark:text-white">
+                        Tipografia Corporativa
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Família Sofia Pro & Plus Jakarta Sans
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] uppercase font-bold text-slate-400">Display / Títulos</span>
+                    <span className="text-[10px] font-mono text-[#fab518] font-bold">Weight 900 • Black</span>
+                  </div>
+                  <p className="text-lg font-black text-[#142142] dark:text-white tracking-tight">
+                    Help Ideias Digitais • 2026
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed pt-1">
+                    Design tipográfico de alto contraste geométrico, otimizado para leitura dinâmica em painéis Kanban, relatórios executivos e faturamento.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-

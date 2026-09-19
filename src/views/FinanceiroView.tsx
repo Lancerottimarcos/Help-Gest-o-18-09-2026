@@ -64,20 +64,23 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Dynamic calculations based strictly on real registered data
-  const mrr = clients
-    .filter(c => c.status === 'Ativo')
-    .reduce((acc, c) => acc + (c.monthlyFee || 0), 0);
+  // Cálculos estritamente baseados nas faturas geradas pelo usuário
+  const totalInvoiced = invoices.reduce((acc, i) => acc + (i.value || 0), 0);
 
   const totalPaid = invoices
     .filter(i => i.status === 'Pago')
-    .reduce((acc, i) => acc + i.value, 0);
+    .reduce((acc, i) => acc + (i.value || 0), 0);
 
   const totalPending = invoices
     .filter(i => i.status === 'Pendente')
-    .reduce((acc, i) => acc + i.value, 0);
+    .reduce((acc, i) => acc + (i.value || 0), 0);
 
-  const projectedRevenue = totalPaid + totalPending;
+  // Recorrência calculada apenas se houver faturas geradas com escopo de recorrência
+  const recurringInvoices = invoices.filter(i => 
+    (i.category || '').toLowerCase().includes('recorr')
+  );
+  const mrr = recurringInvoices.reduce((acc, i) => acc + (i.value || 0), 0);
+
   const expenses = 0; // Despesas reais registradas
   const netProfit = totalPaid - expenses;
   const netMargin = totalPaid > 0 ? Math.round((netProfit / totalPaid) * 100) : 0;
@@ -252,27 +255,27 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
 
       {/* Financial Overview Cards - 100% Real Data Driven */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* MRR Card */}
+        {/* Total Faturado Card */}
         <div className="relative overflow-hidden bg-white dark:bg-[#0f172a] p-6 rounded-[26px] border border-slate-200/90 dark:border-slate-800 card-elevation-subtle group hover:border-[#fab518] transition-all">
           <div className="absolute top-0 right-0 w-28 h-28 bg-[#fab518]/10 dark:bg-[#fab518]/5 rounded-full blur-2xl pointer-events-none" />
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-extrabold uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
-              MRR • Recorrência
+              Total Faturado • Emitido
             </span>
             <div className="w-8 h-8 rounded-xl bg-[#fab518]/15 text-[#142142] dark:text-[#fab518] flex items-center justify-center">
               <Sparkles size={16} className="stroke-[2.5]" />
             </div>
           </div>
           <p className="text-3xl font-black text-[#142142] dark:text-white mt-2 font-mono tabular-nums tracking-tight">
-            R$ {mrr.toLocaleString('pt-BR')},00
+            R$ {totalInvoiced.toLocaleString('pt-BR')},00
           </p>
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80">
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              {clients.filter(c => c.status === 'Ativo').length} cliente(s) ativo(s)
+              {invoices.length} {invoices.length === 1 ? 'fatura gerada' : 'faturas geradas'}
             </span>
             <div className="flex items-center gap-1 text-slate-400 text-xs font-bold font-mono">
               <TrendingUp size={13} />
-              <span>{mrr > 0 ? '+100%' : 'R$ 0,00'}</span>
+              <span>{mrr > 0 ? `R$ ${mrr.toLocaleString('pt-BR')},00 rec.` : invoices.length > 0 ? `${invoices.length} emissões` : 'R$ 0,00'}</span>
             </div>
           </div>
         </div>
@@ -310,7 +313,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
             R$ {totalPending.toLocaleString('pt-BR')},00
           </p>
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 text-xs text-slate-500 dark:text-slate-400">
-            <span>{invoices.filter(i => i.status === 'Pendente').length} fatura(s) pendente(s)</span>
+            <span>{invoices.filter(i => i.status === 'Pendente').length} fatura(s) em aberto</span>
             <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono">Em Aberto</span>
           </div>
         </div>
@@ -351,11 +354,11 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
                   : 'bg-white/10 text-slate-300 border-white/20'
               }`}>
-                {invoices.length > 0 ? 'Em Dia' : 'Limpo'}
+                {invoices.length > 0 ? `${invoices.length} Fatura(s)` : 'Sem Faturas'}
               </span>
             </h4>
             <p className="text-xs text-slate-300 mt-0.5">
-              Receita liquidada: <span className="font-mono font-bold text-[#fab518]">R$ {totalPaid.toLocaleString('pt-BR')},00</span> • A liquidar: <span className="font-mono font-bold text-white">R$ {totalPending.toLocaleString('pt-BR')},00</span>
+              Receita liquidada: <span className="font-mono font-bold text-[#fab518]">R$ {totalPaid.toLocaleString('pt-BR')},00</span> • A liquidar: <span className="font-mono font-bold text-white">R$ {totalPending.toLocaleString('pt-BR')},00</span> • Total emitido: <span className="font-mono font-bold text-slate-200">R$ {totalInvoiced.toLocaleString('pt-BR')},00</span>
             </p>
           </div>
         </div>
@@ -510,10 +513,10 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 <Receipt size={28} className="stroke-[1.5]" />
               </div>
               <h4 className="text-base font-black text-[#142142] dark:text-white">
-                Nenhuma fatura cadastrada
+                Nenhuma fatura gerada
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mt-1 mb-6 leading-relaxed">
-                O módulo financeiro está completamente limpo. Cadastre novas faturas de mensalidades, projetos pontuais ou serviços de mídia para iniciar o controle de cobranças.
+                Os valores e indicadores financeiros são calculados exclusivamente quando você gera faturas. Clique no botão abaixo para emitir sua primeira fatura.
               </p>
               <button
                 type="button"
@@ -521,11 +524,100 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#fab518] hover:bg-[#e29f11] text-[#142142] text-xs font-extrabold shadow-sm transition-all cursor-pointer"
               >
                 <Plus size={16} className="stroke-[3]" />
-                <span>Cadastrar Primeira Fatura</span>
+                <span>Gerar Primeira Fatura</span>
               </button>
             </div>
           ) : (
-            <table className="w-full text-left text-xs sm:text-sm">
+            <>
+              {/* Mobile Card List View (Phones & Small Viewports) */}
+              <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredInvoices.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                    Nenhuma fatura encontrada com os filtros atuais.
+                  </div>
+                ) : (
+                  filteredInvoices.map((inv) => (
+                    <div 
+                      key={`mob-${inv.id}`}
+                      className={`p-4 space-y-2.5 transition-colors ${
+                        selectedInvoiceIds.includes(inv.id) ? 'bg-[#fab518]/10 dark:bg-[#fab518]/15' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={selectedInvoiceIds.includes(inv.id)}
+                            onChange={() => handleToggleSelectInvoice(inv.id)}
+                            className="w-4 h-4 accent-[#fab518] rounded cursor-pointer shrink-0"
+                          />
+                          <span className="font-mono font-bold text-xs text-[#142142] dark:text-[#fab518] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                            {inv.id}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(inv.id)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold transition-all cursor-pointer ${
+                            inv.status === 'Pago'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                              : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                          }`}
+                        >
+                          {inv.status === 'Pago' ? <CheckCircle2 size={11} className="stroke-[2.5]" /> : <Clock size={11} className="stroke-[2.5]" />}
+                          <span>{inv.status}</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-bold text-[#142142] dark:text-white truncate">
+                            {inv.client}
+                          </h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                            {inv.service}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-sm font-black text-[#142142] dark:text-white block">
+                            R$ {inv.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            Venc: {new Date(`${inv.dueDate}T00:00:00`).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-100/80 dark:border-slate-800/80">
+                        <span className="text-[11px] text-slate-400 font-medium">
+                          {inv.paymentMethod} • {inv.category}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPix(inv.id)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                            title="Copiar PIX"
+                          >
+                            <Copy size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(inv.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                            title="Excluir fatura"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Desktop Table View */}
+              <table className="hidden md:table w-full text-left text-xs sm:text-sm">
               <thead className="bg-[#F8F9FA] dark:bg-slate-900/80 text-[#142142] dark:text-slate-300 font-extrabold uppercase text-[11px] border-b border-slate-200 dark:border-slate-800">
                 <tr>
                   <th className="p-4 sm:pl-6 w-10 text-center">
@@ -638,7 +730,8 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 )}
               </tbody>
             </table>
-          )}
+          </>
+        )}
         </div>
       </div>
 

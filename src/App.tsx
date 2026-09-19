@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PageId, DemandItem, Client, KanbanColumnId, ClientActivity, Service, TeamMember, KanbanColumn, BudgetProposal, Invoice } from './types';
+import { PageId, DemandItem, Client, KanbanColumnId, ClientActivity, Service, TeamMember, KanbanColumn, BudgetProposal, Invoice, UserProfile, UserRole } from './types';
 import { initialDemands, initialClients, initialRecentActivities, initialServices, initialTeamMembers, initialProposals, initialInvoices, currentUser, kanbanColumnsData } from './data/mockData';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -73,10 +73,12 @@ export function Layout({ children, onLogout }: LayoutProps) {
       const saved = localStorage.getItem('agency_clients');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.map(c => c.id === 'client-piloto-3405' ? { ...c, monthlyFee: 0 } : c);
+        }
       }
     } catch {}
-    return initialClients;
+    return initialClients.map(c => c.id === 'client-piloto-3405' ? { ...c, monthlyFee: 0 } : c);
   });
 
   const [services, setServices] = useState<Service[]>(() => {
@@ -112,7 +114,46 @@ export function Layout({ children, onLogout }: LayoutProps) {
     return initialInvoices;
   });
 
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialTeamMembers);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
+    try {
+      const saved = localStorage.getItem('agency_team_members');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return initialTeamMembers;
+  });
+
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile>(() => {
+    try {
+      const saved = localStorage.getItem('help_agency_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.name) {
+          const isMarcos =
+            (parsed.name.toLowerCase().includes('marcos') && parsed.name.toLowerCase().includes('lancerotti')) ||
+            parsed.email?.toLowerCase() === 'lancerottirmarcos@gmail.com' ||
+            parsed.username === 'lancerotti';
+          return {
+            id: parsed.id || (isMarcos ? 'usr-1' : `usr-${parsed.username || Date.now()}`),
+            name: parsed.name,
+            email: parsed.email || (isMarcos ? 'lancerottirmarcos@gmail.com' : `${parsed.username || 'usuario'}@ideiasdigitais.com.br`),
+            role: (parsed.role as UserRole) || (isMarcos ? 'proprietario' : 'colaborador'),
+            roleLabel: parsed.roleLabel || (isMarcos ? 'Proprietário da Agência' : 'Colaborador'),
+            avatarUrl: parsed.avatarUrl || currentUser.avatarUrl,
+          };
+        }
+      }
+    } catch {}
+    return currentUser;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('agency_team_members', JSON.stringify(teamMembers));
+    } catch {}
+  }, [teamMembers]);
   const [activities, setActivities] = useState<ClientActivity[]>(initialRecentActivities);
   const [selectedClientForKanban, setSelectedClientForKanban] = useState<string>('todos');
 
@@ -137,11 +178,12 @@ export function Layout({ children, onLogout }: LayoutProps) {
 
       // Se o Supabase tiver clientes cadastrados na nuvem, atualiza imediatamente a visualização
       if (remoteClients && Array.isArray(remoteClients) && remoteClients.length > 0) {
-        setClients(remoteClients);
+        const sanitizedClients = remoteClients.map(c => c.id === 'client-piloto-3405' ? { ...c, monthlyFee: 0 } : c);
+        setClients(sanitizedClients);
         try {
-          localStorage.setItem('agency_clients', JSON.stringify(remoteClients));
+          localStorage.setItem('agency_clients', JSON.stringify(sanitizedClients));
         } catch {}
-        serverDbService.saveDatabase({ clients: remoteClients });
+        serverDbService.saveDatabase({ clients: sanitizedClients });
       }
 
       // Se o Supabase tiver demandas gravadas
@@ -865,17 +907,33 @@ export function Layout({ children, onLogout }: LayoutProps) {
   };
 
   const handleAddTeamMember = (newMember: TeamMember) => {
-    setTeamMembers((prev) => [newMember, ...prev]);
+    setTeamMembers((prev) => {
+      const updated = [newMember, ...prev];
+      try {
+        localStorage.setItem('agency_team_members', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   const handleUpdateTeamMember = (updatedMember: TeamMember) => {
-    setTeamMembers((prev) =>
-      prev.map((m) => (m.id === updatedMember.id ? updatedMember : m))
-    );
+    setTeamMembers((prev) => {
+      const updated = prev.map((m) => (m.id === updatedMember.id ? updatedMember : m));
+      try {
+        localStorage.setItem('agency_team_members', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   const handleDeleteTeamMember = (memberId: string) => {
-    setTeamMembers((prev) => prev.filter((m) => m.id !== memberId));
+    setTeamMembers((prev) => {
+      const updated = prev.filter((m) => m.id !== memberId);
+      try {
+        localStorage.setItem('agency_team_members', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   const renderCurrentView = () => {
@@ -886,6 +944,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
             onNavigate={setCurrentPage}
             demands={demands}
             clients={clients}
+            invoices={invoices}
             activities={activities}
             onOpenNewDemandModal={() => setIsNewDemandModalOpen(true)}
             onSelectDemand={(demandId) => {
@@ -984,6 +1043,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
             onAddTeamMember={handleAddTeamMember}
             onUpdateTeamMember={handleUpdateTeamMember}
             onDeleteTeamMember={handleDeleteTeamMember}
+            currentUser={currentUserProfile}
           />
         );
       case 'configuracoes':
@@ -1042,6 +1102,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
         isCollapsed={isDesktopSidebarCollapsed}
         onToggleCollapse={() => setIsDesktopSidebarCollapsed((prev) => !prev)}
         onLogout={onLogout}
+        currentUser={currentUserProfile}
       />
 
       {/* Main Workspace Column */}

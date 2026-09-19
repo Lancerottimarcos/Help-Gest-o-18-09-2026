@@ -20,7 +20,14 @@ import {
 } from '../utils/securityProtocols';
 
 interface LoginPageProps {
-  onLoginSuccess: (user: { username: string; name: string }) => void;
+  onLoginSuccess: (user: { 
+    username: string; 
+    name: string;
+    email?: string;
+    role?: string;
+    roleLabel?: string;
+    avatarUrl?: string;
+  }) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
@@ -86,22 +93,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         recordSuccessfulLogin(cleanUser);
         recordSessionActivity();
 
+        const authUser = validation.authenticatedUser || {
+          username: 'lancerotti',
+          name: 'Marcos Lancerotti',
+          email: 'lancerottirmarcos@gmail.com',
+          role: 'proprietario',
+          roleLabel: 'Proprietário da Agência',
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          isMaster: true,
+        };
+
         if (rememberMe) {
           try {
             localStorage.setItem('help_agency_auth', 'true');
-            localStorage.setItem('help_agency_user', JSON.stringify({
-              username: 'lancerotti',
-              name: 'Marcos Lancerotti'
-            }));
+            localStorage.setItem('help_agency_user', JSON.stringify(authUser));
           } catch {
             // ignore localStorage quota/privacy error
           }
         }
         setIsLoading(false);
-        onLoginSuccess({
-          username: 'lancerotti',
-          name: 'Marcos Lancerotti'
-        });
+        onLoginSuccess(authUser);
       } else {
         setIsLoading(false);
         // Record failed attempt in security protocol with detailed reason

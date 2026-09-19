@@ -1,0 +1,215 @@
+{
+  "clients": [
+    {
+      "id": "cli-1789831092071",
+      "personType": "fisica",
+      "name": "Richard",
+      "cpfCnpj": "35245025809",
+      "companyName": "Richard",
+      "segment": "Geral",
+      "contactName": "Richard",
+      "email": "contato@richard.com.br",
+      "emails": [],
+      "phone": "16994031493",
+      "phones": [
+        "16994031493"
+      ],
+      "coverColor": "#142142",
+      "avatar": "https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=120&auto=format&fit=crop&q=80",
+      "status": "Ativo",
+      "monthlyFee": 0,
+      "services": [
+        "Gestão de Redes Sociais",
+        "Tráfego Pago"
+      ],
+      "activeDemandsCount": 0,
+      "joinedDate": "2026-09-19",
+      "city": "Teresópolis",
+      "state": "RJ",
+      "history": [],
+      "isAnonymized": false
+    },
+    {
+      "id": "cli-1789819097147",
+      "personType": "fisica",
+      "name": "Reginaldo",
+      "cpfCnpj": "35245025809",
+      "companyName": "Reginaldo",
+      "segment": "Geral",
+      "contactName": "Reginaldo",
+      "email": "contato@reginaldo.com.br",
+      "emails": [],
+      "phone": "(11) 99999-0000",
+      "phones": [],
+      "coverColor": "#9810fa",
+      "avatar": "https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=120&auto=format&fit=crop&q=80",
+      "status": "Ativo",
+      "monthlyFee": 0,
+      "services": [
+        "Gestão de Redes Sociais",
+        "Tráfego Pago"
+      ],
+      "activeDemandsCount": 0,
+      "joinedDate": "2026-09-19",
+      "history": [],
+      "isAnonymized": false
+    },
+    {
+      "id": "cli-1789760600686",
+      "personType": "juridica",
+      "name": "Marcelo",
+      "companyName": "Marcelo",
+      "segment": "dgdgdg",
+      "contactName": "ddf",
+      "email": "dgdg@gmail.com",
+      "emails": [],
+      "phone": "dgdg",
+      "phones": [],
+      "avatar": "https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=120&auto=format&fit=crop&q=80",
+      "status": "Ativo",
+      "monthlyFee": 0,
+      "services": [
+        "Gestão de Redes Sociais",
+        "Tráfego Pago"
+      ],
+      "activeDemandsCount": 0,
+      "history": [],
+      "isAnonymized": false
+    },
+    {
+      "id": "client-piloto-3405",
+      "personType": "juridica",
+      "name": "Help Ideias - Cliente Demonstração",
+      "companyName": "Help Ideias Digitais",
+      "segment": "Marketing Digital",
+      "contactName": "Marcos Lancerotti",
+      "email": "lancerottirmarcos@gmail.com",
+      "emails": [],
+      "phone": "(11) 98765-4321",
+      "phones": [],
+      "avatar": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&auto=format&fit=crop&q=80",
+      "status": "Ativo",
+      "monthlyFee": 0,
+      "services": [
+        "Gestão de Tráfego",
+        "Social Media",
+        "Branding"
+      ],
+      "activeDemandsCount": 1,
+      "history": [],
+      "isAnonymized": false
+    },
+    {
+      "id": "cli-1789758998914",
+      "personType": "juridica",
+      "name": "Carlos",
+      "companyName": "Carlos",
+      "segment": "Geral",
+      "contactName": "Carlos",
+      "email": "contato@carlos.com.br",
+      "emails": [],
+      "phone": "(11) 99999-0000",
+      "phones": [],
+      "avatar": "https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=120&auto=format&fit=crop&q=80",
+      "status": "Ativo",
+      "monthlyFee": 0,
+      "services": [
+        "Gestão de Redes Sociais",
+        "Tráfego Pago"
+      ],
+      "activeDemandsCount": 0,
+      "history": [],
+      "isAnonymized": false
+    },
+    {
+      "id": "cli-1789737013356",
+      "personType": "juridica",
+      "name": "Keisy Mendroti",
+      "companyName": "Keisy Mendroti",
+      "segment": "Marketing",
+      "contactName": "Keisy Mendrotitg",
+      "email": "lancerottirmarcos@gmail.com",
+      "emails": [],
+      "phone": "16994031493",
+      "phones": [],
+      "avatar": "https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=120&auto=format&fit=crop&q=80",
+      "status": "Ativo",
+      "monthlyFee": 0,
+      "services": [
+        "Gestão de Redes Sociais",
+        "Tráfego Pago"
+      ],
+      "activeDemandsCount": 0,
+      "history": [],
+      "isAnonymized": false
+    }
+  ],
+  "demands": [
+    {
+      "id": "demand-piloto-6670",
+      "title": "Campanha Inaugural - Presença Digital",
+      "client": "Help Ideias - Cliente Demonstração",
+      "clientProject": "Lançamento Institucional",
+      "description": "Demanda de validação conectada com sucesso ao banco PostgreSQL Supabase.",
+      "type": "Campanha",
+      "serviceCategory": "Social Media",
+      "columnId": "producao",
+      "priority": "alta",
+      "priorityBars": 3,
+      "dueDate": "Próxima semana",
+      "assignee": {
+        "name": "Marcos Lancerotti",
+        "avatar": ""
+      },
+      "statusLabel": "Em Produção",
+      "checklistTotal": 0,
+      "checklistCompleted": 0,
+      "commentsCount": 0,
+      "attachmentsCount": 0,
+      "whatsappNotified": false,
+      "attachments": []
+    },
+    {
+      "id": "demand-piloto-2759",
+      "title": "teste",
+      "client": "Help Ideias - Cliente Demonstração",
+      "clientProject": "Lançamento Institucional",
+      "description": "Demanda de validação conectada com sucesso ao banco PostgreSQL Supabase.",
+      "type": "Campanha",
+      "serviceCategory": "Social Media",
+      "columnId": "producao",
+      "priority": "alta",
+      "priorityBars": 3,
+      "dueDate": "Próxima semana",
+      "assignee": {
+        "name": "Marcos Lancerotti",
+        "avatar": ""
+      },
+      "statusLabel": "Em Produção",
+      "checklistTotal": 0,
+      "checklistCompleted": 0,
+      "commentsCount": 0,
+      "attachmentsCount": 0,
+      "whatsappNotified": false,
+      "attachments": []
+    }
+  ],
+  "services": [
+    {
+      "id": "srv-1789740458381",
+      "title": "Plano Basic",
+      "category": "Social Media",
+      "description": "Teste",
+      "basePrice": 400,
+      "isMonthly": true,
+      "deliverables": [
+        "Alinhamento estratégico inicial",
+        "Entrega de relatórios de desempenho"
+      ],
+      "activeClientsCount": 0
+    }
+  ],
+  "proposals": [],
+  "invoices": [],
+  "updatedAt": 1789832838126
+}

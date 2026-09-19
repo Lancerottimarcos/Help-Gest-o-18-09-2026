@@ -31,7 +31,7 @@ import {
   Briefcase,
   FileSpreadsheet
 } from 'lucide-react';
-import { Client, DemandItem, PageId, ClientActivity, InicioSectionId, InicioSectionMeta } from '../types';
+import { Client, DemandItem, PageId, ClientActivity, InicioSectionId, InicioSectionMeta, Invoice } from '../types';
 import { RecentClientActivityFeed } from '../components/RecentClientActivityFeed';
 import { DemandsStatusDoughnutChart } from '../components/DemandsStatusDoughnutChart';
 import { ClientLocationMap } from '../components/ClientLocationMap';
@@ -130,6 +130,7 @@ interface InicioViewProps {
   onNavigate: (page: PageId) => void;
   demands: DemandItem[];
   clients: Client[];
+  invoices?: Invoice[];
   activities?: ClientActivity[];
   onOpenNewDemandModal: () => void;
   onSelectDemand?: (demandId: string) => void;
@@ -140,6 +141,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
   onNavigate,
   demands,
   clients,
+  invoices = [],
   activities = initialRecentActivities,
   onOpenNewDemandModal,
   onSelectDemand,
@@ -315,7 +317,13 @@ export const InicioView: React.FC<InicioViewProps> = ({
   const scheduledDemands = demands.filter((d) => d.columnId === 'agendamento');
   
   const activeClients = clients.filter((c) => c.status === 'Ativo');
-  const totalMRR = clients.reduce((acc, c) => acc + (c.status === 'Ativo' ? c.monthlyFee : 0), 0);
+  
+  // Cálculos financeiros estritamente baseados nas faturas geradas
+  const totalInvoiced = invoices.reduce((acc, i) => acc + (i.value || 0), 0);
+  const totalPaidInvoices = invoices.filter(i => i.status === 'Pago').reduce((acc, i) => acc + (i.value || 0), 0);
+  const recurringInvoices = invoices.filter(i => (i.category || '').toLowerCase().includes('recorr'));
+  const totalMRR = recurringInvoices.reduce((acc, i) => acc + (i.value || 0), 0);
+
   const lastClient = clients.length > 0 ? clients[clients.length - 1] : null;
 
   // New clients added this month (September 2026 or currently in onboarding)
@@ -502,21 +510,20 @@ export const InicioView: React.FC<InicioViewProps> = ({
               <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#142142] dark:text-white tracking-tight">
                 {greeting}, <span className="text-[#142142] dark:text-[#fab518]">{currentUser.name}</span>! 👋
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Painel gerencial da agência • Acompanhe o fluxo de produção, demandas e resultados de hoje.
-              </p>
             </div>
 
-            <div className="flex items-center gap-2.5 self-start sm:self-center shrink-0">
+            {!isReorderMode && (
               <button
                 type="button"
-                onClick={onOpenNewDemandModal}
-                className="px-4 py-2.5 rounded-xl bg-[#fab518] hover:bg-[#e29f11] text-[#142142] text-xs font-black transition-all cursor-pointer flex items-center gap-2 shadow-sm hover:shadow"
+                id="btn-toggle-reorder-mode"
+                onClick={() => setIsReorderMode(true)}
+                className="px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 hover:text-[#142142] dark:hover:text-white hover:border-[#fab518] border border-slate-200/90 dark:border-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs hover:shadow-sm shrink-0 self-start sm:self-center group"
+                title="Personalizar e organizar os blocos do painel de início"
               >
-                <Plus size={15} className="stroke-[3]" />
-                <span>Nova Demanda</span>
+                <Move size={13} className="text-[#fab518] group-hover:scale-110 transition-transform" />
+                <span>Modo Organização</span>
               </button>
-            </div>
+            )}
           </div>
         );
 
@@ -594,30 +601,32 @@ export const InicioView: React.FC<InicioViewProps> = ({
                     </div>
                     <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/50">
                       <ArrowUpRight size={12} />
-                      <span>{totalMRR > 0 ? '+15.2% vs mês ant.' : 'R$ 0,00 base'}</span>
+                      <span>{invoices.length > 0 ? `${invoices.length} fatura(s)` : 'R$ 0,00 base'}</span>
                     </span>
                   </div>
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                    Receita Recorrente Mensal (MRR)
+                    Faturamento Gerado
                   </span>
                   <div className="text-3xl sm:text-4xl font-black text-[#142142] dark:text-white mt-1.5 tracking-tight">
-                    R$ {totalMRR.toLocaleString('pt-BR')}
-                    <span className="text-sm font-normal text-slate-400 dark:text-slate-400 ml-1">/mês</span>
+                    R$ {totalInvoiced.toLocaleString('pt-BR')}
+                    <span className="text-sm font-normal text-slate-400 dark:text-slate-400 ml-1">
+                      {totalMRR > 0 ? `(R$ ${totalMRR.toLocaleString('pt-BR')} rec.)` : 'emitido'}
+                    </span>
                   </div>
                 </div>
 
                 <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800/80">
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Contratos</p>
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Faturas</p>
                       <p className="font-semibold text-slate-700 dark:text-slate-200">
-                        {activeClients.length} ativos
+                        {invoices.length} {invoices.length === 1 ? 'emitida' : 'emitidas'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Adimplência</p>
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Liquidado</p>
                       <p className="font-semibold text-emerald-600 dark:text-emerald-400">
-                        100% regular
+                        R$ {totalPaidInvoices.toLocaleString('pt-BR')}
                       </p>
                     </div>
                   </div>
@@ -1205,45 +1214,24 @@ export const InicioView: React.FC<InicioViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Controls Toolbar: In standard mode, only shows "Modo Organização" button. In Modo Organização, unlocks all customization tools */}
-      {!isReorderMode ? (
-        <div className="flex items-center justify-between gap-3.5 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md p-3.5 sm:p-4 rounded-[24px] border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center border border-slate-200/60 dark:border-slate-700/60 shrink-0">
-              <SlidersHorizontal size={16} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs sm:text-sm font-black text-[#142142] dark:text-white tracking-tight">
-                  Painel de Início
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                  {visibleSections.length} de {sectionsOrder.length} seções ativas
-                </span>
-                {hiddenSections.length > 0 && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/80">
-                    {hiddenSections.length} {hiddenSections.length === 1 ? 'oculta' : 'ocultas'}
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Para alterar a ordem das seções ou ocultar blocos, ative o modo organização
-              </p>
-            </div>
-          </div>
-
+      {/* Fallback button if the Welcome section is hidden by the user */}
+      {!isReorderMode && !visibleSections.includes('welcome') && (
+        <div className="flex justify-end animate-in fade-in">
           <button
             type="button"
-            id="btn-toggle-reorder-mode"
+            id="btn-toggle-reorder-mode-fallback"
             onClick={() => setIsReorderMode(true)}
-            className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-[#142142] dark:hover:text-white hover:border-[#fab518] border border-slate-200/90 dark:border-slate-700 text-xs font-black transition-all cursor-pointer flex items-center gap-2 shadow-2xs hover:shadow-sm group shrink-0"
-            title="Liberar personalização das seções, reordenação e visibilidade"
+            className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-[#142142] dark:hover:text-white hover:border-[#fab518] border border-slate-200/90 dark:border-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs hover:shadow-sm group"
+            title="Organizar e personalizar a ordem dos blocos do painel"
           >
             <Move size={13} className="text-[#fab518] group-hover:scale-110 transition-transform" />
             <span>Modo Organização</span>
           </button>
         </div>
-      ) : (
+      )}
+
+      {/* Top Controls Toolbar: In Modo Organização, unlocks all customization tools */}
+      {isReorderMode && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 bg-amber-50/70 dark:bg-slate-900/90 backdrop-blur-md p-3.5 sm:p-4.5 rounded-[24px] border-2 border-[#fab518] dark:border-[#fab518]/70 shadow-lg shadow-amber-500/5 ring-4 ring-[#fab518]/10 animate-in fade-in duration-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-[#fab518] text-[#142142] flex items-center justify-center shrink-0 shadow-xs font-black">

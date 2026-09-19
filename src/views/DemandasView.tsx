@@ -1081,6 +1081,35 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
             </button>
           )}
 
+          {/* Mobile Column Quick Jump Bar */}
+          <div className="sm:hidden flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 px-0.5 mb-2.5 shrink-0">
+            {activeColumns.map((col) => {
+              const colCount = filteredDemands.filter((d) => d.columnId === col.id).length;
+              return (
+                <button
+                  key={col.id}
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById(`kanban-column-${col.id}`);
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-[#142142] dark:text-white whitespace-nowrap shadow-2xs active:scale-95 transition-all shrink-0 cursor-pointer"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: col.color }}
+                  />
+                  <span>{col.title}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300">
+                    {colCount}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <div 
             ref={boardContainerRef}
             onScroll={handleBoardScroll}
@@ -1089,7 +1118,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
             onMouseMove={handleBoardMouseMove}
             onMouseUp={handleBoardMouseUp}
             onMouseLeave={handleBoardMouseUp}
-            className="flex items-start gap-4.5 overflow-x-auto pb-4 pt-1 kanban-scrollbar-x scroll-smooth min-w-full cursor-grab active:cursor-grabbing select-none"
+            className="flex items-start gap-3 sm:gap-4.5 overflow-x-auto pb-4 pt-1 kanban-scrollbar-x scroll-smooth min-w-full snap-x snap-mandatory sm:snap-none cursor-grab active:cursor-grabbing select-none"
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
             {activeColumns.map((col) => {
@@ -1104,8 +1133,8 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                   onDragLeave={(e) => handleColumnDragLeave(e, col.id)}
                   onDrop={(e) => handleColumnDrop(e, col.id)}
                   className={`
-                    rounded-[26px] p-4.5 border flex flex-col w-[320px] min-w-[320px] shrink-0 transition-colors
-                    min-h-[620px] sm:min-h-[700px] lg:min-h-[780px] xl:min-h-[860px] max-h-[88vh] lg:max-h-[calc(100vh-140px)] overflow-y-auto kanban-column-scrollbar
+                    rounded-2xl sm:rounded-[26px] p-3.5 sm:p-4.5 border flex flex-col w-[84vw] sm:w-[320px] min-w-[270px] sm:min-w-[320px] max-w-[340px] shrink-0 snap-center transition-colors
+                    min-h-[580px] sm:min-h-[700px] lg:min-h-[780px] xl:min-h-[860px] max-h-[88vh] lg:max-h-[calc(100vh-140px)] overflow-y-auto kanban-column-scrollbar
                     ${isDragOver 
                       ? 'bg-amber-50/80 dark:bg-amber-950/30 border-[#fab518] ring-2 ring-[#fab518]/30' 
                       : 'bg-[#F8F9FA] dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800'
