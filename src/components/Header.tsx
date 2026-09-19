@@ -16,7 +16,10 @@ import {
   ExternalLink, 
   X,
   ShieldCheck,
-  KeyRound
+  KeyRound,
+  Database,
+  RefreshCw,
+  Cloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PageId, AgencyNotification } from '../types';
@@ -37,6 +40,10 @@ interface HeaderProps {
   onToggleSidebarCollapse?: () => void;
   onLogout?: () => void;
   onNavigate?: (page: PageId) => void;
+  isSupabaseOnline?: boolean;
+  supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
+  onRefreshSupabase?: () => void;
+  clientsCount?: number;
 }
 
 const STORAGE_KEY = 'help_agency_notifications_v2';
@@ -157,6 +164,10 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSidebarCollapse,
   onLogout,
   onNavigate,
+  isSupabaseOnline = false,
+  supabaseSyncStatus = 'idle',
+  onRefreshSupabase,
+  clientsCount,
 }) => {
   const pageInfo = PAGE_TITLES[currentPage] || PAGE_TITLES.inicio;
 
@@ -333,6 +344,39 @@ export const Header: React.FC<HeaderProps> = ({
             className="w-full bg-[#F2F2F2] dark:bg-slate-800/80 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 focus:bg-white dark:focus:bg-slate-900 text-xs sm:text-sm font-medium text-[#142142] dark:text-slate-100 pl-9 pr-3.5 py-2 rounded-xl border border-transparent dark:border-slate-700 focus:border-[#fab518] focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
           />
         </div>
+
+        {/* Supabase Cloud Connection & Sync Status Indicator */}
+        <button
+          type="button"
+          id="btn-supabase-cloud-sync"
+          onClick={onRefreshSupabase}
+          disabled={supabaseSyncStatus === 'syncing'}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+            supabaseSyncStatus === 'syncing'
+              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+              : isSupabaseOnline
+              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#fab518]'
+          }`}
+          title={
+            supabaseSyncStatus === 'syncing'
+              ? 'Sincronizando com a nuvem Supabase...'
+              : 'Banco Supabase Conectado. Clique para sincronizar agora.'
+          }
+        >
+          {supabaseSyncStatus === 'syncing' ? (
+            <RefreshCw size={13} className="animate-spin text-amber-500" />
+          ) : (
+            <Database size={13} className={isSupabaseOnline ? 'text-emerald-500' : 'text-slate-400'} />
+          )}
+          <span className="hidden xl:inline text-[11px]">
+            {supabaseSyncStatus === 'syncing'
+              ? 'Sincronizando...'
+              : isSupabaseOnline
+              ? `Supabase Conectado (${typeof clientsCount === 'number' ? clientsCount : 5})`
+              : 'Supabase Nuvem'}
+          </span>
+        </button>
 
         {/* Theme Toggle Button (Light/Dark Mode) */}
         <ThemeToggle variant="icon" />

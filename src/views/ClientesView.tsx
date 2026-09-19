@@ -23,7 +23,9 @@ import {
   Hash,
   KeyRound,
   CheckSquare,
-  Square
+  Square,
+  RefreshCw,
+  Database
 } from 'lucide-react';
 import { Client, DemandItem } from '../types';
 import { ClientDetailDrawer } from '../components/ClientDetailDrawer';
@@ -46,6 +48,8 @@ interface ClientesViewProps {
   onDeleteMultipleClients?: (clientIds: string[]) => void;
   onSelectClientDemands?: (clientName: string) => void;
   onOpenNewDemandForClient?: (clientName: string) => void;
+  supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
+  onRefreshSupabase?: () => void;
 }
 
 export const ClientesView: React.FC<ClientesViewProps> = ({
@@ -57,6 +61,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   onDeleteMultipleClients,
   onSelectClientDemands,
   onOpenNewDemandForClient,
+  supabaseSyncStatus = 'idle',
+  onRefreshSupabase,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -311,15 +317,33 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          id="btn-new-client"
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs sm:text-sm shadow-xs transition-all cursor-pointer"
-        >
-          <Plus size={16} className="stroke-[3]" />
-          <span>Novo cliente</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {onRefreshSupabase && (
+            <button
+              type="button"
+              id="btn-refresh-clients-supabase"
+              onClick={onRefreshSupabase}
+              disabled={supabaseSyncStatus === 'syncing'}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+              title="Sincronizar clientes com o banco PostgreSQL Supabase na nuvem"
+            >
+              <RefreshCw size={13} className={supabaseSyncStatus === 'syncing' ? 'animate-spin text-amber-500' : 'text-slate-500'} />
+              <span className="hidden sm:inline">
+                {supabaseSyncStatus === 'syncing' ? 'Sincronizando...' : `Nuvem (${clients.length})`}
+              </span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            id="btn-new-client"
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs sm:text-sm shadow-xs transition-all cursor-pointer"
+          >
+            <Plus size={16} className="stroke-[3]" />
+            <span>Novo cliente</span>
+          </button>
+        </div>
       </div>
 
       {/* Bulk Action Bar for Clients */}
@@ -387,14 +411,27 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
               <span>Limpar busca</span>
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={() => setShowModal(true)}
-              className="px-5 py-2.5 bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs rounded-xl inline-flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
-            >
-              <Plus size={14} className="stroke-[3]" />
-              <span>Cadastrar Primeiro Cliente</span>
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowModal(true)}
+                className="px-5 py-2.5 bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs rounded-xl inline-flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+              >
+                <Plus size={14} className="stroke-[3]" />
+                <span>Cadastrar Primeiro Cliente</span>
+              </button>
+              {onRefreshSupabase && (
+                <button
+                  type="button"
+                  onClick={onRefreshSupabase}
+                  disabled={supabaseSyncStatus === 'syncing'}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl inline-flex items-center gap-1.5 cursor-pointer transition-colors border border-slate-200 dark:border-slate-700"
+                >
+                  <RefreshCw size={13} className={supabaseSyncStatus === 'syncing' ? 'animate-spin text-amber-500' : ''} />
+                  <span>{supabaseSyncStatus === 'syncing' ? 'Buscando do Supabase...' : 'Sincronizar do Supabase'}</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
       ) : (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Database, 
   Check, 
@@ -7,29 +7,45 @@ import {
   RefreshCw, 
   AlertCircle, 
   CheckCircle2, 
+  XCircle,
   CloudUpload, 
   Key, 
   Server,
   Sparkles,
   ArrowDownToLine,
   HelpCircle,
-  FileCode2
+  Terminal,
+  Trash2,
+  Table,
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
 import { 
   getSupabaseUrl, 
   getSupabaseAnonKey, 
   saveSupabaseCredentials, 
-  testSupabaseConnection, 
   getSupabaseConfigStatus,
   syncSupabaseCredentialsWithServer,
+  validateSupabaseUrl,
+  validateSupabaseAnonKey,
+  runComprehensiveConnectionTest,
+  ComprehensiveTestResult,
+  ConnectionTestLog,
   SupabaseConfigStatus
 } from '../lib/supabaseClient';
-import { supabaseService, SUPABASE_SQL_SCHEMA } from '../services/supabaseService';
-import { DemandItem, Client } from '../types';
+import { 
+  supabaseService, 
+  SUPABASE_SQL_SCHEMA, 
+  SUPABASE_MIGRATION_SQL 
+} from '../services/supabaseService';
+import { DemandItem, Client, Service, BudgetProposal, Invoice } from '../types';
 
 interface SupabaseConnectionTabProps {
   demands?: DemandItem[];
   clients?: Client[];
+  services?: Service[];
+  proposals?: BudgetProposal[];
+  invoices?: Invoice[];
   onDataImported?: (demands: DemandItem[], clients: Client[]) => void;
 }
 
@@ -37,27 +53,36 @@ interface SyncFeedbackState {
   type: 'success' | 'error' | 'info';
   title: string;
   message: string;
-  action?: 'copy-sql' | 'none';
+  action?: 'copy-sql' | 'copy-migration-sql' | 'none';
 }
 
 export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
   demands = [],
   clients = [],
+  services = [],
+  proposals = [],
+  invoices = [],
   onDataImported
 }) => {
   const [url, setUrl] = useState(() => getSupabaseUrl());
   const [anonKey, setAnonKey] = useState(() => getSupabaseAnonKey());
   const [status, setStatus] = useState<SupabaseConfigStatus>(() => getSupabaseConfigStatus());
   
+  // Realtime immediate validation states
+  const urlValidation = useMemo(() => validateSupabaseUrl(url), [url]);
+  const keyValidation = useMemo(() => validateSupabaseAnonKey(anonKey), [anonKey]);
+
   const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string; latencyMs?: number } | null>(null);
+  const [testResult, setTestResult] = useState<ComprehensiveTestResult | null>(null);
   
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<SyncFeedbackState | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [copiedMigrationSql, setCopiedMigrationSql] = useState(false);
+  const [copiedLogs, setCopiedLogs] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
 
-  // Sincroniza credenciais com o servidor ao montar o componente (para detectar credenciais salvas em outro computador)
+  // Sincroniza credenciais com o servidor ao montar
   useEffect(() => {
     syncSupabaseCredentialsWithServer().then((synced) => {
       if (synced) {
@@ -69,7 +94,7 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
   }, []);
 
   // Fallback para ler dados salvos no localStorage caso as props estejam vazias
-  const effectiveClients = React.useMemo(() => {
+  const effectiveClients = useMemo(() => {
     if (clients && clients.length > 0) return clients;
     try {
       const saved = localStorage.getItem('agency_clients');
@@ -81,7 +106,7 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
     return [];
   }, [clients]);
 
-  const effectiveDemands = React.useMemo(() => {
+  const effectiveDemands = useMemo(() => {
     if (demands && demands.length > 0) return demands;
     try {
       const saved = localStorage.getItem('agency_demands');
@@ -93,6 +118,42 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
     return [];
   }, [demands]);
 
+  const effectiveServices = useMemo(() => {
+    if (services && services.length > 0) return services;
+    try {
+      const saved = localStorage.getItem('agency_services');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  }, [services]);
+
+  const effectiveProposals = useMemo(() => {
+    if (proposals && proposals.length > 0) return proposals;
+    try {
+      const saved = localStorage.getItem('agency_proposals');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  }, [proposals]);
+
+  const effectiveInvoices = useMemo(() => {
+    if (invoices && invoices.length > 0) return invoices;
+    try {
+      const saved = localStorage.getItem('agency_invoices');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  }, [invoices]);
+
   const handleSave = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     saveSupabaseCredentials(url, anonKey);
@@ -101,24 +162,48 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
     setTimeout(() => setSaveToast(false), 3000);
   };
 
+  /**
+   * Teste de conexão completo com logs detalhados
+   */
   const handleTestConnection = async () => {
     const cleanUrl = url.trim();
     const cleanKey = anonKey.trim();
 
     if (!cleanUrl || !cleanKey) {
-      setTestResult({
-        success: false,
-        message: 'Por favor, preencha a Project URL e a Chave Anon antes de testar.',
+      setSyncFeedback({
+        type: 'error',
+        title: 'Credenciais Incompletas',
+        message: 'Por favor, preencha a Project URL e a Chave Anon antes de testar a conexão.',
       });
       return;
     }
 
     setIsTesting(true);
-    setTestResult(null);
     saveSupabaseCredentials(cleanUrl, cleanKey);
-    const res = await testSupabaseConnection(cleanUrl, cleanKey);
-    setIsTesting(false);
-    setTestResult(res);
+    setStatus(getSupabaseConfigStatus());
+
+    try {
+      const result = await runComprehensiveConnectionTest(cleanUrl, cleanKey);
+      setTestResult(result);
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: `Falha crítica durante o teste: ${err.message}`,
+        tablesStatus: { clients: false, demands: false, services: false, proposals: false, invoices: false },
+        missingTables: ['clients', 'demands', 'services', 'proposals', 'invoices'],
+        logs: [
+          {
+            id: `err-${Date.now()}`,
+            timestamp: new Date().toLocaleTimeString('pt-BR'),
+            stage: 'auth',
+            status: 'error',
+            message: `Erro na execução do teste: ${err.message}`,
+          }
+        ],
+      });
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   const handleCopySql = () => {
@@ -127,8 +212,28 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
     setTimeout(() => setCopiedSql(false), 3000);
   };
 
+  const handleCopyMigrationSql = () => {
+    navigator.clipboard.writeText(SUPABASE_MIGRATION_SQL);
+    setCopiedMigrationSql(true);
+    setTimeout(() => setCopiedMigrationSql(false), 3000);
+  };
+
+  const handleCopyLogs = () => {
+    if (!testResult?.logs) return;
+    const formattedLogs = testResult.logs
+      .map((l) => `[${l.timestamp}] [${l.stage.toUpperCase()}] [${l.status.toUpperCase()}] ${l.message} ${l.latencyMs ? `(${l.latencyMs}ms)` : ''}`)
+      .join('\n');
+    navigator.clipboard.writeText(formattedLogs);
+    setCopiedLogs(true);
+    setTimeout(() => setCopiedLogs(false), 3000);
+  };
+
+  const handleClearLogs = () => {
+    setTestResult(null);
+  };
+
   /**
-   * Opção 6: Migrar Dados Locais para o Supabase (sem depender de window.confirm ou window.alert)
+   * Migração de todos os dados locais para o Supabase
    */
   const handleMigrateData = async () => {
     const cleanUrl = url.trim();
@@ -138,31 +243,29 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
       setSyncFeedback({
         type: 'error',
         title: 'Credenciais Incompletas',
-        message: 'Por favor, preencha a Project URL e a Chave Anon nos campos ao lado antes de migrar os dados.',
+        message: 'Por favor, preencha a Project URL e a Chave Anon antes de migrar os dados.',
       });
       return;
     }
 
-    // Salva automaticamente as credenciais para garantir persistência
     saveSupabaseCredentials(cleanUrl, cleanKey);
     setStatus(getSupabaseConfigStatus());
 
     setIsSyncing(true);
     setSyncFeedback({
       type: 'info',
-      title: 'Migrando Dados...',
-      message: 'Conectando ao PostgreSQL do Supabase e sincronizando tabelas...',
+      title: 'Migrando Dados para o PostgreSQL...',
+      message: 'Conectando ao Supabase e enviando clientes, demandas, serviços e lançamentos...',
     });
 
     try {
-      // Se não há dados locais cadastrados, vamos inserir dados piloto para demonstrar o funcionamento
       if (effectiveClients.length === 0 && effectiveDemands.length === 0) {
         const seedRes = await supabaseService.seedTestData(cleanUrl, cleanKey);
         if (seedRes.success) {
           setSyncFeedback({
             type: 'success',
-            title: 'Tabelas Criadas & Dados Piloto Inseridos!',
-            message: 'Como você ainda não tinha clientes cadastrados no navegador, inserimos 1 cliente e 1 demanda de validação no seu banco Supabase. Acesse o "Table Editor" no painel do Supabase para conferir!',
+            title: 'Tabelas Prontas & Registros de Validação Inseridos!',
+            message: 'Como o banco local estava vazio, inserimos 1 cliente e 1 demanda de demonstração no seu Supabase. Acesse o "Table Editor" no painel para conferir.',
           });
         } else {
           setSyncFeedback({
@@ -175,34 +278,42 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
         return;
       }
 
-      // Migra os dados existentes
       const result = await supabaseService.syncAllLocalDataToSupabase(
         effectiveDemands,
         effectiveClients,
         cleanUrl,
-        cleanKey
+        cleanKey,
+        effectiveServices,
+        effectiveProposals,
+        effectiveInvoices
       );
 
       if (result.errors.length > 0) {
-        const isTableMissing = result.errors.some(e => e.includes('não existe'));
+        const isTableMissing = result.errors.some(e => e.includes('não existe') || e.includes('does not exist') || e.includes('42P01'));
+        const isColumnMissing = result.errors.some(e => e.includes('column') || e.includes('schema cache'));
         setSyncFeedback({
           type: 'error',
-          title: isTableMissing ? 'Tabelas Não Encontradas no Supabase' : 'Atenção durante a Migração',
+          title: isTableMissing 
+            ? 'Tabelas Não Criadas no Supabase' 
+            : isColumnMissing 
+              ? 'Colunas Pendentes de Atualização no Supabase' 
+              : 'Avisos durante a Sincronização',
           message: result.errors.join(' | '),
-          action: isTableMissing ? 'copy-sql' : 'none',
+          action: isTableMissing ? 'copy-sql' : isColumnMissing ? 'copy-migration-sql' : 'none',
         });
       } else {
+        const totalItems = result.clientsUploaded + result.demandsUploaded + result.servicesUploaded + result.proposalsUploaded + result.invoicesUploaded;
         setSyncFeedback({
           type: 'success',
           title: 'Migração Concluída com Sucesso!',
-          message: `${result.clientsUploaded} clientes e ${result.demandsUploaded} demandas foram gravados no banco PostgreSQL Supabase. Seus dados estão persistidos na nuvem!`,
+          message: `${totalItems} registros sincronizados no banco Supabase: ${result.clientsUploaded} clientes, ${result.demandsUploaded} demandas, ${result.servicesUploaded} serviços, ${result.proposalsUploaded} orçamentos e ${result.invoicesUploaded} faturas.`,
         });
       }
     } catch (e: any) {
       setSyncFeedback({
         type: 'error',
         title: 'Erro Inesperado',
-        message: `Falha na conexão: ${e.message || 'Verifique a rede ou suas credenciais.'}`,
+        message: `Falha na sincronização: ${e.message || 'Verifique as chaves e conexão.'}`,
       });
     } finally {
       setIsSyncing(false);
@@ -210,50 +321,8 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
   };
 
   /**
-   * Inserir dados de teste diretamente para comprovar o funcionamento
+   * Baixar dados do Supabase para o navegador
    */
-  const handleInsertTestData = async () => {
-    const cleanUrl = url.trim();
-    const cleanKey = anonKey.trim();
-
-    if (!cleanUrl || !cleanKey) {
-      setSyncFeedback({
-        type: 'error',
-        title: 'Credenciais Incompletas',
-        message: 'Preencha a Project URL e a Chave Anon antes de rodar o teste.',
-      });
-      return;
-    }
-
-    saveSupabaseCredentials(cleanUrl, cleanKey);
-    setIsSyncing(true);
-    try {
-      const res = await supabaseService.seedTestData(cleanUrl, cleanKey);
-      if (res.success) {
-        setSyncFeedback({
-          type: 'success',
-          title: 'Dados de Teste Inseridos no PostgreSQL!',
-          message: res.message,
-        });
-      } else {
-        setSyncFeedback({
-          type: 'error',
-          title: 'Erro ao Inserir Registro de Teste',
-          message: res.message,
-          action: res.message.includes('não foi encontrada') ? 'copy-sql' : 'none',
-        });
-      }
-    } catch (err: any) {
-      setSyncFeedback({
-        type: 'error',
-        title: 'Falha no Teste',
-        message: err.message,
-      });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   const handlePullFromSupabase = async () => {
     const cleanUrl = url.trim();
     const cleanKey = anonKey.trim();
@@ -270,8 +339,8 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
     setIsSyncing(true);
     setSyncFeedback({
       type: 'info',
-      title: 'Buscando Dados...',
-      message: 'Consultando tabelas "demands" e "clients" no Supabase...',
+      title: 'Consultando Supabase...',
+      message: 'Lendo dados diretamente do banco de dados na nuvem...',
     });
 
     try {
@@ -286,14 +355,14 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
         }
         setSyncFeedback({
           type: 'success',
-          title: 'Download Concluído!',
-          message: `Carregadas ${remoteDemands.length} demandas e ${remoteClients.length} clientes diretamente do banco PostgreSQL.`,
+          title: 'Download Realizado com Sucesso!',
+          message: `Carregadas ${remoteDemands.length} demandas e ${remoteClients.length} clientes diretamente do Supabase PostgreSQL.`,
         });
       } else {
         setSyncFeedback({
           type: 'error',
-          title: 'Falha na Leitura',
-          message: 'Não foi possível ler as tabelas. Verifique se o Script SQL foi executado no painel do Supabase.',
+          title: 'Falha na Consulta',
+          message: 'Não foi possível ler as tabelas no Supabase. Verifique se o Script SQL foi executado no painel.',
           action: 'copy-sql',
         });
       }
@@ -317,31 +386,32 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black tracking-wider uppercase flex items-center gap-1.5 border border-emerald-500/30">
                 <Database size={13} />
-                PostgreSQL em Nuvem
+                Backend Principal em PostgreSQL
               </span>
               {status.isConfigured ? (
                 <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold flex items-center gap-1">
                   <CheckCircle2 size={13} />
-                  Configurado
+                  Ativo & Configurado
                 </span>
               ) : (
                 <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold flex items-center gap-1">
                   <AlertCircle size={13} />
-                  Aguardando Chaves
+                  Aguardando Credenciais
                 </span>
               )}
             </div>
             <h2 className="text-2xl font-black tracking-tight text-white">
-              Conexão com o Supabase (PostgreSQL)
+              Arquitetura de Banco de Dados Supabase
             </h2>
             <p className="text-slate-300 text-xs leading-relaxed">
-              Substitua o armazenamento local do navegador por um banco relacional gerenciado no Supabase. Habilite acesso simultâneo para sua equipe e persistência duradoura de todas as demandas e clientes.
+              Configure o Supabase como o backend principal do Help Ideias. Garante sincronização em tempo real entre todos os colaboradores, persistência segura com Row Level Security (RLS) e escalabilidade para produção.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
+              id="btn-copy-sql-header"
               onClick={handleCopySql}
               className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
             >
@@ -355,7 +425,7 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
               rel="noreferrer"
               className="px-4 py-2.5 rounded-xl bg-[#fab518] hover:bg-[#e0a215] text-[#142142] font-black text-xs transition-all shadow-md flex items-center gap-2"
             >
-              <span>Acessar Painel Supabase</span>
+              <span>Abrir Painel Supabase</span>
               <ExternalLink size={14} />
             </a>
           </div>
@@ -364,7 +434,7 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
 
       {/* Grid: Credentials & Migration */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Form Column */}
+        {/* Form Column with Immediate Realtime Validation */}
         <div className="lg:col-span-2 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-5">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2 text-sm font-bold text-[#142142] dark:text-white">
@@ -372,7 +442,7 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
               <span>Credenciais da API do Supabase</span>
             </div>
             {saveToast && (
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 animate-fade-in flex items-center gap-1">
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 animate-in fade-in">
                 <Check size={14} />
                 Salvo com sucesso!
               </span>
@@ -380,93 +450,274 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
           </div>
 
           <form onSubmit={handleSave} className="space-y-4">
+            {/* Field 1: Project URL com feedback visual imediato */}
             <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                Project URL (Endpoint do Banco)
-              </label>
-              <input
-                type="text"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://xyzcompany.supabase.co"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-[#fab518]"
-              />
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Project URL (Endpoint do Banco)
+                </label>
+                {/* Feedback Visual Imediato da URL */}
+                {url.trim() ? (
+                  urlValidation.isValid ? (
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 size={13} />
+                      {urlValidation.message}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                      <XCircle size={13} />
+                      {urlValidation.message}
+                    </span>
+                  )
+                ) : (
+                  <span className="text-[11px] text-slate-400">Obrigatório</span>
+                )}
+              </div>
+
+              <div className="relative">
+                <input
+                  id="supabase-project-url-input"
+                  type="text"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://xyzcompany.supabase.co"
+                  className={`w-full px-4 py-2.5 pr-10 rounded-xl border text-xs font-mono transition-all focus:outline-hidden focus:ring-2 ${
+                    !url.trim()
+                      ? 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-[#fab518]'
+                      : urlValidation.isValid
+                      ? 'border-emerald-400 dark:border-emerald-600 bg-emerald-50/20 dark:bg-emerald-950/20 text-slate-900 dark:text-white focus:ring-emerald-500'
+                      : 'border-rose-400 dark:border-rose-600 bg-rose-50/20 dark:bg-rose-950/20 text-slate-900 dark:text-white focus:ring-rose-500'
+                  }`}
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  {url.trim() && (
+                    urlValidation.isValid ? (
+                      <CheckCircle2 size={16} className="text-emerald-500" />
+                    ) : (
+                      <XCircle size={16} className="text-rose-500" />
+                    )
+                  )}
+                </div>
+              </div>
               <p className="text-[11px] text-slate-400 mt-1">
                 Encontrado em <strong>Project Settings &gt; API &gt; Project URL</strong>
               </p>
             </div>
 
+            {/* Field 2: Anon Key com feedback visual imediato */}
             <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                Anon / Public API Key
-              </label>
-              <input
-                type="password"
-                value={anonKey}
-                onChange={(e) => setAnonKey(e.target.value)}
-                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-[#fab518]"
-              />
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Anon / Public API Key
+                </label>
+                {/* Feedback Visual Imediato da Chave */}
+                {anonKey.trim() ? (
+                  keyValidation.isValid ? (
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 size={13} />
+                      {keyValidation.message}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                      <XCircle size={13} />
+                      {keyValidation.message}
+                    </span>
+                  )
+                ) : (
+                  <span className="text-[11px] text-slate-400">Obrigatório</span>
+                )}
+              </div>
+
+              <div className="relative">
+                <input
+                  id="supabase-anon-key-input"
+                  type="password"
+                  value={anonKey}
+                  onChange={(e) => setAnonKey(e.target.value)}
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  className={`w-full px-4 py-2.5 pr-10 rounded-xl border text-xs font-mono transition-all focus:outline-hidden focus:ring-2 ${
+                    !anonKey.trim()
+                      ? 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-[#fab518]'
+                      : keyValidation.isValid
+                      ? 'border-emerald-400 dark:border-emerald-600 bg-emerald-50/20 dark:bg-emerald-950/20 text-slate-900 dark:text-white focus:ring-emerald-500'
+                      : 'border-rose-400 dark:border-rose-600 bg-rose-50/20 dark:bg-rose-950/20 text-slate-900 dark:text-white focus:ring-rose-500'
+                  }`}
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  {anonKey.trim() && (
+                    keyValidation.isValid ? (
+                      <CheckCircle2 size={16} className="text-emerald-500" />
+                    ) : (
+                      <XCircle size={16} className="text-rose-500" />
+                    )
+                  )}
+                </div>
+              </div>
               <p className="text-[11px] text-slate-400 mt-1">
                 Encontrado em <strong>Project Settings &gt; API &gt; Project API keys &gt; anon public</strong>
               </p>
             </div>
 
+            {/* Ações do Formulário */}
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] font-black text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer flex items-center gap-2"
+                id="btn-save-supabase-credentials"
+                className="px-5 py-2.5 rounded-xl bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] font-black text-xs hover:opacity-90 transition-all shadow-xs cursor-pointer flex items-center gap-2 active:scale-95"
               >
                 <Check size={15} />
-                <span>Salvar Configuração</span>
+                <span>Salvar Credenciais</span>
               </button>
 
               <button
                 type="button"
+                id="btn-test-supabase-connection"
                 onClick={handleTestConnection}
                 disabled={isTesting || !url.trim() || !anonKey.trim()}
-                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 active:scale-95"
               >
                 <RefreshCw size={14} className={isTesting ? 'animate-spin text-[#fab518]' : ''} />
-                <span>{isTesting ? 'Testando Conexão...' : 'Testar Conexão em Tempo Real'}</span>
+                <span>{isTesting ? 'Executando Teste Diagnóstico...' : 'Testar Conexão em Tempo Real'}</span>
               </button>
             </div>
           </form>
 
-          {/* Test Feedback */}
+          {/* Terminal / Painel de Logs de Conexão Detalhado */}
           {testResult && (
-            <div
-              className={`p-4 rounded-2xl border text-xs font-medium transition-all ${
-                testResult.success
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
-                  : 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-800 dark:text-red-300'
-              }`}
-            >
-              <div className="flex items-center gap-2 font-bold">
-                {testResult.success ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-                <span>{testResult.message}</span>
+            <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-950 text-slate-100 shadow-md">
+              {/* Header do Terminal */}
+              <div className="px-4 py-2.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <Terminal size={14} className="text-[#fab518]" />
+                  <span className="font-bold text-slate-200">Terminal de Diagnóstico Supabase</span>
+                  {testResult.success ? (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-[10px] flex items-center gap-1 border border-emerald-500/30">
+                      <CheckCircle2 size={11} />
+                      Conectado ({testResult.latencyMs}ms)
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 font-black text-[10px] flex items-center gap-1 border border-rose-500/30">
+                      <XCircle size={11} />
+                      Falha na Conexão
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyLogs}
+                    className="text-[11px] text-slate-400 hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Copiar logs completos"
+                  >
+                    {copiedLogs ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    <span>{copiedLogs ? 'Copiado!' : 'Copiar'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearLogs}
+                    className="text-[11px] text-slate-400 hover:text-rose-400 transition-colors flex items-center gap-1 cursor-pointer ml-1"
+                    title="Limpar logs"
+                  >
+                    <Trash2 size={12} />
+                    <span>Limpar</span>
+                  </button>
+                </div>
               </div>
-              {testResult.latencyMs !== undefined && (
-                <div className="mt-1 text-[11px] opacity-80">
-                  Latência do servidor: {testResult.latencyMs}ms
+
+              {/* Status das Tabelas Principais */}
+              <div className="p-3 bg-slate-900/60 border-b border-slate-800/80">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Table size={12} className="text-[#fab518]" />
+                  <span>Auditoria de Tabelas no PostgreSQL</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                  {Object.entries(testResult.tablesStatus).map(([table, exists]) => (
+                    <div 
+                      key={table}
+                      className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between text-[11px] font-mono ${
+                        exists 
+                          ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300' 
+                          : 'bg-rose-950/40 border-rose-800 text-rose-300'
+                      }`}
+                    >
+                      <span className="font-bold">{table}</span>
+                      {exists ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Console de Logs Passo a Passo */}
+              <div className="p-3 max-h-56 overflow-y-auto font-mono text-[11px] space-y-1.5 leading-relaxed">
+                {testResult.logs.map((log) => (
+                  <div key={log.id} className="flex items-start gap-2">
+                    <span className="text-slate-500 shrink-0 select-none">[{log.timestamp}]</span>
+                    <span 
+                      className={`px-1.5 py-0.2 rounded text-[10px] font-bold shrink-0 uppercase select-none ${
+                        log.stage === 'format' ? 'bg-blue-900/60 text-blue-300' :
+                        log.stage === 'auth' ? 'bg-purple-900/60 text-purple-300' :
+                        log.stage === 'rest' ? 'bg-amber-900/60 text-amber-300' :
+                        log.stage === 'tables' ? 'bg-cyan-900/60 text-cyan-300' :
+                        'bg-slate-800 text-slate-300'
+                      }`}
+                    >
+                      {log.stage}
+                    </span>
+                    <span 
+                      className={
+                        log.status === 'success' ? 'text-emerald-400' :
+                        log.status === 'error' ? 'text-rose-400 font-bold' :
+                        log.status === 'warning' ? 'text-amber-300' :
+                        'text-slate-300'
+                      }
+                    >
+                      {log.message}
+                    </span>
+                    {log.latencyMs !== undefined && (
+                      <span className="text-slate-500 text-[10px] ml-auto shrink-0">
+                        {log.latencyMs}ms
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Ação se faltarem tabelas */}
+              {testResult.missingTables.length > 0 && (
+                <div className="p-3 bg-amber-950/40 border-t border-amber-900/60 flex items-center justify-between gap-3 text-xs text-amber-300">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={14} className="text-amber-400 shrink-0" />
+                    <span className="text-[11px]">
+                      Tabelas pendentes no Supabase: <strong>{testResult.missingTables.join(', ')}</strong>.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopySql}
+                    className="px-3 py-1.5 rounded-lg bg-[#fab518] hover:bg-amber-400 text-[#142142] font-black text-[11px] shrink-0 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Copy size={12} />
+                    <span>Copiar Script SQL</span>
+                  </button>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Sync & Migration Column (OPÇÃO 6) */}
+        {/* Sync & Migration Column */}
         <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-5 flex flex-col justify-between">
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-bold text-[#142142] dark:text-white pb-3 border-b border-slate-100 dark:border-slate-800">
               <CloudUpload size={18} className="text-[#fab518]" />
-              <span>Sincronização & Migração (Opção 6)</span>
+              <span>Sincronização & Migração</span>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
               <div className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center justify-between">
-                <span>Registros Prontos para Envio:</span>
-                <span className="text-[10px] text-slate-400 font-normal">Navegador Local</span>
+                <span>Registros Prontos para Nuvem:</span>
+                <span className="text-[10px] text-slate-400 font-normal">Armazenamento Local</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-center">
                 <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
@@ -485,12 +736,12 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Clique no botão abaixo para enviar os registros para as tabelas do seu Supabase PostgreSQL.
+              Clique no botão abaixo para migrar os dados do Help Ideias diretamente para as tabelas PostgreSQL do seu Supabase.
             </p>
           </div>
 
           <div className="space-y-2.5 pt-3">
-            {/* BOTÃO PRINCIPAL OPÇÃO 6 */}
+            {/* Botão Principal de Migração */}
             <button
               type="button"
               id="btn-migrate-supabase"
@@ -502,24 +753,13 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
               <span>{isSyncing ? 'Gravando no Supabase...' : 'Migrar Dados Locais p/ Supabase'}</span>
             </button>
 
-            {/* Inserir Registro Piloto (Para validar mesmo com 0 clientes) */}
-            <button
-              type="button"
-              onClick={handleInsertTestData}
-              disabled={isSyncing}
-              className="w-full py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
-              title="Cria 1 cliente e 1 demanda de teste diretamente no Supabase para validar as tabelas"
-            >
-              <Sparkles size={13} className="text-emerald-500" />
-              <span>Inserir Linhas de Teste no Supabase</span>
-            </button>
-
             {/* Puxar do Banco */}
             <button
               type="button"
+              id="btn-pull-supabase-data"
               onClick={handlePullFromSupabase}
               disabled={isSyncing}
-              className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
             >
               <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
               <span>Baixar Dados do Supabase p/ Navegador</span>
@@ -556,6 +796,19 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
                     </button>
                   </div>
                 )}
+
+                {syncFeedback.action === 'copy-migration-sql' && (
+                  <div className="pt-1 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopyMigrationSql}
+                      className="px-3 py-1.5 rounded-lg bg-[#fab518] hover:bg-amber-400 text-[#142142] font-black text-[11px] flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Copy size={12} />
+                      <span>{copiedMigrationSql ? 'Script de Atualização Copiado!' : 'Copiar Script de Atualização de Colunas (ALTER TABLE)'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -569,26 +822,38 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
             <Server size={18} className="text-[#fab518]" />
             <div>
               <h3 className="text-sm font-bold text-[#142142] dark:text-white">
-                Script SQL de Criação das Tabelas
+                Scripts SQL para o Banco no Supabase
               </h3>
               <p className="text-[11px] text-slate-400">
-                Execute este código no <strong>SQL Editor</strong> do painel do Supabase para criar as tabelas com um clique.
+                Execute no <strong>SQL Editor</strong> do Supabase para criar tabelas ou atualizar colunas com 1 clique.
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleCopySql}
-            className="px-4 py-2 rounded-xl bg-[#142142] dark:bg-slate-800 hover:bg-slate-800 text-white text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer"
-          >
-            {copiedSql ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-            <span>{copiedSql ? 'SQL Copiado!' : 'Copiar Script SQL'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopyMigrationSql}
+              className="px-3 py-2 rounded-xl bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-200 text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+              title="Adiciona as colunas novas sem recriar ou apagar tabelas"
+            >
+              {copiedMigrationSql ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+              <span>{copiedMigrationSql ? 'Copiado!' : 'Atualizar Colunas (ALTER TABLE)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopySql}
+              className="px-4 py-2 rounded-xl bg-[#142142] dark:bg-slate-800 hover:bg-slate-800 text-white text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95"
+            >
+              {copiedSql ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+              <span>{copiedSql ? 'SQL Completo Copiado!' : 'Copiar Script Completo'}</span>
+            </button>
+          </div>
         </div>
 
         <div className="relative">
-          <pre className="p-4 rounded-2xl bg-slate-950 text-emerald-400 text-xs font-mono overflow-x-auto max-h-60 leading-relaxed border border-slate-800">
+          <pre className="p-4 rounded-2xl bg-slate-950 text-emerald-400 text-xs font-mono overflow-x-auto max-h-60 leading-relaxed border border-slate-800 select-all">
             {SUPABASE_SQL_SCHEMA}
           </pre>
         </div>
@@ -598,7 +863,7 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
       <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-4">
         <h4 className="text-xs font-black uppercase tracking-wider text-[#142142] dark:text-[#fab518] flex items-center gap-2">
           <HelpCircle size={15} />
-          <span>Guia Rápido: Como Integrar em 3 Minutos</span>
+          <span>Guia Rápido: Como Integrar o Supabase em 3 Passos</span>
         </h4>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
@@ -606,9 +871,9 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
             <div className="w-6 h-6 rounded-full bg-[#fab518]/20 text-[#142142] dark:text-[#fab518] font-black text-xs flex items-center justify-center">
               1
             </div>
-            <div className="font-bold text-[#142142] dark:text-white">Criar Tabelas</div>
+            <div className="font-bold text-[#142142] dark:text-white">Criar Tabelas no Supabase</div>
             <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
-              Clique em <strong>Copiar Script SQL</strong> acima. No painel do Supabase, abra o <strong>SQL Editor</strong>, cole e clique em <strong>Run</strong>.
+              Clique em <strong>Copiar Script SQL</strong> acima. No painel do Supabase, acesse o <strong>SQL Editor</strong>, cole o código e clique em <strong>Run</strong>.
             </p>
           </div>
 
@@ -616,9 +881,9 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
             <div className="w-6 h-6 rounded-full bg-[#fab518]/20 text-[#142142] dark:text-[#fab518] font-black text-xs flex items-center justify-center">
               2
             </div>
-            <div className="font-bold text-[#142142] dark:text-white">Copiar Chaves da API</div>
+            <div className="font-bold text-[#142142] dark:text-white">Colar as Chaves da API</div>
             <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
-              No Supabase, vá em <strong>Project Settings &gt; API</strong>. Copie a <strong>Project URL</strong> e a chave <strong>anon public</strong> e cole nos campos à esquerda.
+              No Supabase, vá em <strong>Project Settings &gt; API</strong>. Copie a <strong>Project URL</strong> e a chave <strong>anon public</strong> e cole nos campos à esquerda. Veja o ícone de check verde imediato.
             </p>
           </div>
 
@@ -626,9 +891,9 @@ export const SupabaseConnectionTab: React.FC<SupabaseConnectionTabProps> = ({
             <div className="w-6 h-6 rounded-full bg-[#fab518]/20 text-[#142142] dark:text-[#fab518] font-black text-xs flex items-center justify-center">
               3
             </div>
-            <div className="font-bold text-[#142142] dark:text-white">Testar & Migrar</div>
+            <div className="font-bold text-[#142142] dark:text-white">Testar e Migrar</div>
             <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
-              Clique em <strong>Testar Conexão</strong>. Com o status verde, clique em <strong>Migrar Dados Locais</strong> para sincronizar seu banco.
+              Clique em <strong>Testar Conexão em Tempo Real</strong> para ver os logs do handshake. Em seguida, clique em <strong>Migrar Dados Locais</strong> para sincronizar seu banco.
             </p>
           </div>
         </div>

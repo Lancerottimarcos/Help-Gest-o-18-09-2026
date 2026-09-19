@@ -28,13 +28,16 @@ import { BrowserNotificationSettingsCard } from '../components/BrowserNotificati
 import { SupabaseConnectionTab } from '../components/SupabaseConnectionTab';
 import { useTwoFactor } from '../context/TwoFactorContext';
 import { BackupEnvelope } from '../utils/backupManager';
-import { DemandItem, Client } from '../types';
+import { DemandItem, Client, Service, BudgetProposal, Invoice } from '../types';
 import { SUPABASE_SQL_SCHEMA } from '../services/supabaseService';
 
 export interface ConfiguracoesViewProps {
   onRestoreData?: (backup: BackupEnvelope) => void;
   demands?: DemandItem[];
   clients?: Client[];
+  services?: Service[];
+  proposals?: BudgetProposal[];
+  invoices?: Invoice[];
   onSyncSupabaseData?: (demands: DemandItem[], clients: Client[]) => void;
 }
 
@@ -42,6 +45,9 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
   onRestoreData,
   demands = [],
   clients = [],
+  services = [],
+  proposals = [],
+  invoices = [],
   onSyncSupabaseData
 }) => {
   const { request2Fa } = useTwoFactor();
@@ -298,6 +304,9 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
         <SupabaseConnectionTab
           demands={demands}
           clients={clients}
+          services={services}
+          proposals={proposals}
+          invoices={invoices}
           onDataImported={onSyncSupabaseData}
         />
       ) : activeTab === 'auditoria' ? (

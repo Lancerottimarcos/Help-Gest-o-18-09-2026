@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PageId, DemandItem, Client, KanbanColumnId, ClientActivity, Service, TeamMember, KanbanColumn, BudgetProposal, Invoice } from './types';
 import { initialDemands, initialClients, initialRecentActivities, initialServices, initialTeamMembers, initialProposals, initialInvoices, currentUser, kanbanColumnsData } from './data/mockData';
@@ -118,145 +118,145 @@ export function Layout({ children, onLogout }: LayoutProps) {
 
   const isServerDbLoadedRef = useRef(false);
 
-  // 1. Carrega dados persistentes do servidor central na inicialização (compartilha dados entre múltiplos computadores e modo anônimo)
+  // Sincronização robusta contínua com o Supabase (PostgreSQL Nuvem Principal)
+  const [isSupabaseOnline, setIsSupabaseOnline] = useState(true);
+  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+
+  const handleSyncWithSupabase = useCallback(async (isSilent = false) => {
+    if (!supabaseService.isConfigured()) return;
+    if (!isSilent) setSupabaseSyncStatus('syncing');
+
+    try {
+      const [remoteDemands, remoteClients, remoteServices, remoteProposals, remoteInvoices] = await Promise.all([
+        supabaseService.fetchDemands(),
+        supabaseService.fetchClients(),
+        supabaseService.fetchServices(),
+        supabaseService.fetchProposals(),
+        supabaseService.fetchInvoices(),
+      ]);
+
+      // Se o Supabase tiver clientes cadastrados na nuvem, atualiza imediatamente a visualização
+      if (remoteClients && Array.isArray(remoteClients) && remoteClients.length > 0) {
+        setClients(remoteClients);
+        try {
+          localStorage.setItem('agency_clients', JSON.stringify(remoteClients));
+        } catch {}
+        serverDbService.saveDatabase({ clients: remoteClients });
+      }
+
+      // Se o Supabase tiver demandas gravadas
+      if (remoteDemands && Array.isArray(remoteDemands) && remoteDemands.length > 0) {
+        setDemands(remoteDemands);
+        try {
+          localStorage.setItem('agency_demands', JSON.stringify(remoteDemands));
+        } catch {}
+        serverDbService.saveDatabase({ demands: remoteDemands });
+      }
+
+      // Se o Supabase tiver serviços cadastrados
+      if (remoteServices && Array.isArray(remoteServices) && remoteServices.length > 0) {
+        setServices(remoteServices);
+        try {
+          localStorage.setItem('agency_services', JSON.stringify(remoteServices));
+        } catch {}
+      }
+
+      // Se o Supabase tiver propostas orçamentárias
+      if (remoteProposals && Array.isArray(remoteProposals) && remoteProposals.length > 0) {
+        setProposals(remoteProposals);
+        try {
+          localStorage.setItem('agency_proposals', JSON.stringify(remoteProposals));
+        } catch {}
+      }
+
+      // Se o Supabase tiver faturas registradas
+      if (remoteInvoices && Array.isArray(remoteInvoices) && remoteInvoices.length > 0) {
+        setInvoices(remoteInvoices);
+        try {
+          localStorage.setItem('agency_invoices', JSON.stringify(remoteInvoices));
+        } catch {}
+      }
+
+      setIsSupabaseOnline(true);
+      setSupabaseSyncStatus('synced');
+    } catch (err) {
+      console.warn('Erro ao sincronizar com Supabase:', err);
+      setSupabaseSyncStatus('error');
+    }
+  }, []);
+
+  // 1. Carrega dados persistentes do servidor central e do Supabase na montagem inicial
   useEffect(() => {
     let isMounted = true;
 
-    const loadCentralDatabase = async () => {
+    const initData = async () => {
+      // Inicia sincronização direta com a nuvem Supabase
+      handleSyncWithSupabase(false);
+
+      // Também busca do servidor de banco compartilhado (fallback redundante)
       try {
         const remoteData = await serverDbService.fetchDatabase();
         if (!isMounted) return;
 
         if (remoteData) {
-          // Servidor possui dados persistidos
           if (remoteData.clients && Array.isArray(remoteData.clients) && remoteData.clients.length > 0) {
-            setClients(remoteData.clients);
-            try { localStorage.setItem('agency_clients', JSON.stringify(remoteData.clients)); } catch {}
+            setClients((prev) => (prev.length === 0 ? remoteData.clients! : prev));
           }
           if (remoteData.demands && Array.isArray(remoteData.demands) && remoteData.demands.length > 0) {
-            setDemands(remoteData.demands);
-            try { localStorage.setItem('agency_demands', JSON.stringify(remoteData.demands)); } catch {}
-          }
-          if (remoteData.services && Array.isArray(remoteData.services) && remoteData.services.length > 0) {
-            setServices(remoteData.services);
-            try { localStorage.setItem('agency_services', JSON.stringify(remoteData.services)); } catch {}
-          }
-          if (remoteData.proposals && Array.isArray(remoteData.proposals) && remoteData.proposals.length > 0) {
-            setProposals(remoteData.proposals);
-            try { localStorage.setItem('agency_proposals', JSON.stringify(remoteData.proposals)); } catch {}
-          }
-          if (remoteData.invoices && Array.isArray(remoteData.invoices) && remoteData.invoices.length > 0) {
-            setInvoices(remoteData.invoices);
-            try { localStorage.setItem('agency_invoices', JSON.stringify(remoteData.invoices)); } catch {}
-          }
-        } else {
-          // Servidor ainda não tem dados: se este navegador já possui dados locais, propaga para o servidor central
-          const localClientsStr = localStorage.getItem('agency_clients');
-          const localDemandsStr = localStorage.getItem('agency_demands');
-          if (localClientsStr || localDemandsStr) {
-            try {
-              const c = localClientsStr ? JSON.parse(localClientsStr) : clients;
-              const d = localDemandsStr ? JSON.parse(localDemandsStr) : demands;
-              serverDbService.saveDatabase({
-                clients: c,
-                demands: d,
-                services,
-                proposals,
-                invoices,
-              }, true);
-            } catch {}
+            setDemands((prev) => (prev.length === 0 ? remoteData.demands! : prev));
           }
         }
-      } catch (err) {
-        console.warn('Erro ao carregar banco central do servidor:', err);
-      } finally {
-        if (isMounted) {
-          isServerDbLoadedRef.current = true;
-        }
+      } catch {}
+
+      if (isMounted) {
+        isServerDbLoadedRef.current = true;
       }
     };
 
-    loadCentralDatabase();
+    initData();
+
+    // Sincronização periódica a cada 20 segundos para manter múltiplos computadores alinhados
+    const pollInterval = setInterval(() => {
+      handleSyncWithSupabase(true);
+    }, 20000);
+
+    // Sincroniza imediatamente quando a janela / aba do navegador ganha foco
+    const handleFocus = () => {
+      handleSyncWithSupabase(true);
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', handleFocus);
 
     return () => {
       isMounted = false;
+      clearInterval(pollInterval);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('visibilitychange', handleFocus);
     };
-  }, []);
+  }, [handleSyncWithSupabase]);
 
   // Automatically save state updates to localStorage and central server
   useEffect(() => {
-    try {
-      localStorage.setItem('agency_clients', JSON.stringify(clients));
-    } catch {}
-    if (isServerDbLoadedRef.current) {
-      serverDbService.saveDatabase({ clients });
+    if (clients && clients.length > 0) {
+      try {
+        localStorage.setItem('agency_clients', JSON.stringify(clients));
+      } catch {}
+      if (isServerDbLoadedRef.current) {
+        serverDbService.saveDatabase({ clients });
+      }
     }
   }, [clients]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('agency_demands', JSON.stringify(demands));
-    } catch {}
-    if (isServerDbLoadedRef.current) {
-      serverDbService.saveDatabase({ demands });
+    if (demands && demands.length > 0) {
+      try {
+        localStorage.setItem('agency_demands', JSON.stringify(demands));
+      } catch {}
+      if (isServerDbLoadedRef.current) {
+        serverDbService.saveDatabase({ demands });
+      }
     }
   }, [demands]);
-
-  // Sincronização automática contínua com o Supabase (PostgreSQL)
-  const [isSupabaseOnline, setIsSupabaseOnline] = useState(false);
-  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const syncWithSupabase = async () => {
-      // Sincroniza credenciais compartilhadas do servidor (para suportar múltiplos computadores)
-      await syncSupabaseCredentialsWithServer();
-
-      if (!supabaseService.isConfigured()) return;
-      setSupabaseSyncStatus('syncing');
-
-      try {
-        const [remoteDemands, remoteClients] = await Promise.all([
-          supabaseService.fetchDemands(),
-          supabaseService.fetchClients(),
-        ]);
-
-        if (!isMounted) return;
-
-        // Se o Supabase tiver demandas gravadas, carrega no aplicativo
-        if (remoteDemands && remoteDemands.length > 0) {
-          setDemands(remoteDemands);
-          try {
-            localStorage.setItem('agency_demands', JSON.stringify(remoteDemands));
-          } catch {}
-        } else if (demands && demands.length > 0) {
-          // Se o Supabase estiver vazio e o local tiver dados, migra para o Supabase
-          supabaseService.syncAllLocalDataToSupabase(demands, clients);
-        }
-
-        // Se o Supabase tiver clientes gravados, carrega no aplicativo
-        if (remoteClients && remoteClients.length > 0) {
-          setClients(remoteClients);
-          try {
-            localStorage.setItem('agency_clients', JSON.stringify(remoteClients));
-          } catch {}
-        }
-
-        setIsSupabaseOnline(true);
-        setSupabaseSyncStatus('synced');
-      } catch (err) {
-        console.warn('Erro ao sincronizar com Supabase no arranque:', err);
-        setSupabaseSyncStatus('error');
-      }
-    };
-
-    syncWithSupabase();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     try {
@@ -287,30 +287,54 @@ export function Layout({ children, onLogout }: LayoutProps) {
 
   const handleAddProposal = (newProposal: BudgetProposal) => {
     setProposals((prev) => [newProposal, ...prev]);
+    if (supabaseService.isConfigured()) {
+      supabaseService.upsertProposal(newProposal);
+    }
   };
 
   const handleUpdateProposalStatus = (id: string, newStatus: 'Enviado' | 'Aprovado' | 'Recusado') => {
-    setProposals((prev) => prev.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
+    setProposals((prev) => {
+      const updated = prev.map((p) => (p.id === id ? { ...p, status: newStatus } : p));
+      const target = updated.find(p => p.id === id);
+      if (target && supabaseService.isConfigured()) {
+        supabaseService.upsertProposal(target);
+      }
+      return updated;
+    });
   };
 
   const handleAddInvoice = (newInvoice: Invoice) => {
     setInvoices((prev) => [newInvoice, ...prev]);
+    if (supabaseService.isConfigured()) {
+      supabaseService.upsertInvoice(newInvoice);
+    }
   };
 
   const handleToggleInvoiceStatus = (id: string) => {
-    setInvoices((prev) =>
-      prev.map((inv) =>
+    setInvoices((prev) => {
+      const updated = prev.map((inv) =>
         inv.id === id ? { ...inv, status: inv.status === 'Pago' ? 'Pendente' : 'Pago' } : inv
-      )
-    );
+      );
+      const target = updated.find(i => i.id === id);
+      if (target && supabaseService.isConfigured()) {
+        supabaseService.upsertInvoice(target);
+      }
+      return updated;
+    });
   };
 
   const handleDeleteInvoice = (id: string) => {
     setInvoices((prev) => prev.filter((inv) => inv.id !== id));
+    if (supabaseService.isConfigured()) {
+      supabaseService.deleteInvoice(id);
+    }
   };
 
   const handleDeleteMultipleInvoices = (invoiceIds: string[]) => {
     setInvoices((prev) => prev.filter((inv) => !invoiceIds.includes(inv.id)));
+    if (supabaseService.isConfigured()) {
+      invoiceIds.forEach(id => supabaseService.deleteInvoice(id));
+    }
   };
 
   // Kanban columns state with persistence
@@ -819,16 +843,25 @@ export function Layout({ children, onLogout }: LayoutProps) {
 
   const handleAddService = (newService: Service) => {
     setServices((prev) => [newService, ...prev]);
+    if (supabaseService.isConfigured()) {
+      supabaseService.upsertService(newService);
+    }
   };
 
   const handleUpdateService = (updatedService: Service) => {
     setServices((prev) =>
       prev.map((s) => (s.id === updatedService.id ? updatedService : s))
     );
+    if (supabaseService.isConfigured()) {
+      supabaseService.upsertService(updatedService);
+    }
   };
 
   const handleDeleteService = (serviceId: string) => {
     setServices((prev) => prev.filter((s) => s.id !== serviceId));
+    if (supabaseService.isConfigured()) {
+      supabaseService.deleteService(serviceId);
+    }
   };
 
   const handleAddTeamMember = (newMember: TeamMember) => {
@@ -905,6 +938,8 @@ export function Layout({ children, onLogout }: LayoutProps) {
             onUpdateClient={handleUpdateClient}
             onDeleteClient={handleDeleteClient}
             onDeleteMultipleClients={handleDeleteMultipleClients}
+            supabaseSyncStatus={supabaseSyncStatus}
+            onRefreshSupabase={() => handleSyncWithSupabase(false)}
             onSelectClientDemands={(clientName) => {
               setSelectedClientForKanban(clientName);
               setCurrentPage('demandas');
@@ -957,6 +992,9 @@ export function Layout({ children, onLogout }: LayoutProps) {
             onRestoreData={handleRestoreBackupData}
             demands={demands}
             clients={clients}
+            services={services}
+            proposals={proposals}
+            invoices={invoices}
             onSyncSupabaseData={(newDemands, newClients) => {
               if (newDemands && newDemands.length > 0) setDemands(newDemands);
               if (newClients && newClients.length > 0) setClients(newClients);
@@ -1019,6 +1057,10 @@ export function Layout({ children, onLogout }: LayoutProps) {
           onToggleSidebarCollapse={() => setIsDesktopSidebarCollapsed((prev) => !prev)}
           onLogout={onLogout}
           onNavigate={(page) => setCurrentPage(page)}
+          isSupabaseOnline={isSupabaseOnline}
+          supabaseSyncStatus={supabaseSyncStatus}
+          onRefreshSupabase={() => handleSyncWithSupabase(false)}
+          clientsCount={clients.length}
         />
 
         {/* Page Content Container */}
