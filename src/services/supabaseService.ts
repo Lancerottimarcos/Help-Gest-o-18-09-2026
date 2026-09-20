@@ -915,21 +915,36 @@ export const supabaseService = {
         return null;
       }
 
-      return (data || []).map((row: any): TeamMember => ({
-        id: row.id,
-        name: row.name,
-        role: row.role,
-        functionRole: row.function_role || row.role,
-        email: row.email,
-        avatar: row.avatar || '',
-        activeTasks: Number(row.active_tasks) || 0,
-        status: (row.status as any) || 'Disponível',
-        specialties: Array.isArray(row.specialties) ? row.specialties : [],
-        username: row.username || undefined,
-        password: row.password || undefined,
-        createdBy: row.created_by || undefined,
-        createdAt: row.created_at || undefined,
-      }));
+      // Recupera cache local para proteger senhas e usuários caso o banco ainda não tenha as colunas
+      let localMembers: TeamMember[] = [];
+      try {
+        const saved = localStorage.getItem('agency_team_members');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) localMembers = parsed;
+        }
+      } catch {}
+
+      return (data || []).map((row: any): TeamMember => {
+        const localMatch = localMembers.find((l) => l.id === row.id);
+        const isOwner = row.id === 'tm-1' || String(row.name || '').toLowerCase().includes('marcos lancerotti');
+
+        return {
+          id: row.id,
+          name: row.name,
+          role: row.role,
+          functionRole: row.function_role || row.role,
+          email: row.email,
+          avatar: row.avatar || '',
+          activeTasks: Number(row.active_tasks) || 0,
+          status: (row.status as any) || 'Disponível',
+          specialties: Array.isArray(row.specialties) ? row.specialties : [],
+          username: row.username || localMatch?.username || (isOwner ? 'lancerotti' : undefined),
+          password: row.password || localMatch?.password || (isOwner ? '521Spide#*' : '123456'),
+          createdBy: row.created_by || undefined,
+          createdAt: row.created_at || undefined,
+        };
+      });
     } catch {
       return null;
     }
@@ -962,6 +977,12 @@ export const supabaseService = {
   },
 
   async deleteTeamMember(id: string): Promise<boolean> {
+    // Proteção absoluta: Marcos Lancerotti (Dono da Agência) nunca pode ser excluído
+    if (id === 'tm-1') {
+      console.warn('Ação bloqueada no Supabase: Marcos Lancerotti é o Dono da Agência e não pode ser excluído.');
+      return false;
+    }
+
     const supabase = getSupabaseClient();
     if (!supabase) return false;
     try {

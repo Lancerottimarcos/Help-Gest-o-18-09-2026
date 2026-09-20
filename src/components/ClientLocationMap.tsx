@@ -24,6 +24,13 @@ import {
   geoToBrazilSvg, 
   BrazilStatePath 
 } from '../data/brazilStatesData';
+import { 
+  WORLD_COUNTRIES, 
+  GLOBAL_CITIES, 
+  GLOBAL_COUNTRIES_FALLBACK, 
+  geoToWorldSvg, 
+  WorldCountryPath 
+} from '../data/worldMapData';
 
 interface ClientLocationMapProps {
   clients: Client[];
@@ -173,9 +180,109 @@ function getClientCoordinates(client: Client): {
   lng: number; 
   cityName: string; 
   stateName?: string;
+  country?: string;
   region: 'Sudeste' | 'Sul' | 'Nordeste' | 'Centro-Oeste' | 'Norte' | 'Internacional';
 } {
-  // 1. Try explicit client.city
+  // 1. Check if client.city matches GLOBAL_CITIES (e.g. Lisboa, Miami, Nova York, Londres, etc.)
+  if (client.city) {
+    const norm = normalizeCityName(client.city);
+    if (GLOBAL_CITIES[norm]) {
+      const g = GLOBAL_CITIES[norm];
+      return { 
+        lat: g.lat, 
+        lng: g.lng, 
+        cityName: g.name, 
+        stateName: client.state || g.country,
+        country: g.country,
+        region: 'Internacional'
+      };
+    }
+  }
+
+  // 2. Check if client.country matches GLOBAL_COUNTRIES_FALLBACK
+  if ((client as any).country) {
+    const normCountry = normalizeCityName((client as any).country);
+    if (GLOBAL_COUNTRIES_FALLBACK[normCountry]) {
+      const fb = GLOBAL_COUNTRIES_FALLBACK[normCountry];
+      return {
+        lat: fb.lat,
+        lng: fb.lng,
+        cityName: client.city || fb.defaultCity,
+        stateName: client.state || fb.country,
+        country: fb.country,
+        region: 'Internacional'
+      };
+    }
+  }
+
+  // 3. Check if client.state matches an international country or abbreviation (e.g. Portugal, PT, EUA, USA, US, Espanha, etc.)
+  if (client.state) {
+    const normState = normalizeCityName(client.state);
+    if (GLOBAL_COUNTRIES_FALLBACK[normState]) {
+      const fb = GLOBAL_COUNTRIES_FALLBACK[normState];
+      return {
+        lat: fb.lat,
+        lng: fb.lng,
+        cityName: client.city || fb.defaultCity,
+        stateName: client.state,
+        country: fb.country,
+        region: 'Internacional'
+      };
+    }
+    if (normState.includes('portugal') || normState.includes('lisboa')) {
+      const fb = GLOBAL_COUNTRIES_FALLBACK['portugal'];
+      return {
+        lat: fb.lat,
+        lng: fb.lng,
+        cityName: client.city || fb.defaultCity,
+        stateName: client.state,
+        country: fb.country,
+        region: 'Internacional'
+      };
+    }
+    if (normState.includes('eua') || normState.includes('estados unidos') || normState.includes('florida') || normState.includes('miami')) {
+      const fb = GLOBAL_COUNTRIES_FALLBACK['estados unidos'];
+      return {
+        lat: fb.lat,
+        lng: fb.lng,
+        cityName: client.city || fb.defaultCity,
+        stateName: client.state,
+        country: fb.country,
+        region: 'Internacional'
+      };
+    }
+  }
+
+  // 4. Try parsing address for global cities or countries
+  if (client.address) {
+    const normAddr = normalizeCityName(client.address);
+    for (const [key, g] of Object.entries(GLOBAL_CITIES)) {
+      if (normAddr.includes(key)) {
+        return {
+          lat: g.lat,
+          lng: g.lng,
+          cityName: g.name,
+          stateName: client.state || g.country,
+          country: g.country,
+          region: 'Internacional'
+        };
+      }
+    }
+    for (const [key, fb] of Object.entries(GLOBAL_COUNTRIES_FALLBACK)) {
+      if (normAddr.includes(key)) {
+        return {
+          lat: fb.lat,
+          lng: fb.lng,
+          cityName: client.city || fb.defaultCity,
+          stateName: client.state || fb.country,
+          country: fb.country,
+          region: 'Internacional'
+        };
+      }
+    }
+  }
+
+  // 5. Try Brazilian known cities
   if (client.city) {
     const norm = normalizeCityName(client.city);
     if (KNOWN_CITIES[norm]) {
@@ -185,12 +292,13 @@ function getClientCoordinates(client: Client): {
         lng: entry.lng, 
         cityName: client.city, 
         stateName: client.state || entry.state,
+        country: 'Brasil',
         region: entry.region || resolveRegionByState(client.state || entry.state)
       };
     }
   }
 
-  // 2. Try parsing from address if city is missing or not matched
+  // 6. Try parsing from address for Brazilian cities
   if (client.address) {
     const parts = client.address.split(/[-–,]/).map((p) => p.trim());
     for (const part of parts) {
@@ -202,13 +310,14 @@ function getClientCoordinates(client: Client): {
           lng: entry.lng, 
           cityName: entry.name, 
           stateName: client.state || entry.state,
+          country: 'Brasil',
           region: entry.region || resolveRegionByState(client.state || entry.state)
         };
       }
     }
   }
 
-  // 3. Fallback based on state
+  // 7. Fallback based on Brazilian state
   const stateCode = (client.state || '').toUpperCase().trim();
   const stateFallbacks: Record<string, { lat: number; lng: number; defaultCity: string; region: 'Sudeste' | 'Sul' | 'Nordeste' | 'Centro-Oeste' | 'Norte' | 'Internacional' }> = {
     SP: { lat: -23.5505, lng: -46.6333, defaultCity: 'São Paulo', region: 'Sudeste' },
@@ -234,16 +343,18 @@ function getClientCoordinates(client: Client): {
       lng: fb.lng + (client.id.charCodeAt(client.id.length - 1) % 5) * 0.08,
       cityName: client.city || fb.defaultCity,
       stateName: stateCode,
+      country: 'Brasil',
       region: fb.region
     };
   }
 
-  // Final fallback
+  // 8. Final fallback
   return {
     lat: -23.5505,
     lng: -46.6333,
     cityName: client.city || 'São Paulo',
     stateName: client.state || 'SP',
+    country: 'Brasil',
     region: 'Sudeste'
   };
 }
@@ -252,6 +363,7 @@ export interface CityCluster {
   key: string;
   cityName: string;
   stateName?: string;
+  country?: string;
   region: 'Sudeste' | 'Sul' | 'Nordeste' | 'Centro-Oeste' | 'Norte' | 'Internacional';
   lat: number;
   lng: number;
@@ -268,43 +380,69 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
   onNavigate,
   onSelectClient,
 }) => {
-  const [viewMode, setViewMode] = useState<'world' | 'brazil'>('brazil');
+  // Default to 'brazil' view mode with option for world view
+  const [viewMode, setViewMode] = useState<'brazil' | 'world'>('brazil');
   const [selectedCluster, setSelectedCluster] = useState<CityCluster | null>(null);
   const [hoveredCluster, setHoveredCluster] = useState<CityCluster | null>(null);
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [hoveredState, setHoveredState] = useState<BrazilStatePath | null>(null);
+  const [hoveredCountry, setHoveredCountry] = useState<WorldCountryPath | null>(null);
   const [selectedRegionFilter, setSelectedRegionFilter] = useState<string>('todas');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [zoomLevel, setZoomLevel] = useState<number>(1);
 
-  // Group clients by State (UF) to highlight registered client states
+  // Group clients by State (UF) to highlight registered client states in Brazil
   const activeStatesMap = useMemo(() => {
     const map = new Map<string, { count: number; clients: Client[]; mrr: number; stateName: string }>();
 
     clients.forEach((client) => {
-      let uf = (client.state || '').trim().toUpperCase();
-      if (!uf && client.city) {
-        const norm = normalizeCityName(client.city);
-        if (KNOWN_CITIES[norm]?.state) {
-          uf = KNOWN_CITIES[norm].state!;
+      const coords = getClientCoordinates(client);
+      if (coords.country === 'Brasil' || !coords.country) {
+        let uf = (coords.stateName || client.state || '').trim().toUpperCase();
+        if (uf.length === 2 && BRAZIL_STATES.some(s => s.id === uf)) {
+          if (!map.has(uf)) {
+            const stateObj = BRAZIL_STATES.find((s) => s.id === uf);
+            map.set(uf, {
+              count: 0,
+              clients: [],
+              mrr: 0,
+              stateName: stateObj?.name || uf,
+            });
+          }
+          const entry = map.get(uf)!;
+          entry.count += 1;
+          entry.clients.push(client);
+          if (client.status === 'Ativo') {
+            entry.mrr += client.monthlyFee || 0;
+          }
         }
       }
+    });
 
-      if (uf) {
-        if (!map.has(uf)) {
-          const stateObj = BRAZIL_STATES.find((s) => s.id === uf);
-          map.set(uf, {
+    return map;
+  }, [clients]);
+
+  // Group international clients by Country
+  const activeCountriesMap = useMemo(() => {
+    const map = new Map<string, { count: number; clients: Client[]; mrr: number; countryName: string }>();
+
+    clients.forEach((client) => {
+      const coords = getClientCoordinates(client);
+      if (coords.region === 'Internacional' && coords.country && coords.country !== 'Brasil') {
+        const countryKey = coords.country;
+        if (!map.has(countryKey)) {
+          map.set(countryKey, {
             count: 0,
             clients: [],
             mrr: 0,
-            stateName: stateObj?.name || uf,
+            countryName: countryKey,
           });
         }
-        const entry = map.get(uf)!;
+        const entry = map.get(countryKey)!;
         entry.count += 1;
         entry.clients.push(client);
         if (client.status === 'Ativo') {
-          entry.mrr += client.monthlyFee;
+          entry.mrr += client.monthlyFee || 0;
         }
       }
     });
@@ -318,12 +456,11 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
 
     clients.forEach((client) => {
       const coords = getClientCoordinates(client);
-      const key = `${coords.cityName.toLowerCase()}-${(coords.stateName || '').toLowerCase()}`;
+      const key = `${coords.cityName.toLowerCase()}-${(coords.stateName || coords.country || '').toLowerCase()}`;
 
       if (!map.has(key)) {
-        // Project to World SVG: viewBox="0 0 1000 500"
-        const worldX = 500 + (coords.lng / 180) * 470;
-        const worldY = 250 - (coords.lat / 90) * 230;
+        // High precision Equirectangular Projection to World SVG: viewBox="0 0 1000 500"
+        const worldCoords = geoToWorldSvg(coords.lat, coords.lng);
 
         // Project to Brazil SVG: viewBox="0 0 353.845 367.766"
         const brCoords = geoToBrazilSvg(coords.lat, coords.lng);
@@ -332,13 +469,14 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
           key,
           cityName: coords.cityName,
           stateName: coords.stateName,
+          country: coords.country,
           region: coords.region,
           lat: coords.lat,
           lng: coords.lng,
           clients: [client],
-          totalMRR: client.status === 'Ativo' ? client.monthlyFee : 0,
-          worldX: Math.max(15, Math.min(985, worldX)),
-          worldY: Math.max(15, Math.min(485, worldY)),
+          totalMRR: client.status === 'Ativo' ? client.monthlyFee || 0 : 0,
+          worldX: worldCoords.x,
+          worldY: worldCoords.y,
           brazilX: brCoords.x,
           brazilY: brCoords.y,
         });
@@ -346,7 +484,7 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
         const cluster = map.get(key)!;
         cluster.clients.push(client);
         if (client.status === 'Ativo') {
-          cluster.totalMRR += client.monthlyFee;
+          cluster.totalMRR += client.monthlyFee || 0;
         }
       }
     });
@@ -385,14 +523,18 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
     };
   }, [clusters]);
 
-  // Filtered clusters based on Region & Search
+  // Filtered clusters based on Region, State/Country & Search
   const filteredClusters = useMemo(() => {
     return clusters.filter((c) => {
       const matchRegion = selectedRegionFilter === 'todas' || c.region === selectedRegionFilter;
-      const matchState = !selectedState || c.stateName?.toUpperCase() === selectedState.toUpperCase();
+      const matchState = !selectedState || 
+        (c.stateName && c.stateName.toUpperCase() === selectedState.toUpperCase()) ||
+        (c.country && c.country.toLowerCase() === selectedState.toLowerCase()) ||
+        (selectedState === 'Brasil' && (c.country === 'Brasil' || !c.country || c.region !== 'Internacional'));
       const matchQuery = !searchQuery.trim() || 
         c.cityName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (c.stateName && c.stateName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (c.country && c.country.toLowerCase().includes(searchQuery.toLowerCase())) ||
         c.clients.some((cli) => cli.name.toLowerCase().includes(searchQuery.toLowerCase()));
       return matchRegion && matchState && matchQuery;
     });
@@ -411,6 +553,7 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
   };
 
   const activeStatesList = useMemo(() => Array.from(activeStatesMap.keys()), [activeStatesMap]);
+  const activeCountriesList = useMemo(() => Array.from(activeCountriesMap.keys()), [activeCountriesMap]);
 
   return (
     <div 
@@ -639,122 +782,219 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
               style={{ transform: `scale(${zoomLevel})` }}
             >
               {viewMode === 'world' ? (
-                /* WORLD MAP SVG: High Fidelity Cartographic Vector */
+                /* INTERACTIVE HIGH FIDELITY WORLD MAP SVG WITH DYNAMIC VECTOR COUNTRY PATHS */
                 <svg
                   viewBox="0 0 1000 500"
-                  className="w-full h-auto max-h-[440px] drop-shadow-2xl"
-                  aria-label="Mapa Mundi Cartográfico"
+                  className="w-full h-auto max-h-[460px] drop-shadow-2xl"
+                  aria-label="Mapa Mundi Global Interativo"
                 >
                   <defs>
-                    <linearGradient id="world-grad-land" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#1e293b" />
-                      <stop offset="100%" stopColor="#0f172a" />
-                    </linearGradient>
-                    <radialGradient id="ocean-core" cx="50%" cy="50%" r="55%">
-                      <stop offset="0%" stopColor="#0b1329" stopOpacity="0.8" />
-                      <stop offset="100%" stopColor="#030712" stopOpacity="1" />
+                    <radialGradient id="world-ocean-deep" cx="50%" cy="50%" r="65%">
+                      <stop offset="0%" stopColor="#0f172a" />
+                      <stop offset="60%" stopColor="#090e1a" />
+                      <stop offset="100%" stopColor="#030712" />
                     </radialGradient>
-                    <filter id="glow-gold" x="-50%" y="-50%" width="200%" height="200%">
-                      <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#fab518" floodOpacity="0.8" />
+                    <linearGradient id="country-active-grad" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#fab518" />
+                      <stop offset="100%" stopColor="#d97706" />
+                    </linearGradient>
+                    <filter id="country-glow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#fab518" floodOpacity="0.75" />
+                    </filter>
+                    <filter id="city-pin-glow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#fab518" floodOpacity="0.9" />
                     </filter>
                   </defs>
 
-                  {/* Ocean Background Area */}
-                  <rect width="1000" height="500" fill="url(#ocean-core)" rx="16" />
+                  {/* Deep Cartographic Ocean Base */}
+                  <rect width="1000" height="500" rx="18" fill="url(#world-ocean-deep)" />
 
-                  {/* Latitude / Longitude Graticule Lines */}
-                  <g stroke="#334155" strokeWidth="0.5" strokeDasharray="3 4" opacity="0.4">
-                    <line x1="150" y1="20" x2="150" y2="480" />
-                    <line x1="300" y1="20" x2="300" y2="480" />
-                    <line x1="500" y1="20" x2="500" y2="480" />
-                    <line x1="700" y1="20" x2="700" y2="480" />
-                    <line x1="850" y1="20" x2="850" y2="480" />
-                    <line x1="20" y1="140" x2="980" y2="140" stroke="#475569" />
-                    <line x1="20" y1="250" x2="980" y2="250" stroke="#fab518" strokeDasharray="none" strokeWidth="0.8" opacity="0.5" />
-                    <line x1="20" y1="340" x2="980" y2="340" stroke="#475569" />
+                  {/* Latitude / Longitude Graticule & Meridian Grid */}
+                  <g stroke="#334155" strokeWidth="0.5" strokeDasharray="3 4" opacity="0.35">
+                    <line x1="166" y1="15" x2="166" y2="485" />
+                    <line x1="333" y1="15" x2="333" y2="485" />
+                    <line x1="500" y1="15" x2="500" y2="485" stroke="#475569" strokeDasharray="none" strokeWidth="0.8" opacity="0.6" />
+                    <line x1="666" y1="15" x2="666" y2="485" />
+                    <line x1="833" y1="15" x2="833" y2="485" />
+
+                    <line x1="15" y1="125" x2="985" y2="125" />
+                    <line x1="15" y1="250" x2="985" y2="250" stroke="#fab518" strokeDasharray="none" strokeWidth="0.8" opacity="0.5" />
+                    <line x1="15" y1="375" x2="985" y2="375" />
                   </g>
 
-                  {/* Latitude markings */}
-                  <text x="30" y="246" className="fill-slate-500 text-[9px] font-mono select-none">EQUADOR 0°</text>
-                  <text x="30" y="136" className="fill-slate-600 text-[8px] font-mono select-none">30°N</text>
-                  <text x="30" y="336" className="fill-slate-600 text-[8px] font-mono select-none">30°S</text>
+                  {/* Geographic Reference Coordinates Markers */}
+                  <text x="25" y="246" className="fill-amber-400/80 text-[8.5px] font-mono select-none font-bold">EQUADOR (0°)</text>
+                  <text x="25" y="121" className="fill-slate-500 text-[8px] font-mono select-none">TRÓPICO DE CÂNCER (23.5°N)</text>
+                  <text x="25" y="371" className="fill-slate-500 text-[8px] font-mono select-none">TRÓPICO DE CAPRICÓRNIO (23.5°S)</text>
+                  <text x="505" y="25" className="fill-slate-500 text-[8px] font-mono select-none">MERIDIANO DE GREENWICH (0°)</text>
 
-                  {/* Continents Vector Paths */}
-                  <g fill="url(#world-grad-land)" stroke="#334155" strokeWidth="1" strokeLinejoin="round">
-                    <path d="M 90,80 Q 140,65 190,85 T 260,70 T 320,110 T 300,160 Q 260,180 280,220 Q 250,260 210,250 T 170,220 Q 140,180 120,130 Z" />
-                    <path d="M 210,250 Q 230,270 250,295 T 240,310 T 215,280 Z" />
-                    <path d="M 330,45 Q 380,40 405,75 T 370,110 T 335,80 Z" />
-                    <path d="M 255,295 Q 290,290 320,305 Q 370,300 410,335 Q 415,365 385,410 Q 360,450 330,480 Q 315,480 305,440 Q 285,390 270,360 Q 250,330 255,295 Z" className="fill-slate-800/90 stroke-slate-700" />
-                    <path d="M 285,310 Q 345,305 395,335 Q 405,365 380,400 Q 355,415 330,395 Q 310,360 285,310 Z" fill="#fab518" fillOpacity="0.25" stroke="#fab518" strokeWidth="1.6" />
-                    <path d="M 470,140 Q 520,130 550,150 T 570,185 Q 540,215 490,210 T 470,170 Z" />
-                    <path d="M 455,145 Q 470,135 480,155 T 465,175 T 450,160 Z" />
-                    <path d="M 505,80 Q 540,75 550,125 T 515,135 Z" />
-                    <path d="M 465,220 Q 550,210 595,255 T 590,340 Q 560,405 530,420 Q 495,420 480,360 T 455,270 Z" />
-                    <path d="M 605,345 Q 615,350 610,385 T 595,380 Z" />
-                    <path d="M 560,140 Q 640,110 750,110 T 890,130 Q 860,180 810,210 T 730,230 Q 720,290 680,290 T 640,240 Q 580,240 560,180 Z" />
-                    <path d="M 655,235 Q 710,235 695,295 T 660,265 Z" />
-                    <path d="M 855,170 Q 870,160 865,210 T 850,200 Z" />
-                    <path d="M 760,300 Q 820,310 805,345 T 750,335 Z" />
-                    <path d="M 780,360 Q 860,345 885,395 T 855,445 T 785,425 Z" />
-                    <path d="M 910,430 Q 925,425 920,460 T 905,455 Z" />
+                  {/* Real World Vector Countries Layer */}
+                  <g id="world-countries-layer">
+                    {WORLD_COUNTRIES.map((country) => {
+                      const isBrazil = country.id === 'BR';
+                      const hasActiveClients = isBrazil 
+                        ? activeStatesList.length > 0 
+                        : (activeCountriesMap.has(country.name) || activeCountriesMap.has(country.id));
+                      
+                      const isSelected = selectedState === country.name || (isBrazil && selectedState === 'Brasil');
+                      const isHovered = hoveredCountry?.id === country.id;
+
+                      let fill = '#1e293b';
+                      let stroke = '#334155';
+                      let strokeWidth = 0.6;
+                      let opacity = 0.85;
+
+                      if (isBrazil) {
+                        fill = isSelected || isHovered ? '#fab518' : '#eab308';
+                        stroke = '#fef08a';
+                        strokeWidth = 1.6;
+                        opacity = 0.95;
+                      } else if (hasActiveClients) {
+                        fill = isSelected || isHovered ? '#f59e0b' : '#d97706';
+                        stroke = '#fbbf24';
+                        strokeWidth = 1.4;
+                        opacity = 0.95;
+                      } else if (isHovered) {
+                        fill = '#334155';
+                        stroke = '#64748b';
+                        strokeWidth = 1.0;
+                        opacity = 1;
+                      }
+
+                      return (
+                        <path
+                          key={`world-country-${country.id}`}
+                          d={country.d}
+                          fill={fill}
+                          stroke={stroke}
+                          strokeWidth={strokeWidth}
+                          strokeLinejoin="round"
+                          opacity={opacity}
+                          filter={hasActiveClients ? 'url(#country-glow)' : undefined}
+                          className="transition-colors duration-150 cursor-pointer"
+                          onClick={() => {
+                            if (isBrazil) {
+                              setViewMode('brazil');
+                              setSelectedState(null);
+                            } else {
+                              setSelectedState(selectedState === country.name ? null : country.name);
+                            }
+                          }}
+                          onMouseEnter={() => setHoveredCountry(country)}
+                          onMouseLeave={() => setHoveredCountry(null)}
+                        >
+                          <title>{country.name} ({country.region}){hasActiveClients ? ' • Clientes Cadastrados' : ''}</title>
+                        </path>
+                      );
+                    })}
                   </g>
 
-                  {/* Markers on World Map */}
-                  {filteredClusters.map((cluster) => {
-                    const isSelected = selectedCluster?.key === cluster.key;
-                    const isHovered = hoveredCluster?.key === cluster.key;
-                    const isActive = isSelected || isHovered;
+                  {/* Continent Labels for geographical orientation */}
+                  <g className="fill-slate-500/70 text-[9px] font-black uppercase tracking-wider select-none pointer-events-none">
+                    <text x="180" y="160">América do Norte</text>
+                    <text x="320" y="360">América do Sul</text>
+                    <text x="505" y="125">Europa</text>
+                    <text x="510" y="270">África</text>
+                    <text x="730" y="165">Ásia</text>
+                    <text x="830" y="380">Oceania</text>
+                  </g>
 
-                    return (
-                      <g
-                        key={`world-${cluster.key}`}
-                        className="cursor-pointer group"
-                        onClick={() => setSelectedCluster(isSelected ? null : cluster)}
-                        onMouseEnter={() => setHoveredCluster(cluster)}
-                        onMouseLeave={() => setHoveredCluster(null)}
-                      >
-                        <circle
-                          cx={cluster.worldX}
-                          cy={cluster.worldY}
-                          r={isActive ? 22 : 14}
-                          className="fill-[#fab518]/25 stroke-[#fab518] stroke-[1] animate-ping"
-                          style={{ transformOrigin: `${cluster.worldX}px ${cluster.worldY}px`, animationDuration: '2.4s' }}
-                        />
-                        <circle
-                          cx={cluster.worldX}
-                          cy={cluster.worldY}
-                          r={isActive ? 10 : 7}
-                          className="fill-slate-900 stroke-slate-700 stroke-[1]"
-                        />
-                        <circle
-                          cx={cluster.worldX}
-                          cy={cluster.worldY}
-                          r={isActive ? 7 : 4.5}
-                          fill="#fab518"
-                          filter={isActive ? 'url(#glow-gold)' : undefined}
-                          className="group-hover:fill-amber-300 transition-all stroke-slate-950 stroke-[1.5]"
-                        />
-                        {cluster.clients.length > 1 && (
-                          <g transform={`translate(${cluster.worldX + 5}, ${cluster.worldY - 11})`}>
-                            <rect width="15" height="13" rx="6" className="fill-[#fab518] stroke-slate-900 stroke-[1]" />
-                            <text x="7.5" y="9.5" textAnchor="middle" className="fill-[#142142] text-[8.5px] font-black pointer-events-none">
-                              {cluster.clients.length}
+                  {/* Brazil Fast-Zoom Callout Badge */}
+                  <g 
+                    className="cursor-pointer group"
+                    onClick={() => {
+                      setViewMode('brazil');
+                      setSelectedState(null);
+                    }}
+                  >
+                    <rect x="255" y="315" width="115" height="22" rx="7" className="fill-slate-900/95 stroke-amber-400 stroke-[1.2] shadow-lg group-hover:fill-amber-500 transition-colors" />
+                    <text x="312" y="329" textAnchor="middle" className="fill-amber-300 group-hover:fill-slate-950 text-[9.5px] font-black pointer-events-none transition-colors">
+                      🇧🇷 Foco Brasil ({activeStatesList.length} UFs)
+                    </text>
+                  </g>
+
+                  {/* Client Markers Layer on World Map */}
+                  <g id="world-markers-layer">
+                    {filteredClusters.map((cluster) => {
+                      const isSelected = selectedCluster?.key === cluster.key;
+                      const isHovered = hoveredCluster?.key === cluster.key;
+                      const isActive = isSelected || isHovered;
+
+                      return (
+                        <g
+                          key={`world-marker-${cluster.key}`}
+                          className="cursor-pointer group"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCluster(isSelected ? null : cluster);
+                          }}
+                          onMouseEnter={() => setHoveredCluster(cluster)}
+                          onMouseLeave={() => setHoveredCluster(null)}
+                        >
+                          {/* Animated Radar Pulse */}
+                          <circle
+                            cx={cluster.worldX}
+                            cy={cluster.worldY}
+                            r={isActive ? 20 : 13}
+                            className="fill-[#fab518]/30 stroke-[#fab518] stroke-[1] animate-ping"
+                            style={{ transformOrigin: `${cluster.worldX}px ${cluster.worldY}px`, animationDuration: '2.5s' }}
+                          />
+
+                          {/* Outer Contrast Ring */}
+                          <circle
+                            cx={cluster.worldX}
+                            cy={cluster.worldY}
+                            r={isActive ? 8.5 : 6}
+                            className="fill-[#142142] stroke-white stroke-[1.2]"
+                          />
+
+                          {/* Center Core Gold Pin */}
+                          <circle
+                            cx={cluster.worldX}
+                            cy={cluster.worldY}
+                            r={isActive ? 5.5 : 4}
+                            fill="#fab518"
+                            filter={isActive ? 'url(#city-pin-glow)' : undefined}
+                            className="stroke-[#142142] stroke-[0.8] group-hover:scale-125 transition-transform"
+                          />
+
+                          {/* Multi-client Counter Badge */}
+                          {cluster.clients.length > 1 && (
+                            <g transform={`translate(${cluster.worldX + 4}, ${cluster.worldY - 10})`}>
+                              <rect width="13" height="11" rx="5" className="fill-[#142142] stroke-[#fab518] stroke-[1]" />
+                              <text x="6.5" y="8" textAnchor="middle" className="fill-[#fab518] text-[7.5px] font-black pointer-events-none">
+                                {cluster.clients.length}
+                              </text>
+                            </g>
+                          )}
+
+                          {/* City & Country Label */}
+                          <g transform={`translate(${cluster.worldX}, ${cluster.worldY + 14})`}>
+                            <rect
+                              x={-((cluster.cityName.length * 5.5 + 14) / 2)}
+                              y="-2"
+                              width={cluster.cityName.length * 5.5 + 14}
+                              height="14"
+                              rx="4"
+                              className={`transition-colors ${
+                                isActive ? 'fill-amber-500' : 'fill-slate-900/90 stroke-slate-700 stroke-[0.8]'
+                              }`}
+                            />
+                            <text
+                              x="0"
+                              y="8"
+                              textAnchor="middle"
+                              className={`text-[8.5px] font-extrabold tracking-tight pointer-events-none select-none ${
+                                isActive ? 'fill-[#142142] font-black' : 'fill-white'
+                              }`}
+                            >
+                              {cluster.cityName}{cluster.country && cluster.country !== 'Brasil' ? ` (${cluster.country})` : ''}
                             </text>
                           </g>
-                        )}
-                        <text
-                          x={cluster.worldX}
-                          y={cluster.worldY + 16}
-                          textAnchor="middle"
-                          className={`text-[9.5px] font-bold tracking-tight pointer-events-none drop-shadow-md transition-all ${
-                            isActive ? 'fill-[#fab518] font-black text-[11px]' : 'fill-slate-300'
-                          }`}
-                        >
-                          {cluster.cityName}
-                        </text>
-                      </g>
-                    );
-                  })}
+                        </g>
+                      );
+                    })}
+                  </g>
                 </svg>
               ) : (
                 /* OFFICIAL DETAILED BRAZIL STATES VECTOR MAP SVG (REFERÊNCIA mapa-brasil.png) */
@@ -994,8 +1234,30 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
               )}
             </div>
 
-            {/* Floating State Mini HUD on Hover */}
-            {hoveredState && !activeCluster && (
+            {/* Floating State/Country Mini HUD on Hover */}
+            {viewMode === 'world' && hoveredCountry && !activeCluster && (
+              <div className="absolute top-4 right-4 bg-slate-950/90 text-white backdrop-blur-md rounded-xl px-3.5 py-2 border border-slate-700/80 shadow-xl pointer-events-none z-20 flex items-center gap-2.5 animate-in fade-in duration-150">
+                <span className={`w-3 h-3 rounded-full shrink-0 ${
+                  hoveredCountry.id === 'BR' || activeCountriesMap.has(hoveredCountry.name) || activeCountriesMap.has(hoveredCountry.id) 
+                    ? 'bg-[#fab518] shadow-xs' 
+                    : 'bg-slate-600'
+                }`} />
+                <div>
+                  <p className="text-xs font-black text-white leading-none">
+                    {hoveredCountry.name} ({hoveredCountry.region})
+                  </p>
+                  <p className="text-[10px] text-slate-300 mt-0.5">
+                    {hoveredCountry.id === 'BR'
+                      ? `${activeStatesList.length} estados atendidos • ${regionalStats.totalClientsCount} clientes no Brasil`
+                      : activeCountriesMap.has(hoveredCountry.name)
+                      ? `${activeCountriesMap.get(hoveredCountry.name)?.count} clientes cadastrados • R$ ${activeCountriesMap.get(hoveredCountry.name)?.mrr.toLocaleString('pt-BR')}/mês`
+                      : 'Nenhum cliente cadastrado neste país'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {viewMode === 'brazil' && hoveredState && !activeCluster && (
               <div className="absolute top-4 right-4 bg-slate-950/90 text-white backdrop-blur-md rounded-xl px-3.5 py-2 border border-slate-700/80 shadow-xl pointer-events-none z-20 flex items-center gap-2.5 animate-in fade-in duration-150">
                 <span className={`w-3 h-3 rounded-full shrink-0 ${activeStatesMap.has(hoveredState.id) ? 'bg-[#fab518] shadow-xs' : 'bg-slate-600'}`} />
                 <div>

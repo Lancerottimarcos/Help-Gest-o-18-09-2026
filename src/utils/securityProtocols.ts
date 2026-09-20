@@ -945,6 +945,31 @@ export interface AuthenticatedUserPayload {
   isMaster: boolean;
 }
 
+/**
+ * Função utilitária centralizada para identificar se um membro é o Marcos Lancerotti (Dono / Fundador da Agência).
+ * Utilizada para proteger a conta mestra contra exclusão involuntária e conceder acesso total.
+ */
+export function isOwnerOrMarcos(member?: any | null): boolean {
+  if (!member) return false;
+  const name = String(member.name || '').toLowerCase();
+  const email = String(member.email || '').toLowerCase();
+  const username = String(member.username || '').toLowerCase().replace(/^@/, '');
+  const role = String(member.role || '').toLowerCase();
+  const functionRole = String(member.functionRole || '').toLowerCase();
+
+  return (
+    member.id === 'tm-1' ||
+    (name.includes('marcos') && name.includes('lancerotti')) ||
+    email === 'lancerottirmarcos@gmail.com' ||
+    username === 'lancerotti' ||
+    role.includes('dono') ||
+    role.includes('fundador') ||
+    role.includes('proprietário') ||
+    role.includes('proprietario') ||
+    (functionRole === 'ceo' && name.includes('marcos'))
+  );
+}
+
 export async function validateMasterCredentials(
   userInput: string,
   passInput: string
@@ -955,44 +980,10 @@ export async function validateMasterCredentials(
   authenticatedUser?: AuthenticatedUserPayload;
 }> {
   const cleanUser = (userInput || '').trim().toLowerCase().replace(/^@/, '');
-  const isMarcosUser = cleanUser === 'lancerotti' || 
-                       cleanUser === 'lancerottirmarcos@gmail.com' || 
-                       cleanUser === 'marcos' || 
-                       cleanUser === 'marcos lancerotti';
 
-  // 1. Verificação da Conta Mestra (Marcos Lancerotti)
-  if (isMarcosUser) {
-    const savedHash = localStorage.getItem(STORAGE_PASSWORD_HASH_KEY);
-    const inputHash = await computeSha256(passInput);
-
-    let passwordMatched = false;
-    if (savedHash) {
-      passwordMatched = inputHash === savedHash;
-    } else {
-      // Default password check
-      const defaultHash = await computeSha256(DEFAULT_RAW_PASSWORD);
-      passwordMatched = inputHash === defaultHash || passInput === DEFAULT_RAW_PASSWORD;
-    }
-
-    return {
-      isValid: passwordMatched,
-      usernameMatched: true,
-      passwordMatched,
-      authenticatedUser: passwordMatched ? {
-        username: 'lancerotti',
-        name: 'Marcos Lancerotti',
-        email: 'lancerottirmarcos@gmail.com',
-        role: 'proprietario',
-        roleLabel: 'Proprietário da Agência',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        isMaster: true,
-      } : undefined
-    };
-  }
-
-  // 2. Verificação de Colaborador cadastrado na página de equipe
+  // Recupera equipe atualizada do localStorage ou mock
+  let team: TeamMember[] = initialTeamMembers;
   try {
-    let team: TeamMember[] = initialTeamMembers;
     const storedTeam = localStorage.getItem('agency_team_members');
     if (storedTeam) {
       const parsed = JSON.parse(storedTeam);
@@ -1000,7 +991,68 @@ export async function validateMasterCredentials(
         team = parsed;
       }
     }
+  } catch {}
 
+  // Localiza registro do Marcos na equipe
+  const marcosMember = team.find((m) => isOwnerOrMarcos(m));
+  const marcosCustomUsername = marcosMember?.username?.trim().toLowerCase().replace(/^@/, '');
+
+  const isMarcosUser = cleanUser === 'lancerotti' || 
+                       cleanUser === 'lancerottirmarcos@gmail.com' || 
+                       cleanUser === 'marcos' || 
+                       cleanUser === 'marcos lancerotti' ||
+                       (marcosCustomUsername && cleanUser === marcosCustomUsername);
+
+  // 1. Verificação da Conta Mestra (Marcos Lancerotti)
+  if (isMarcosUser) {
+    const savedHash = localStorage.getItem(STORAGE_PASSWORD_HASH_KEY);
+    const inputHash = await computeSha256(passInput);
+
+    let passwordMatched = false;
+
+    // Prioridade 1: Senha diretamente cadastrada/editada no perfil da Equipe
+    if (marcosMember && marcosMember.password) {
+      if (passInput === marcosMember.password || inputHash === marcosMember.password) {
+        passwordMatched = true;
+      }
+    }
+
+    // Prioridade 2: Hash armazenado da senha mestra
+    if (!passwordMatched && savedHash) {
+      passwordMatched = inputHash === savedHash;
+    }
+
+    // Prioridade 3: Senha padrão de fábrica (521Spide#*)
+    if (!passwordMatched) {
+      const defaultHash = await computeSha256(DEFAULT_RAW_PASSWORD);
+      passwordMatched = inputHash === defaultHash || passInput === DEFAULT_RAW_PASSWORD;
+    }
+
+    // Se a senha foi validada, sincroniza o hash para manter consistente
+    if (passwordMatched && passInput) {
+      try {
+        localStorage.setItem(STORAGE_PASSWORD_HASH_KEY, inputHash);
+      } catch {}
+    }
+
+    return {
+      isValid: passwordMatched,
+      usernameMatched: true,
+      passwordMatched,
+      authenticatedUser: passwordMatched ? {
+        username: marcosMember?.username || 'lancerotti',
+        name: marcosMember?.name || 'Marcos Lancerotti',
+        email: marcosMember?.email || 'lancerottirmarcos@gmail.com',
+        role: 'proprietario',
+        roleLabel: 'Proprietário da Agência',
+        avatarUrl: marcosMember?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        isMaster: true,
+      } : undefined
+    };
+  }
+
+  // 2. Verificação de Colaborador cadastrado na página de equipe
+  try {
     const matchedMember = team.find((m) => {
       const mUser = (m.username || '').trim().toLowerCase().replace(/^@/, '');
       const mEmail = (m.email || '').trim().toLowerCase();
@@ -1015,6 +1067,8 @@ export async function validateMasterCredentials(
                               inputHash === configuredPassword ||
                               (configuredPassword === '123456' && passInput === '123456');
 
+      const isOwner = isOwnerOrMarcos(matchedMember);
+
       return {
         isValid: passwordMatched,
         usernameMatched: true,
@@ -1023,10 +1077,10 @@ export async function validateMasterCredentials(
           username: matchedMember.username || matchedMember.email.split('@')[0],
           name: matchedMember.name,
           email: matchedMember.email,
-          role: 'colaborador',
-          roleLabel: matchedMember.role || 'Colaborador',
+          role: isOwner ? 'proprietario' : 'colaborador',
+          roleLabel: isOwner ? 'Proprietário da Agência' : (matchedMember.role || 'Colaborador'),
           avatarUrl: matchedMember.avatar,
-          isMaster: false,
+          isMaster: isOwner,
         } : undefined
       };
     }

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { DemandAttachment } from '../types';
 import { scanFileForMalware, FileScanResult } from '../utils/securityProtocols';
+import { processAttachmentFile } from '../utils/fileUtils';
 
 interface FileUploadDropzoneProps {
   attachments: DemandAttachment[];
@@ -71,37 +72,8 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
         return;
       }
 
-      // Determine category
-      let type: 'image' | 'video' | 'document' | 'other' = 'other';
-      if (file.type.startsWith('image/')) {
-        type = 'image';
-      } else if (file.type.startsWith('video/')) {
-        type = 'video';
-      } else if (
-        file.type.includes('pdf') ||
-        file.type.includes('word') ||
-        file.type.includes('text') ||
-        file.name.endsWith('.pdf') ||
-        file.name.endsWith('.doc') ||
-        file.name.endsWith('.docx')
-      ) {
-        type = 'document';
-      }
-
-      // Generate object URL for instant preview/download
-      const objectUrl = URL.createObjectURL(file);
-
-      const newAttachment: DemandAttachment = {
-        id: `att-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        name: file.name,
-        size: file.size,
-        type,
-        url: objectUrl,
-        uploadedAt: 'Agora mesmo',
-        verifiedClean: true,
-        threatScanStatus: 'clean',
-      };
-
+      // Process file (converts image into durable Base64 and validates format)
+      const newAttachment = await processAttachmentFile(file);
       onAddAttachment(newAttachment);
     } catch (err) {
       setErrorMessage(`Falha na verificação de integridade do arquivo "${file.name}".`);

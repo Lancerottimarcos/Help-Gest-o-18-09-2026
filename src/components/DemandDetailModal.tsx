@@ -22,16 +22,24 @@ import {
   UploadCloud,
   ClipboardList,
   Film,
-  Eye,
-  Maximize2,
+  Download,
   MessageCircle,
   XCircle,
-  Edit3
+  Edit3,
+  Flag,
+  CalendarDays,
+  UserCheck,
+  FolderGit2,
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { DemandItem, KanbanColumnId, Priority, Client, DemandAttachment, KanbanColumn } from '../types';
 import { kanbanColumnsData } from '../data/mockData';
 import { FileUploadDropzone } from './FileUploadDropzone';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
+import { CustomDatePicker } from './CustomDatePicker';
+import { CustomPrioritySelect } from './CustomPrioritySelect';
+import { processAttachmentFile } from '../utils/fileUtils';
 
 interface DemandDetailModalProps {
   demand: DemandItem;
@@ -144,14 +152,16 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
   const [isSavedToast, setIsSavedToast] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-  // Active media preview selection & Lightbox viewer
-  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
-  const [lightboxMedia, setLightboxMedia] = useState<DemandAttachment | null>(null);
+  // Active media upload state
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [isMediaDragOver, setIsMediaDragOver] = useState(false);
   const mediaInputRef = useRef<HTMLInputElement>(null);
+  const currentDemandIdRef = useRef<string | null>(null);
 
-  // Keep state in sync when demand changes
+  // Keep state in sync when demand changes (keyed on demand.id to avoid clobbering user edits on re-render)
   useEffect(() => {
-    if (demand) {
+    if (demand && demand.id !== currentDemandIdRef.current) {
+      currentDemandIdRef.current = demand.id;
       setTitle(demand.title);
       setClient(demand.client);
       setDescription(demand.description || '');
@@ -162,18 +172,22 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
       setDueDate(demand.dueDate || '');
       setAssigneeName(demand.assignee?.name || '');
       setAssigneeAvatar(demand.assignee?.avatar || '');
-      setAttachments(
-        demand.attachments || (demand.thumbnail ? [
-          {
-            id: 'att-initial-1',
-            name: `${demand.title.replace(/\s+/g, '_').toLowerCase()}_preview.jpg`,
-            size: 1.4 * 1024 * 1024,
-            type: 'image',
-            url: demand.thumbnail,
-            uploadedAt: 'Criado com a demanda'
-          }
-        ] : [])
-      );
+      
+      const initialAttachments = demand.attachments && demand.attachments.length > 0
+        ? demand.attachments
+        : (demand.thumbnail ? [
+            {
+              id: 'att-initial-1',
+              name: `${demand.title.replace(/\s+/g, '_').toLowerCase()}_preview.jpg`,
+              size: 1.4 * 1024 * 1024,
+              type: 'image' as const,
+              url: demand.thumbnail,
+              uploadedAt: 'Criado com a demanda'
+            }
+          ] : []);
+
+      setAttachments(initialAttachments);
+
       setChecklist([
         { id: 'chk-1', text: 'Receber briefing e direcionamento criativo', completed: true },
         { id: 'chk-2', text: 'Desenvolvimento e revisão da arte / copywriting', completed: (demand.checklistCompleted || 0) >= 2 },
@@ -181,44 +195,54 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
         { id: 'chk-4', text: 'Validação final com o cliente', completed: (demand.checklistCompleted || 0) >= 4 },
       ]);
     }
-  }, [demand]);
+  }, [demand?.id]);
 
   // Filter media attachments (images or videos)
   const mediaAttachments = attachments.filter((a) => a.type === 'image' || a.type === 'video');
-  const currentMedia = (selectedMediaId ? mediaAttachments.find((m) => m.id === selectedMediaId) : null) || mediaAttachments[0] || null;
 
-  // Direct media upload handler
-  const handleDirectMediaUpload = (files: FileList | null) => {
+  // Direct media upload handler with persistent Data URL and multi-file support
+  const handleDirectMediaUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const file = files[0];
-    if (file.size > 200 * 1024 * 1024) {
-      alert(`O arquivo excede o limite máximo de 200MB.`);
-      return;
-    }
-    let type: 'image' | 'video' | 'document' | 'other' = 'other';
-    if (file.type.startsWith('image/')) type = 'image';
-    else if (file.type.startsWith('video/')) type = 'video';
-    else type = 'document';
+    setIsUploadingMedia(true);
+    try {
+      const newItems: DemandAttachment[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > 200 * 1024 * 1024) {
+          alert(`O arquivo "${file.name}" excede o limite máximo de 200MB.`);
+          continue;
+        }
+        const processed = await processAttachmentFile(file);
+        newItems.push(processed);
+      }
 
-    const objectUrl = URL.createObjectURL(file);
-    const newAtt: DemandAttachment = {
-      id: `att-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      name: file.name,
-      size: file.size,
-      type,
-      url: objectUrl,
-      uploadedAt: 'Agora mesmo',
-    };
-    setAttachments((prev) => [newAtt, ...prev]);
-    setSelectedMediaId(newAtt.id);
+      if (newItems.length > 0) {
+        setAttachments((prev) => [...newItems, ...prev]);
+      }
+    } catch (err) {
+      console.error('Erro ao processar anexos:', err);
+    } finally {
+      setIsUploadingMedia(false);
+      if (mediaInputRef.current) {
+        mediaInputRef.current.value = '';
+      }
+    }
   };
 
   // Remove media attachment
   const handleRemoveMedia = (id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
-    if (selectedMediaId === id) {
-      setSelectedMediaId(null);
-    }
+  };
+
+  // Download media attachment
+  const handleDownloadMedia = (media: DemandAttachment) => {
+    if (!media.url) return;
+    const a = document.createElement('a');
+    a.href = media.url;
+    a.download = media.name || 'anexo';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   // Toggle checklist item
@@ -274,10 +298,14 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
 
     const completedCount = checklist.filter((i) => i.completed).length;
 
-    // Use the first image attachment as thumbnail if available, or keep existing
-    const effectiveThumbnail = 
-      attachments.find((a) => a.type === 'image')?.url 
-      || demand.thumbnail;
+    // Use the first image attachment as thumbnail if available, or clear if all images were removed
+    const firstImageAttachment = attachments.find((a) => {
+      if (a.type === 'image') return true;
+      if (typeof a.url === 'string' && (a.url.startsWith('data:image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(a.url))) return true;
+      if (typeof a.name === 'string' && /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(a.name)) return true;
+      return false;
+    });
+    const effectiveThumbnail = firstImageAttachment ? (firstImageAttachment.thumbnailUrl || firstImageAttachment.url) : undefined;
 
     const updatedDemand: DemandItem = {
       ...demand,
@@ -327,35 +355,30 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
     >
       <div 
         id="demand-detail-modal-card"
-        className="bg-white w-full max-w-4xl xl:max-w-5xl rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col max-h-[92vh] my-auto transition-all"
+        className="bg-white dark:bg-[#0f172a] w-full max-w-4xl xl:max-w-5xl rounded-3xl shadow-2xl border border-slate-200/90 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh] my-auto transition-all ring-1 ring-black/5"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="bg-[#142142] text-white px-5 sm:px-6 py-3.5 flex items-center justify-between gap-4 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
-            {/* Icon: circle with background #fab518 and dark contrast icon */}
-            <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-full bg-[#fab518] text-[#142142] flex items-center justify-center shrink-0 shadow-sm ring-2 ring-black/5 select-none">
-              <ClipboardList className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-[#142142] stroke-[2.2]" />
+        <div className="bg-[#142142] text-white px-5 sm:px-6 py-4 flex items-center justify-between gap-4 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-3.5 min-w-0 flex-1">
+            {/* Icon: refined badge */}
+            <div className="h-10 w-10 rounded-xl bg-[#fab518] text-[#142142] flex items-center justify-center shrink-0 shadow-sm font-black select-none">
+              <ClipboardList className="w-5 h-5 text-[#142142] stroke-[2.4]" />
             </div>
 
-            {/* Title & Identification */}
+            {/* Title */}
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 sm:gap-2.5">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-black bg-[#fab518] text-[#142142] shadow-xs shrink-0">
-                  #{demand.id.replace('dem-', '')}
-                </span>
-                <h3 className="font-extrabold text-base sm:text-lg text-white tracking-tight truncate leading-snug">
-                  {title || demand.title}
-                </h3>
-              </div>
+              <h3 className="font-extrabold text-base sm:text-lg text-white tracking-tight truncate leading-snug">
+                {title || demand.title}
+              </h3>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="h-8.5 w-8.5 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/25 text-white flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 ring-1 ring-white/10"
+              className="h-9 w-9 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer border border-white/10"
               title="Fechar janela"
               aria-label="Fechar modal"
             >
@@ -364,85 +387,10 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Quick Navigation Tabs */}
-        <div className="bg-[#F8F9FA] px-5 sm:px-6 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0 overflow-x-auto">
-          <div className="flex items-center gap-1 py-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('details')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'details'
-                  ? 'bg-[#142142] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-[#142142] hover:bg-slate-200/60'
-              }`}
-            >
-              <Layers size={14} />
-              <span>Informações da Demanda</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('attachments')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'attachments'
-                  ? 'bg-[#142142] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-[#142142] hover:bg-slate-200/60'
-              }`}
-            >
-              <UploadCloud size={14} />
-              <span>Arquivos & Vídeos (até 200MB)</span>
-              <span className="bg-[#fab518] text-[#142142] text-[10px] px-1.5 py-0.2 rounded-full font-black">
-                {attachments.length}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('checklist')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'checklist'
-                  ? 'bg-[#142142] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-[#142142] hover:bg-slate-200/60'
-              }`}
-            >
-              <CheckSquare size={14} />
-              <span>Checklist</span>
-              <span className="bg-slate-200 text-slate-700 text-[10px] px-1.5 py-0.2 rounded-full font-black">
-                {completedChecklistCount}/{checklist.length}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('comments')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'comments'
-                  ? 'bg-[#142142] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-[#142142] hover:bg-slate-200/60'
-              }`}
-            >
-              <MessageSquare size={14} />
-              <span>Notas & Atividades</span>
-              <span className="bg-slate-200 text-slate-700 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                {comments.length}
-              </span>
-            </button>
-          </div>
-
-          {/* Quick status progress pill */}
-          <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-slate-500 shrink-0">
-            <span>Progresso:</span>
-            <div className="w-16 h-2 bg-slate-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[#fab518] rounded-full transition-all"
-                style={{ width: `${checklistPercentage}%` }}
-              />
-            </div>
-            <span className="text-[11px] text-slate-700 font-bold">{checklistPercentage}%</span>
-          </div>
-        </div>
-
         {/* Modal Scrollable Body */}
-        <div id="demand-detail-modal-body" className="p-4 sm:p-5 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-200">
+        <div id="demand-detail-modal-body" className="p-4 sm:p-6 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 space-y-4">
           {activeTab === 'details' && (
-            <form onSubmit={handleSave} className="space-y-3.5">
+            <form onSubmit={handleSave} className="space-y-4">
               {/* Interactive Client Approval Banner */}
               {(columnId === 'aprovacao' || demand.approvalStatus) && (
                 <div className="p-3 sm:p-3.5 bg-linear-to-r from-amber-50/95 via-orange-50/90 to-amber-50/95 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
@@ -512,349 +460,311 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
                 </div>
               )}
 
-              {/* Bento Grid 2 Columns: Left Column (Form Fields) & Right Column (Visual Media Preview) */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 lg:gap-4.5 items-start">
-                {/* Left Column (col-span-7) */}
-                <div className="lg:col-span-7 space-y-3">
-                  {/* Row 1: Title & Client */}
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                    <div className="sm:col-span-7">
-                      <label className="block text-[11px] font-bold text-[#142142] mb-1">
-                        Título da Demanda *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Ex: Post Carrossel Lançamento Coleção"
-                        className="w-full bg-[#F4F5F7] hover:bg-[#EBEDF0] focus:bg-white text-xs font-normal font-sofia-regular text-[#142142] px-3 py-2 rounded-xl border border-transparent focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all"
-                      />
-                    </div>
+              {/* Form Container */}
+              <div className="space-y-4">
+                {/* Row 1: Título da Demanda */}
+                <div>
+                  <label htmlFor="demand-title-input" className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
+                    Título da Demanda <span className="text-amber-500 font-black">*</span>
+                  </label>
+                  <input
+                    id="demand-title-input"
+                    type="text"
+                    required
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Ex: Campanha Mês do Consumidor - Promoção Especial"
+                    className="w-full bg-slate-50/70 dark:bg-slate-800/80 hover:bg-slate-100/60 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs sm:text-sm font-semibold text-slate-900 dark:text-white px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all placeholder:text-slate-400 placeholder:font-normal shadow-2xs"
+                  />
+                </div>
 
-                    <div className="sm:col-span-5">
-                      <label className="block text-[11px] font-bold text-[#142142] mb-1">
-                        Cliente Vinculado *
-                      </label>
-                      <select
-                        value={client}
-                        onChange={(e) => setClient(e.target.value)}
-                        className="w-full bg-[#F4F5F7] hover:bg-[#EBEDF0] focus:bg-white text-xs font-normal font-sofia-regular text-[#142142] px-3 py-2 rounded-xl border border-transparent focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer"
-                      >
-                        {clients.length > 0 ? (
-                          clients.map((c) => (
-                            <option key={c.id} value={c.name}>
-                              {c.name}
-                            </option>
-                          ))
-                        ) : (
-                          <>
-                            <option value="COLLAB RAM">COLLAB RAM</option>
-                            <option value="Bella Moda Boutique">Bella Moda Boutique</option>
-                            <option value="Sabor da Serra Restaurante">Sabor da Serra Restaurante</option>
-                            <option value="Auto Mecânica Silva">Auto Mecânica Silva</option>
-                            <option value="Dra. Camila Odontologia">Dra. Camila Odontologia</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Row 2: Etapa Kanban, Prioridade, Prazo */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#142142] mb-1">
-                        Etapa Kanban *
-                      </label>
-                      <select
-                        value={columnId}
-                        onChange={(e) => setColumnId(e.target.value as KanbanColumnId)}
-                        className="w-full bg-[#F4F5F7] hover:bg-[#EBEDF0] focus:bg-white text-xs font-normal font-sofia-regular text-[#142142] px-2.5 py-2 rounded-xl border border-transparent focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer"
-                      >
-                        {(columns && columns.length > 0 ? columns : kanbanColumnsData).map((col) => (
-                          <option key={col.id} value={col.id}>
-                            {col.title}
-                          </option>
-                        ))}
-                      </select>
-                      {columnId === 'aprovacao' && (
-                        <p className="text-[10px] text-emerald-700 font-bold mt-1 flex items-center gap-1">
-                          <MessageCircle size={11} className="text-[#25D366] shrink-0" />
-                          <span>Dispara Portal & WhatsApp</span>
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#142142] mb-1">
-                        Prioridade *
-                      </label>
-                      <select
-                        value={priority}
-                        onChange={(e) => setPriority(e.target.value as Priority)}
-                        className="w-full bg-[#F4F5F7] hover:bg-[#EBEDF0] focus:bg-white text-xs font-normal font-sofia-regular text-[#142142] px-2.5 py-2 rounded-xl border border-transparent focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer"
-                      >
-                        <option value="baixa">Baixa (1 barra)</option>
-                        <option value="media">Média (2 barras)</option>
-                        <option value="alta">Alta (3 barras)</option>
-                        <option value="urgente">Urgente (Crítico)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#142142] mb-1">
-                        Data / Prazo
-                      </label>
-                      <input
-                        type="date"
-                        value={dueDate}
-                        onChange={(e) => setDueDate(e.target.value)}
-                        className="w-full bg-[#F4F5F7] hover:bg-[#EBEDF0] focus:bg-white text-xs font-normal font-sofia-regular text-[#142142] px-2.5 py-2 rounded-xl border border-transparent focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Row 3: Responsável na Equipe e Tipo de Peça */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#142142] mb-1">
-                        Responsável na Equipe
-                      </label>
-                      <select
-                        value={assigneeName}
-                        onChange={(e) => {
-                          const name = e.target.value;
-                          setAssigneeName(name);
-                          if (name.includes('Beatriz')) {
-                            setAssigneeAvatar('https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80');
-                          } else if (name.includes('Lucas')) {
-                            setAssigneeAvatar('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80');
-                          } else if (name.includes('Matheus')) {
-                            setAssigneeAvatar('https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80');
-                          } else {
-                            setAssigneeAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80');
-                          }
-                        }}
-                        className="w-full bg-[#F4F5F7] hover:bg-[#EBEDF0] focus:bg-white text-xs font-normal font-sofia-regular text-[#142142] px-3 py-2 rounded-xl border border-transparent focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer"
-                      >
-                        <option value="Beatriz Lima">Beatriz Lima (Design)</option>
-                        <option value="Lucas Rocha">Lucas Rocha (Copywriting)</option>
-                        <option value="Matheus Costa">Matheus Costa (Web Dev)</option>
-                        <option value="Marcos Lancerotti">Marcos Lancerotti (Gestor)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#142142] mb-1">
-                        Tipo de Peça
-                      </label>
-                      <select
-                        value={type}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setType(val);
-                          if (val === 'Meta Ads') setServiceCategory('Tráfego Pago');
-                          else if (val === 'Des. de Site') setServiceCategory('Criação de Sites');
-                          else if (val === 'Logotipo') setServiceCategory('Design Geral');
-                          else if (val === 'Post') setServiceCategory('Social Media');
-                          else setServiceCategory('Social Media');
-                        }}
-                        className="w-full bg-[#F4F5F7] hover:bg-[#EBEDF0] focus:bg-white text-xs font-normal font-sofia-regular text-[#142142] px-3 py-2 rounded-xl border border-transparent focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer"
-                      >
-                        <option value="Post">Post</option>
-                        <option value="Meta Ads">Meta Ads</option>
-                        <option value="Des. de Site">Des. de Site</option>
-                        <option value="Logotipo">Logotipo</option>
-                        <option value="Outros">Outros</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Row 4: Descrição e Briefing */}
+                {/* Row 2: Cliente Vinculado & Tipo de Peça */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="block text-[11px] font-bold text-[#142142] mb-1">
-                      Descrição e Briefing da Demanda
+                    <label htmlFor="demand-client-select" className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
+                      Cliente Vinculado <span className="text-amber-500 font-black">*</span>
                     </label>
-                    <textarea
-                      rows={2}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Descreva o escopo, orientações, briefing ou detalhes da demanda..."
-                      className="w-full bg-[#F4F5F7] hover:bg-[#EBEDF0] focus:bg-white text-xs font-normal font-sofia-regular text-[#142142] px-3 py-2 rounded-xl border border-transparent focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none resize-none placeholder:text-slate-400 leading-relaxed transition-all"
+                    <select
+                      id="demand-client-select"
+                      value={client}
+                      onChange={(e) => setClient(e.target.value)}
+                      className="w-full bg-slate-50/70 dark:bg-slate-800/80 hover:bg-slate-100/60 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer shadow-2xs"
+                    >
+                      {clients.length > 0 ? (
+                        clients.map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.name}
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="COLLAB RAM">COLLAB RAM</option>
+                          <option value="Bella Moda Boutique">Bella Moda Boutique</option>
+                          <option value="Sabor da Serra Restaurante">Sabor da Serra Restaurante</option>
+                          <option value="Auto Mecânica Silva">Auto Mecânica Silva</option>
+                          <option value="Dra. Camila Odontologia">Dra. Camila Odontologia</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="demand-type-select" className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
+                      Tipo de Peça
+                    </label>
+                    <select
+                      id="demand-type-select"
+                      value={type}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setType(val);
+                        if (val === 'Meta Ads') setServiceCategory('Tráfego Pago');
+                        else if (val === 'Des. de Site') setServiceCategory('Criação de Sites');
+                        else if (val === 'Logotipo') setServiceCategory('Design Geral');
+                        else if (val === 'Post') setServiceCategory('Social Media');
+                        else setServiceCategory('Social Media');
+                      }}
+                      className="w-full bg-slate-50/70 dark:bg-slate-800/80 hover:bg-slate-100/60 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer shadow-2xs"
+                    >
+                      <option value="Post">Post (Feed / Carrossel)</option>
+                      <option value="Meta Ads">Meta Ads (Anúncio)</option>
+                      <option value="Des. de Site">Des. de Site / Landing Page</option>
+                      <option value="Logotipo">Logotipo & Identidade</option>
+                      <option value="Vídeo / Reels">Vídeo / Reels</option>
+                      <option value="Outros">Outros Formatos</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Row 3: Etapa Kanban, Prioridade & Data / Prazo (Properly spaced) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label htmlFor="demand-kanban-step" className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
+                      Etapa Kanban <span className="text-amber-500 font-black">*</span>
+                    </label>
+                    <select
+                      id="demand-kanban-step"
+                      value={columnId}
+                      onChange={(e) => setColumnId(e.target.value as KanbanColumnId)}
+                      className="w-full bg-slate-50/70 dark:bg-slate-800/80 hover:bg-slate-100/60 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer shadow-2xs"
+                    >
+                      {(columns && columns.length > 0 ? columns : kanbanColumnsData).map((col) => (
+                        <option key={col.id} value={col.id}>
+                          {col.title}
+                        </option>
+                      ))}
+                    </select>
+                    {columnId === 'aprovacao' && (
+                      <p className="text-[10.5px] text-emerald-700 dark:text-emerald-400 font-bold mt-1.5 flex items-center gap-1">
+                        <MessageCircle size={11} className="text-[#25D366] shrink-0" />
+                        <span>Ativa Portal & WhatsApp</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <CustomPrioritySelect
+                      id="demand-detail-priority"
+                      label="Prioridade *"
+                      value={priority}
+                      onChange={setPriority}
+                    />
+                  </div>
+
+                  <div>
+                    <CustomDatePicker
+                      id="demand-detail-due-date"
+                      label="Data / Prazo"
+                      value={dueDate}
+                      onChange={setDueDate}
+                      placeholder="Definir prazo..."
                     />
                   </div>
                 </div>
 
-                {/* Right Column (col-span-5): Imagem ou Vídeo Anexado */}
-                <div className="lg:col-span-5 flex flex-col justify-between space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-bold text-[#142142] flex items-center gap-1.5">
-                      <ImageIcon size={13} className="text-[#fab518]" />
-                      <span>Imagem ou Vídeo Anexado</span>
-                      {mediaAttachments.length > 0 && (
-                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-[#142142]/10 text-[#142142]">
-                          {mediaAttachments.length}
-                        </span>
-                      )}
-                    </label>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="file"
-                        ref={mediaInputRef}
-                        accept="image/*,video/*"
-                        className="hidden"
-                        onChange={(e) => handleDirectMediaUpload(e.target.files)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => mediaInputRef.current?.click()}
-                        className="text-[10.5px] font-bold text-[#142142] hover:text-[#fab518] flex items-center gap-1 transition-colors cursor-pointer"
-                      >
-                        <Plus size={12} />
-                        <span>{mediaAttachments.length > 0 ? 'Adicionar' : 'Anexar'}</span>
-                      </button>
-                      {mediaAttachments.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('attachments')}
-                          className="text-[10.5px] font-semibold text-slate-500 hover:text-[#142142] transition-colors cursor-pointer"
-                        >
-                          • Ver todos
-                        </button>
+                {/* Row 4: Responsável na Equipe with Visual Avatar */}
+                <div>
+                  <label htmlFor="demand-assignee-select" className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
+                    Responsável na Equipe
+                  </label>
+                  <div className="relative flex items-center">
+                    <div className="absolute left-3 pointer-events-none flex items-center">
+                      {assigneeAvatar ? (
+                        <img src={assigneeAvatar} alt="" className="w-5 h-5 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700" />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full bg-[#142142] text-[#fab518] text-[9px] font-bold flex items-center justify-center">
+                          {assigneeName.charAt(0) || 'U'}
+                        </div>
                       )}
                     </div>
+                    <select
+                      id="demand-assignee-select"
+                      value={assigneeName}
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        setAssigneeName(name);
+                        if (name.includes('Beatriz')) {
+                          setAssigneeAvatar('https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80');
+                        } else if (name.includes('Lucas')) {
+                          setAssigneeAvatar('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80');
+                        } else if (name.includes('Matheus')) {
+                          setAssigneeAvatar('https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80');
+                        } else {
+                          setAssigneeAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80');
+                        }
+                      }}
+                      className="w-full bg-slate-50/70 dark:bg-slate-800/80 hover:bg-slate-100/60 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 pl-10 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer shadow-2xs"
+                    >
+                      <option value="Beatriz Lima">Beatriz Lima (Design & Direção de Arte)</option>
+                      <option value="Lucas Rocha">Lucas Rocha (Copywriting & Conteúdo)</option>
+                      <option value="Matheus Costa">Matheus Costa (Web Development & Tech)</option>
+                      <option value="Marcos Lancerotti">Marcos Lancerotti (Gestor de Contas)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Row 5: Descrição e Briefing da Demanda */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="demand-description-textarea" className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                      Descrição & Briefing da Demanda
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-normal">Orientações de criação</span>
+                  </div>
+                  <textarea
+                    id="demand-description-textarea"
+                    rows={3}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Descreva o escopo, orientações, briefing ou detalhes da demanda..."
+                    className="w-full bg-slate-50/70 dark:bg-slate-800/80 hover:bg-slate-100/60 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none resize-none placeholder:text-slate-400 leading-relaxed transition-all shadow-2xs"
+                  />
+                </div>
+
+                {/* Row 6: Anexos (Compacto conforme imagem de referência) */}
+                <div 
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsMediaDragOver(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsMediaDragOver(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsMediaDragOver(false);
+                    handleDirectMediaUpload(e.dataTransfer.files);
+                  }}
+                  className={`pt-1 relative transition-all ${
+                    isMediaDragOver ? 'ring-2 ring-[#fab518]/50 rounded-xl p-2 bg-amber-50/30 dark:bg-amber-950/20' : ''
+                  }`}
+                >
+                  {/* Uploading indicator overlay */}
+                  {isUploadingMedia && (
+                    <div className="absolute inset-0 z-30 bg-white/90 dark:bg-slate-900/90 rounded-xl flex items-center justify-center gap-2 text-slate-800 dark:text-white backdrop-blur-xs p-2">
+                      <Loader2 size={16} className="animate-spin text-[#fab518]" />
+                      <span className="text-xs font-semibold">Anexando mídia...</span>
+                    </div>
+                  )}
+
+                  {/* Header: "Anexos [3] +" matching reference image */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs sm:text-[13px] font-bold text-slate-900 dark:text-slate-100">
+                      Anexos
+                    </span>
+                    {mediaAttachments.length > 0 && (
+                      <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 min-w-[20px] text-center leading-none">
+                        {mediaAttachments.length}
+                      </span>
+                    )}
+                    <input
+                      type="file"
+                      ref={mediaInputRef}
+                      accept="image/*,video/*"
+                      multiple
+                      className="hidden"
+                      onClick={(e) => {
+                        (e.target as HTMLInputElement).value = '';
+                      }}
+                      onChange={(e) => handleDirectMediaUpload(e.target.files)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => mediaInputRef.current?.click()}
+                      className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white p-0.5 rounded transition-colors cursor-pointer"
+                      title="Adicionar anexo"
+                    >
+                      <Plus size={16} className="stroke-[2.2]" />
+                    </button>
                   </div>
 
-                  {/* Display Media Preview or Empty Drop Target */}
-                  {currentMedia ? (
-                    <div className="bg-[#F8F9FA] rounded-2xl border border-slate-200/90 p-2 space-y-2 flex-1 flex flex-col justify-between">
-                      {/* Active Media Container */}
-                      <div className="relative group rounded-xl overflow-hidden bg-slate-950 border border-slate-200/60 shadow-inner flex items-center justify-center h-44 sm:h-48">
-                        {currentMedia.type === 'video' ? (
-                          <video
-                            src={currentMedia.url}
-                            controls
-                            className="w-full h-full object-contain bg-black rounded-xl"
-                            poster={currentMedia.thumbnailUrl}
+                  {/* Row of Compact Thumbnails (square cards with subtle rounded corners and dashed '+' card) */}
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {mediaAttachments.map((media) => (
+                      <div
+                        key={media.id}
+                        className="group relative w-16 h-16 sm:w-[68px] sm:h-[68px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0 shadow-2xs transition-all hover:border-slate-300 dark:hover:border-slate-600"
+                      >
+                        {media.type === 'video' ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-0.5 bg-slate-900 text-white">
+                            <Film size={18} className="text-[#fab518]" />
+                            <span className="text-[8px] font-bold uppercase tracking-wider">Vídeo</span>
+                          </div>
+                        ) : media.url?.trim() ? (
+                          <img
+                            src={media.url}
+                            alt={media.name}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
                           />
                         ) : (
-                          <div 
-                            className="relative w-full h-full flex items-center justify-center cursor-pointer group"
-                            onClick={() => setLightboxMedia(currentMedia)}
-                          >
-                            {currentMedia.url?.trim() ? (
-                              <img
-                                src={currentMedia.url}
-                                alt={currentMedia.name}
-                                className="w-full h-full object-contain rounded-xl transition-transform duration-300 group-hover:scale-[1.01]"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                <ImageIcon size={32} />
-                              </div>
-                            )}
-                            {/* Hover Overlay */}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-xl backdrop-blur-xs">
-                              <span className="px-2.5 py-1 bg-white/95 hover:bg-white text-[#142142] text-[11px] font-bold rounded-lg shadow-md flex items-center gap-1.5 transition-all">
-                                <Eye size={12} />
-                                Tela Cheia
-                              </span>
-                            </div>
+                          <div className="w-full h-full flex items-center justify-center text-slate-400">
+                            <ImageIcon size={18} />
                           </div>
                         )}
 
-                        {/* Top Badges */}
-                        <div className="absolute top-2 left-2 flex items-center gap-1 z-10 pointer-events-none">
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-[#142142]/90 text-white shadow-xs backdrop-blur-xs flex items-center gap-1">
-                            {currentMedia.type === 'video' ? <Film size={10} className="text-[#fab518]" /> : <ImageIcon size={10} className="text-[#fab518]" />}
-                            {currentMedia.type === 'video' ? 'Vídeo' : 'Imagem'}
-                          </span>
-                        </div>
-
-                        {/* Top Right Quick Actions */}
-                        <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                        {/* Action buttons overlay on hover: Download and Remove */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center justify-center gap-1 p-1">
                           <button
                             type="button"
-                            onClick={() => setLightboxMedia(currentMedia)}
-                            className="h-6 w-6 rounded-md bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-xs transition-colors cursor-pointer"
-                            title="Expandir visualização"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadMedia(media);
+                            }}
+                            className="w-6 h-6 rounded-md bg-slate-900/90 hover:bg-[#fab518] hover:text-[#142142] text-white flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+                            title="Baixar anexo"
                           >
-                            <Maximize2 size={11} />
+                            <Download size={11} className="stroke-[2.5]" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleRemoveMedia(currentMedia.id)}
-                            className="h-6 w-6 rounded-md bg-red-500/80 hover:bg-red-600 text-white flex items-center justify-center backdrop-blur-xs transition-colors cursor-pointer"
-                            title="Remover este arquivo"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveMedia(media.id);
+                            }}
+                            className="w-6 h-6 rounded-md bg-slate-900/90 hover:bg-rose-600 text-white flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+                            title="Remover anexo"
                           >
                             <Trash2 size={11} />
                           </button>
                         </div>
                       </div>
+                    ))}
 
-                      {/* Thumbnails strip if more than 1 media file */}
-                      {mediaAttachments.length > 1 && (
-                        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 px-0.5">
-                          {mediaAttachments.map((media) => {
-                            const isSelected = media.id === currentMedia.id;
-                            return (
-                              <button
-                                key={media.id}
-                                type="button"
-                                onClick={() => setSelectedMediaId(media.id)}
-                                className={`relative h-10 w-12 shrink-0 rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
-                                  isSelected 
-                                    ? 'border-[#fab518] ring-2 ring-[#fab518]/30 shadow-xs' 
-                                    : 'border-slate-200 opacity-70 hover:opacity-100'
-                                }`}
-                              >
-                                {media.type === 'video' ? (
-                                  <div className="w-full h-full bg-slate-800 flex items-center justify-center text-white">
-                                    <Film size={13} className="text-[#fab518]" />
-                                  </div>
-                                ) : media.url?.trim() ? (
-                                  <img
-                                    src={media.url}
-                                    alt={media.name}
-                                    className="w-full h-full object-cover"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400">
-                                    <ImageIcon size={13} />
-                                  </div>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    /* Empty state / drop area when no image/video attached */
-                    <div
+                    {/* Dashed '+' Add Button Card (Exact style from reference screenshot) */}
+                    <button
+                      type="button"
                       onClick={() => mediaInputRef.current?.click()}
-                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleDirectMediaUpload(e.dataTransfer.files);
-                      }}
-                      className="group border-2 border-dashed border-slate-200 hover:border-[#fab518] bg-[#F4F5F7]/70 hover:bg-[#fab518]/5 rounded-2xl p-4 flex-1 flex flex-col items-center justify-center text-center transition-all cursor-pointer min-h-[140px]"
+                      className="w-16 h-16 sm:w-[68px] sm:h-[68px] rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-slate-500 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/60 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-all cursor-pointer shrink-0"
+                      title="Adicionar outro anexo"
                     >
-                      <div className="w-9 h-9 rounded-full bg-white group-hover:bg-[#fab518]/20 flex items-center justify-center text-slate-400 group-hover:text-[#142142] transition-all shadow-2xs mb-1.5">
-                        <UploadCloud size={18} className="stroke-[2]" />
-                      </div>
-                      <p className="text-xs font-bold text-[#142142] group-hover:text-[#142142]">
-                        Clique para anexar mídia
-                      </p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">
-                        PNG, JPG, MP4, MOV (até 200MB)
-                      </p>
-                    </div>
-                  )}
+                      <Plus size={20} className="stroke-[2]" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </form>
@@ -1011,16 +921,16 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="bg-[#F8F9FA] px-5 sm:px-7 py-3 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+        <div className="bg-slate-50 dark:bg-slate-900/90 px-5 sm:px-7 py-3.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
           <div>
             {onDelete && (
               <button
                 type="button"
                 id="btn-trigger-delete-demand"
                 onClick={() => setIsDeleteModalOpen(true)}
-                className="px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 border border-transparent hover:border-rose-200 dark:hover:border-rose-800/60"
               >
-                <Trash2 size={14} />
+                <Trash2 size={15} />
                 <span>Excluir Demanda</span>
               </button>
             )}
@@ -1030,16 +940,16 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-slate-600 hover:bg-slate-200/80 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              className="px-4 py-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95"
             >
               Cancelar
             </button>
             <button
               type="button"
               onClick={() => handleSave()}
-              className="px-5 py-2.5 bg-[#fab518] hover:bg-[#e29f11] text-[#142142] rounded-xl text-xs font-black shadow-xs flex items-center gap-2 transition-transform active:scale-98 cursor-pointer"
+              className="px-5 py-2.5 bg-[#fab518] hover:bg-[#e29f11] active:bg-[#c98b0a] text-[#142142] rounded-xl text-xs font-black shadow-sm flex items-center gap-2 transition-all hover:shadow-md active:scale-98 cursor-pointer ring-2 ring-[#fab518]/20"
             >
-              <Save size={14} />
+              <Save size={15} className="stroke-[2.5]" />
               <span>Salvar Alterações</span>
             </button>
           </div>
@@ -1053,55 +963,6 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
           </div>
         )}
       </div>
-
-      {/* Lightbox / Zoom Modal for Attached Media */}
-      {lightboxMedia && (
-        <div 
-          className="fixed inset-0 z-60 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
-          onClick={() => setLightboxMedia(null)}
-        >
-          <div 
-            className="relative max-w-4xl w-full max-h-[90vh] bg-slate-950 rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-4 py-3 bg-[#142142] text-white flex items-center justify-between border-b border-white/10">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-[#fab518] text-[#142142]">
-                  {lightboxMedia.type === 'video' ? 'Vídeo' : 'Imagem'}
-                </span>
-                <span className="text-xs font-bold truncate">{lightboxMedia.name}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setLightboxMedia(null)}
-                className="h-7 w-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
-                aria-label="Fechar prévia"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="p-2 sm:p-4 flex items-center justify-center bg-black/50 overflow-auto max-h-[calc(90vh-52px)]">
-              {lightboxMedia.type === 'video' ? (
-                <video 
-                  src={lightboxMedia.url} 
-                  controls 
-                  autoPlay 
-                  className="max-h-[78vh] max-w-full rounded-xl bg-black" 
-                />
-              ) : lightboxMedia.url?.trim() ? (
-                <img 
-                  src={lightboxMedia.url} 
-                  alt={lightboxMedia.name} 
-                  className="max-h-[78vh] max-w-full object-contain rounded-xl" 
-                  referrerPolicy="no-referrer" 
-                />
-              ) : (
-                <div className="text-white text-sm">Mídia não disponível</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Generic Confirmation Modal for Demand Deletion */}
       <ConfirmDeleteModal

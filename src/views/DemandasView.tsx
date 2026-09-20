@@ -117,6 +117,25 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     return dateStr;
   };
 
+  // Retorna a URL da imagem anexada para exibir como miniatura única no card da demanda
+  const getDemandImageThumbnail = (demand: DemandItem): string | undefined => {
+    if (demand.thumbnail && demand.thumbnail.trim()) {
+      return demand.thumbnail;
+    }
+    if (demand.attachments && demand.attachments.length > 0) {
+      const firstImage = demand.attachments.find((att) => {
+        if (att.type === 'image') return true;
+        if (typeof att.url === 'string' && (att.url.startsWith('data:image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(att.url))) return true;
+        if (typeof att.name === 'string' && /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(att.name)) return true;
+        return false;
+      });
+      if (firstImage) {
+        return firstImage.thumbnailUrl || firstImage.url;
+      }
+    }
+    return undefined;
+  };
+
   const [activeTab, setActiveTab] = useState<'quadro' | 'lista' | 'calendario' | 'gantt'>('quadro');
   const [selectedClientFilter, setSelectedClientFilter] = useState<string>(initialClientFilter);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -1322,13 +1341,17 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
 
                         {/* Content Row: Thumbnail + Title */}
                         <div className="flex items-start gap-3 mb-3">
-                          {demand.thumbnail?.trim() ? (
-                            <img
-                              src={demand.thumbnail}
-                              alt={demand.title}
-                              className="w-12 h-12 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0 pointer-events-none group-hover:ring-[#fab518] transition-all"
-                            />
-                          ) : null}
+                          {(() => {
+                            const cardThumbnail = getDemandImageThumbnail(demand);
+                            if (!cardThumbnail) return null;
+                            return (
+                              <img
+                                src={cardThumbnail}
+                                alt={demand.title}
+                                className="w-12 h-12 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0 pointer-events-none group-hover:ring-[#fab518] transition-all"
+                              />
+                            );
+                          })()}
                           <div className="flex-1 min-w-0">
                             <h4 className="text-xs sm:text-sm font-bold text-[#142142] dark:text-white leading-tight group-hover:underline line-clamp-2">
                               {demand.title}
@@ -1713,9 +1736,13 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                 >
                   <td className="p-4 font-bold text-[#142142] dark:text-white">
                     <div className="flex items-center gap-3">
-                      {demand.thumbnail?.trim() ? (
-                        <img src={demand.thumbnail} alt="" className="w-8 h-8 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-700 group-hover:ring-[#fab518]" />
-                      ) : null}
+                      {(() => {
+                        const listThumbnail = getDemandImageThumbnail(demand);
+                        if (!listThumbnail) return null;
+                        return (
+                          <img src={listThumbnail} alt="" className="w-8 h-8 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-700 group-hover:ring-[#fab518]" />
+                        );
+                      })()}
                       <div>
                         <div className="group-hover:text-[#fab518] group-hover:underline">{demand.title}</div>
                         <span className="text-[10px] text-slate-400 font-normal">{demand.id}</span>

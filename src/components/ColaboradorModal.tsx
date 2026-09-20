@@ -20,9 +20,13 @@ import {
   Code2,
   AlertCircle,
   RefreshCw,
-  Crown
+  Crown,
+  Copy,
+  CheckCircle2,
+  Shield
 } from 'lucide-react';
 import { TeamMember, TeamFunctionOption } from '../types';
+import { isOwnerOrMarcos, updateMasterPassword } from '../utils/securityProtocols';
 
 interface ColaboradorModalProps {
   isOpen: boolean;
@@ -145,12 +149,16 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
       .replace(/^\.|\.$/g, '');
   };
 
+  const [copiedCredential, setCopiedCredential] = useState(false);
+
   const handleGeneratePassword = () => {
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     const newPass = `Help${randomNum}!`;
     setPassword(newPass);
     setShowPassword(true);
   };
+
+  const isEditingOwner = Boolean(memberToEdit && isOwnerOrMarcos(memberToEdit));
 
   useEffect(() => {
     if (memberToEdit) {
@@ -168,9 +176,13 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
         setCustomRoleTitle(memberToEdit.role || '');
       }
 
-      setUsername(memberToEdit.username || generateUsernameFromName(memberToEdit.name || ''));
-      setPassword(memberToEdit.password || '123456');
-      setEmail(memberToEdit.email || '');
+      const isMarcos = isOwnerOrMarcos(memberToEdit);
+      const defaultUser = isMarcos ? 'lancerotti' : generateUsernameFromName(memberToEdit.name || '');
+      const defaultPass = isMarcos ? '521Spide#*' : '123456';
+
+      setUsername(memberToEdit.username || defaultUser);
+      setPassword(memberToEdit.password || defaultPass);
+      setEmail(memberToEdit.email || (isMarcos ? 'lancerottirmarcos@gmail.com' : ''));
       setStatus(memberToEdit.status || 'Disponível');
       setActiveTasks(memberToEdit.activeTasks || 0);
       setAvatar(memberToEdit.avatar || PRESET_AVATARS[0]);
@@ -204,7 +216,7 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
   };
 
   const handleNameBlur = () => {
-    if (name.trim() && !username.trim()) {
+    if (!memberToEdit && name.trim() && !username.trim()) {
       const suggested = generateUsernameFromName(name);
       setUsername(suggested);
       if (!email.trim()) {
@@ -223,6 +235,13 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
 
   const handleRemoveTag = (tagToRemove: string) => {
     setSpecialties((prev) => prev.filter((t) => t !== tagToRemove));
+  };
+
+  const handleCopyCredentials = () => {
+    const textToCopy = `Usuário: ${username}\nSenha: ${password}`;
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedCredential(true);
+    setTimeout(() => setCopiedCredential(false), 2500);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -265,6 +284,15 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
       createdBy: memberToEdit?.createdBy || 'Marcos Lancerotti',
       createdAt: memberToEdit?.createdAt || new Date().toISOString(),
     };
+
+    // Se o colaborador salvo for o Marcos Lancerotti, sincroniza com a Senha Mestra
+    const isMarcos = (memberToEdit && isOwnerOrMarcos(memberToEdit)) || isOwnerOrMarcos(finalMember);
+    if (isMarcos) {
+      updateMasterPassword(finalPassword);
+      try {
+        localStorage.setItem('help_agency_master_user', cleanUsername);
+      } catch {}
+    }
 
     onSave(finalMember);
     onClose();
@@ -416,24 +444,54 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
           </div>
 
           {/* Section 2: Credenciais de Acesso (Usuário e Senha para Login) */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300/60 dark:border-amber-500/30 space-y-4">
-            <div className="flex items-start justify-between gap-3">
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-slate-50/50 dark:to-slate-900/40 border border-amber-300/70 dark:border-amber-500/30 space-y-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#fab518] text-[#142142] flex items-center justify-center font-black shrink-0 shadow-xs">
-                  <KeyRound size={16} />
+                <div className="w-9 h-9 rounded-xl bg-[#fab518] text-[#142142] flex items-center justify-center font-black shrink-0 shadow-xs ring-2 ring-[#fab518]/20">
+                  <KeyRound size={17} className="stroke-[2.2]" />
                 </div>
                 <div>
-                  <h3 className="text-xs sm:text-sm font-black text-[#142142] dark:text-white">
-                    Credenciais de Acesso ao Sistema
-                  </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Defina o usuário e senha para este colaborador fazer login na plataforma
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs sm:text-sm font-black text-[#142142] dark:text-white tracking-tight">
+                      Credenciais de Acesso ao Sistema
+                    </h3>
+                    {isEditingOwner ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+                        <Crown size={11} className="text-amber-600 dark:text-amber-400" />
+                        Conta Mestra (Dono)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                        <ShieldCheck size={11} />
+                        Acesso Ativo
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Usuário e senha criptografados para login direto na plataforma
                   </p>
                 </div>
               </div>
-              <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 shrink-0">
-                Acesso Ativo
-              </span>
+
+              {/* Botão Copiar Dados de Acesso */}
+              <button
+                type="button"
+                onClick={handleCopyCredentials}
+                className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-all shadow-2xs active:scale-95 cursor-pointer"
+                title="Copiar usuário e senha para a área de transferência"
+              >
+                {copiedCredential ? (
+                  <>
+                    <CheckCircle2 size={13} className="text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={13} className="text-slate-400" />
+                    <span>Copiar Credenciais</span>
+                  </>
+                )}
+              </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
@@ -443,19 +501,21 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
                   Usuário de Login *
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">@</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 font-black text-xs">@</span>
                   <input
                     type="text"
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-                    placeholder="Ex: beatriz.design"
-                    className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono text-xs focus:outline-hidden focus:border-[#fab518] focus:ring-1 focus:ring-[#fab518]"
+                    placeholder="Ex: beatriz.design ou lancerotti"
+                    className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono text-xs focus:outline-hidden focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/20 transition-all font-semibold"
                   />
                 </div>
-                <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
-                  <span>Usado para entrar no sistema</span>
-                  {name.trim() && (
+                <div className="flex items-center justify-between mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                  <span>
+                    Login: <strong className="font-mono text-slate-700 dark:text-slate-200">@{username || 'usuario'}</strong>
+                  </span>
+                  {name.trim() && !isEditingOwner && (
                     <button
                       type="button"
                       onClick={() => setUsername(generateUsernameFromName(name))}
@@ -481,20 +541,27 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                    className="w-full pl-9 pr-16 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-mono text-xs focus:outline-hidden focus:border-[#fab518] focus:ring-1 focus:ring-[#fab518]"
+                    placeholder="Defina a senha"
+                    className="w-full pl-9 pr-16 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono text-xs focus:outline-hidden focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/20 transition-all font-semibold"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 transition-colors cursor-pointer"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                     title={showPassword ? 'Ocultar senha' : 'Exibir senha'}
                   >
                     {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
-                <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
-                  <span>Padrão inicial: 123456</span>
+                <div className="flex items-center justify-between mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex gap-0.5">
+                      <div className={`h-1.5 w-3 rounded-full ${password.length > 0 ? (password.length >= 6 ? 'bg-emerald-500' : 'bg-amber-500') : 'bg-slate-200 dark:bg-slate-700'}`} />
+                      <div className={`h-1.5 w-3 rounded-full ${password.length >= 6 ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`} />
+                      <div className={`h-1.5 w-3 rounded-full ${password.length >= 8 && /[!@#$%^&*]/.test(password) ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`} />
+                    </div>
+                    <span>{password.length < 6 ? 'Mín. 6 chars' : (password.length >= 8 && /[!@#$%^&*]/.test(password) ? 'Segura' : 'Boa')}</span>
+                  </div>
                   <button
                     type="button"
                     onClick={handleGeneratePassword}
@@ -504,6 +571,16 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Reassuring Security Note */}
+            <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 text-[11px] text-slate-600 dark:text-slate-300 flex items-start gap-2">
+              <Shield size={14} className="text-[#fab518] shrink-0 mt-0.5" />
+              <p className="leading-tight">
+                {isEditingOwner
+                  ? 'Como Marcos Lancerotti é o Dono da Agência, atualizar a senha aqui também sincroniza automaticamente a Senha Mestra do sistema.'
+                  : 'Este usuário e senha são gravados na nuvem e no armazenamento seguro local para autenticação imediata na tela de login.'}
+              </p>
             </div>
           </div>
 

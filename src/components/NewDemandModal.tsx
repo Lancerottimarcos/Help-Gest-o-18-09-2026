@@ -3,6 +3,8 @@ import { X, Plus, Calendar, User, Tag, Sparkles, UploadCloud } from 'lucide-reac
 import { Client, DemandItem, KanbanColumnId, Priority, DemandAttachment, TeamMember, KanbanColumn } from '../types';
 import { initialTeamMembers } from '../data/mockData';
 import { FileUploadDropzone } from './FileUploadDropzone';
+import { CustomDatePicker } from './CustomDatePicker';
+import { CustomPrioritySelect } from './CustomPrioritySelect';
 import { detectAndSanitizeInput } from '../utils/securityProtocols';
 
 interface NewDemandModalProps {
@@ -74,7 +76,12 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
       urgente: 3,
     };
 
-    const firstImageAttachment = attachments.find((a) => a.type === 'image');
+    const firstImageAttachment = attachments.find((a) => {
+      if (a.type === 'image') return true;
+      if (typeof a.url === 'string' && (a.url.startsWith('data:image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(a.url))) return true;
+      if (typeof a.name === 'string' && /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(a.name)) return true;
+      return false;
+    });
 
     const newDemand: DemandItem = {
       id: `DEM-${Math.floor(100 + Math.random() * 900)}`,
@@ -222,17 +229,12 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#142142] dark:text-white mb-1">Prioridade</label>
-              <select
+              <CustomPrioritySelect
+                id="new-demand-priority"
+                label="Prioridade"
                 value={priority}
-                onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-xs font-semibold text-[#142142] dark:text-slate-100 p-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:outline-none transition-colors"
-              >
-                <option value="baixa">Baixa</option>
-                <option value="media">Média</option>
-                <option value="alta">Alta</option>
-                <option value="urgente">Urgente</option>
-              </select>
+                onChange={setPriority}
+              />
             </div>
 
             <div>
@@ -274,12 +276,12 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#142142] dark:text-white mb-1">Prazo de Entrega</label>
-              <input
-                type="date"
+              <CustomDatePicker
+                id="new-demand-due-date"
+                label="Prazo de Entrega"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-xs font-semibold text-[#142142] dark:text-slate-100 p-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:outline-none transition-colors"
+                onChange={setDueDate}
+                placeholder="Selecione o prazo..."
               />
             </div>
           </div>

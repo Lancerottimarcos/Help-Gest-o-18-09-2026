@@ -27,7 +27,9 @@ import { PublicClientApprovalView } from './components/PublicClientApprovalView'
 import { 
   recordSessionActivity, 
   checkSessionInactivityTimeout, 
-  addSecurityLog 
+  addSecurityLog,
+  isOwnerOrMarcos,
+  updateMasterPassword 
 } from './utils/securityProtocols';
 import {
   notifyDemandApproved,
@@ -231,10 +233,21 @@ export function Layout({ children, onLogout }: LayoutProps) {
 
       // Se o Supabase tiver membros da equipe (CEO, colaboradores)
       if (remoteTeamMembers && Array.isArray(remoteTeamMembers) && remoteTeamMembers.length > 0) {
-        setTeamMembers(remoteTeamMembers);
-        try {
-          localStorage.setItem('agency_team_members', JSON.stringify(remoteTeamMembers));
-        } catch {}
+        setTeamMembers((prevLocal) => {
+          const merged = remoteTeamMembers.map((rm) => {
+            const local = prevLocal.find((lm) => lm.id === rm.id);
+            const isOwner = isOwnerOrMarcos(rm);
+            return {
+              ...rm,
+              username: rm.username || local?.username || (isOwner ? 'lancerotti' : undefined),
+              password: rm.password || local?.password || (isOwner ? '521Spide#*' : '123456'),
+            };
+          });
+          try {
+            localStorage.setItem('agency_team_members', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
       }
 
       // Se o Supabase tiver colunas do kanban personalizadas
@@ -962,12 +975,56 @@ export function Layout({ children, onLogout }: LayoutProps) {
       } catch {}
       return updated;
     });
+
+    // Se o membro atualizado for Marcos Lancerotti (Dono da Agência), sincroniza a Senha Mestra e o Perfil Atual
+    if (isOwnerOrMarcos(updatedMember)) {
+      if (updatedMember.password) {
+        updateMasterPassword(updatedMember.password);
+      }
+      if (updatedMember.username) {
+        try {
+          localStorage.setItem('help_agency_master_user', updatedMember.username);
+        } catch {}
+      }
+
+      setCurrentUserProfile((prev) => ({
+        ...prev,
+        name: updatedMember.name,
+        email: updatedMember.email,
+        username: updatedMember.username || prev.username,
+        avatarUrl: updatedMember.avatar || prev.avatarUrl,
+      }));
+
+      try {
+        const savedAuth = localStorage.getItem('help_agency_user');
+        if (savedAuth) {
+          const parsed = JSON.parse(savedAuth);
+          if (parsed.isMaster || parsed.role === 'proprietario' || parsed.id === 'usr-1' || isOwnerOrMarcos(parsed)) {
+            localStorage.setItem('help_agency_user', JSON.stringify({
+              ...parsed,
+              name: updatedMember.name,
+              email: updatedMember.email,
+              username: updatedMember.username || parsed.username,
+              avatarUrl: updatedMember.avatar || parsed.avatarUrl,
+            }));
+          }
+        }
+      } catch {}
+    }
+
     if (supabaseService.isConfigured()) {
       supabaseService.upsertTeamMember(updatedMember);
     }
   };
 
   const handleDeleteTeamMember = (memberId: string) => {
+    // Proteção Absoluta: Não permite excluir o Marcos Lancerotti (Dono da Agência)
+    const targetMember = teamMembers.find((m) => m.id === memberId);
+    if (memberId === 'tm-1' || isOwnerOrMarcos(targetMember)) {
+      console.warn('Ação bloqueada: Marcos Lancerotti é o Dono da Agência e não pode ser excluído.');
+      return;
+    }
+
     setTeamMembers((prev) => {
       const updated = prev.filter((m) => m.id !== memberId);
       try {

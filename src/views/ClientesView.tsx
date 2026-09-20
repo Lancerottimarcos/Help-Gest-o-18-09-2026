@@ -914,10 +914,9 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                     <input
                       type="text"
                       placeholder="SP"
-                      maxLength={2}
                       value={newClientState}
-                      onChange={(e) => setNewClientState(e.target.value.toUpperCase())}
-                      className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-sm text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono uppercase transition-all"
+                      onChange={(e) => setNewClientState(e.target.value)}
+                      className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-sm text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 font-medium transition-all"
                     />
                   </div>
                 </div>
@@ -1321,10 +1320,10 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                     </label>
                     <input
                       type="text"
-                      maxLength={2}
+                      placeholder="SP"
                       value={editState}
-                      onChange={(e) => setEditState(e.target.value.toUpperCase())}
-                      className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-sm text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:outline-none font-mono uppercase transition-all"
+                      onChange={(e) => setEditState(e.target.value)}
+                      className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-sm text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:outline-none font-medium transition-all"
                     />
                   </div>
                 </div>

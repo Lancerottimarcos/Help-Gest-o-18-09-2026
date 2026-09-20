@@ -32,6 +32,7 @@ import { TeamMember, UserProfile, TeamFunctionOption } from '../types';
 import { initialTeamMembers } from '../data/mockData';
 import { ColaboradorModal, PREDEFINED_ROLES } from '../components/ColaboradorModal';
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
+import { isOwnerOrMarcos } from '../utils/securityProtocols';
 
 interface EquipeViewProps {
   teamMembers?: TeamMember[];
@@ -64,19 +65,21 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
   const [memberToEdit, setMemberToEdit] = useState<TeamMember | null>(null);
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
   const [showRestrictedModal, setShowRestrictedModal] = useState(false);
+  const [ownerDeleteBlockedModal, setOwnerDeleteBlockedModal] = useState(false);
 
   // Quick Credential Peek Drawer for Marcos
   const [credentialPeekMember, setCredentialPeekMember] = useState<TeamMember | null>(null);
   const [showPeekPassword, setShowPeekPassword] = useState(false);
   const [copyToast, setCopyToast] = useState<string | null>(null);
 
-  // Verificação de permissão: Somente o Marcos Lancerotti consegue adicionar colaboradores
+  // Verificação de permissão: Marcos Lancerotti ou Proprietário
   const isMarcosLancerotti = Boolean(
-    currentUser && (
-      (currentUser.name?.toLowerCase().includes('marcos') && currentUser.name?.toLowerCase().includes('lancerotti')) ||
-      currentUser.email?.toLowerCase() === 'lancerottirmarcos@gmail.com' ||
-      (currentUser as any).username?.toLowerCase() === 'lancerotti'
-    )
+    !currentUser ||
+    currentUser.role === 'proprietario' ||
+    (currentUser as any).isMaster === true ||
+    (currentUser.name?.toLowerCase().includes('marcos') && currentUser.name?.toLowerCase().includes('lancerotti')) ||
+    currentUser.email?.toLowerCase() === 'lancerottirmarcos@gmail.com' ||
+    (currentUser as any).username?.toLowerCase() === 'lancerotti'
   );
 
   const showNotification = (msg: string) => {
@@ -100,6 +103,15 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
     }
     setMemberToEdit(member);
     setIsModalOpen(true);
+  };
+
+  const handleRequestDelete = (member: TeamMember) => {
+    if (isOwnerOrMarcos(member)) {
+      setOwnerDeleteBlockedModal(true);
+      showNotification('Operação Bloqueada: Marcos Lancerotti é o Dono da Agência e não pode ser excluído.');
+      return;
+    }
+    setMemberToDelete(member);
   };
 
   const handleSaveMember = (member: TeamMember) => {
@@ -126,6 +138,14 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
 
   const handleConfirmDelete = () => {
     if (!memberToDelete || !isMarcosLancerotti) return;
+
+    // Proteção Absoluta: Não permite excluir o Marcos Lancerotti (Dono da Agência)
+    if (isOwnerOrMarcos(memberToDelete)) {
+      setOwnerDeleteBlockedModal(true);
+      showNotification('Ação Bloqueada: Marcos Lancerotti é o Dono da Agência e não pode ser excluído.');
+      setMemberToDelete(null);
+      return;
+    }
 
     if (onDeleteTeamMember) {
       onDeleteTeamMember(memberToDelete.id);
@@ -560,10 +580,16 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
             const loadLevel = tasksCount <= 2 ? 'Leve' : tasksCount <= 5 ? 'Ideal' : 'Intensa';
             const loadColor = tasksCount <= 2 ? 'bg-emerald-500' : tasksCount <= 5 ? 'bg-blue-500' : 'bg-amber-500';
 
+            const isOwner = isOwnerOrMarcos(member);
+
             return (
               <div
                 key={member.id}
-                className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-2xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between group"
+                className={`rounded-2xl p-5 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group ${
+                  isOwner
+                    ? 'bg-white dark:bg-[#0f172a] border-2 border-amber-300 dark:border-amber-500/50 ring-2 ring-amber-400/15'
+                    : 'bg-white dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
               >
                 <div className="space-y-4">
                   {/* Top Bar: Avatar, Online Dot, Name and Status Badge */}
@@ -599,9 +625,17 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                       </div>
 
                       <div className="min-w-0">
-                        <h3 className="text-sm font-extrabold text-[#142142] dark:text-white truncate group-hover:text-[#fab518] transition-colors">
-                          {member.name}
-                        </h3>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="text-sm font-extrabold text-[#142142] dark:text-white truncate group-hover:text-[#fab518] transition-colors">
+                            {member.name}
+                          </h3>
+                          {isOwner && (
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-sm bg-amber-100 dark:bg-amber-950/90 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                              <Crown size={10} className="text-amber-600 dark:text-amber-400" />
+                              Dono
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
                           {member.role || memberFunc}
                         </p>
@@ -722,14 +756,24 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                         >
                           <Pencil size={13} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setMemberToDelete(member)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
-                          title={`Excluir colaborador ${member.name}`}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {isOwner ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 select-none cursor-default"
+                            title="Marcos Lancerotti é o Dono da Agência e não pode ser excluído."
+                          >
+                            <Crown size={11} className="text-amber-600 dark:text-amber-400" />
+                            <span>Dono Protegido</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRequestDelete(member)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                            title={`Excluir colaborador ${member.name}`}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </>
                     ) : (
                       <span className="text-[10px] text-slate-400">Ativo</span>
@@ -780,9 +824,17 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                             </div>
                           )}
                           <div>
-                            <span className="font-extrabold text-[#142142] dark:text-white block">
-                              {member.name}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-extrabold text-[#142142] dark:text-white block">
+                                {member.name}
+                              </span>
+                              {isOwnerOrMarcos(member) && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase px-1.5 py-0.2 rounded-sm bg-amber-100 dark:bg-amber-950/90 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                                  <Crown size={10} className="text-amber-600 dark:text-amber-400" />
+                                  Dono
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[11px] text-slate-400">
                               {member.role || memberFunc}
                             </span>
@@ -865,14 +917,24 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                             >
                               <Pencil size={13} />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setMemberToDelete(member)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                              title="Excluir"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            {isOwnerOrMarcos(member) ? (
+                              <span
+                                className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 select-none cursor-default"
+                                title="Marcos Lancerotti é o Dono da Agência e não pode ser excluído."
+                              >
+                                <Crown size={11} className="text-amber-600 dark:text-amber-400" />
+                                <span>Dono Protegido</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleRequestDelete(member)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                                title="Excluir"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                           </div>
                         ) : (
                           <span className="text-[11px] text-slate-400">Visualização</span>
@@ -1017,6 +1079,46 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
           ) : undefined
         }
       />
+
+      {/* Modal avisando que Marcos Lancerotti é o Dono da Agência e não pode ser excluído */}
+      {ownerDeleteBlockedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
+          <div className="bg-white dark:bg-[#0f172a] rounded-2xl max-w-md w-full border border-amber-300 dark:border-amber-700/80 p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-[#142142] dark:text-[#fab518] flex items-center justify-center mx-auto border border-amber-300 dark:border-amber-700">
+              <Crown size={24} className="stroke-[2.2]" />
+            </div>
+            <div className="text-center space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
+                Ação Bloqueada pelo Sistema
+              </span>
+              <h3 className="text-base font-black text-[#142142] dark:text-white">
+                Marcos Lancerotti é o Dono da Agência
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                Esta conta pertence ao <strong>Fundador e Proprietário da Agência</strong>. Por razões de governança e conformidade institucional, ela é <strong>permanentemente protegida contra exclusão</strong>.
+              </p>
+              <div className="p-3 bg-amber-50/70 dark:bg-amber-950/40 rounded-xl text-[11px] text-amber-900 dark:text-amber-200 text-left border border-amber-200/80 dark:border-amber-800/60 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <ShieldCheck size={14} className="text-[#fab518]" />
+                  Privilégios de Administrador Mestre
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                  Você pode editar o perfil, avatar, usuário e senha de Marcos a qualquer momento, mas a titularidade principal é vitalícia.
+                </p>
+              </div>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setOwnerDeleteBlockedModal(false)}
+                className="w-full py-2.5 rounded-xl bg-[#142142] text-white font-bold text-xs hover:bg-[#1e3060] transition-colors cursor-pointer shadow-xs"
+              >
+                Compreendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Restricted Access Modal for Non-Marcos Users */}
       {showRestrictedModal && (
