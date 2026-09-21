@@ -22,7 +22,8 @@ import {
   TrendingUp,
   Users,
   Zap,
-  HelpCircle
+  HelpCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { InicioSectionId, InicioSectionMeta } from '../types';
 
@@ -41,15 +42,15 @@ export const DASHBOARD_PRESETS: DashboardCustomizerPreset[] = [
     name: 'Completo (Padrão)',
     badge: '6 seções',
     description: 'Todas as seções visíveis no fluxo balanceado',
-    order: ['welcome', 'indicadores', 'aniversariantes', 'atividades', 'mapa', 'prioridades'],
+    order: ['welcome', 'demandas_atrasadas', 'indicadores', 'prioridades', 'aniversariantes', 'mapa'],
     hidden: [],
   },
   {
     id: 'operacional',
     name: 'Foco Operacional',
     badge: '4 seções',
-    description: 'Prioriza indicadores, prazos de kanban e atividades de produção',
-    order: ['indicadores', 'prioridades', 'atividades', 'welcome', 'aniversariantes', 'mapa'],
+    description: 'Prioriza atrasos, indicadores, prazos de kanban e mapa',
+    order: ['demandas_atrasadas', 'indicadores', 'prioridades', 'welcome', 'aniversariantes', 'mapa'],
     hidden: ['aniversariantes', 'mapa'],
   },
   {
@@ -57,16 +58,16 @@ export const DASHBOARD_PRESETS: DashboardCustomizerPreset[] = [
     name: 'Gestão & Clientes',
     badge: '5 seções',
     description: 'Foco em relacionamento, aniversariantes e mapa de clientes',
-    order: ['welcome', 'indicadores', 'aniversariantes', 'mapa', 'atividades', 'prioridades'],
+    order: ['welcome', 'demandas_atrasadas', 'indicadores', 'aniversariantes', 'mapa', 'prioridades'],
     hidden: ['prioridades'],
   },
   {
     id: 'essencial',
     name: 'Visão Compacta',
     badge: '3 seções',
-    description: 'Apenas boas-vindas, KPIs e status prioritários',
-    order: ['welcome', 'indicadores', 'prioridades', 'atividades', 'aniversariantes', 'mapa'],
-    hidden: ['atividades', 'aniversariantes', 'mapa'],
+    description: 'Apenas boas-vindas, alertas de atraso, KPIs e status prioritários',
+    order: ['welcome', 'demandas_atrasadas', 'indicadores', 'prioridades', 'aniversariantes', 'mapa'],
+    hidden: ['aniversariantes', 'mapa'],
   },
 ];
 
@@ -169,12 +170,12 @@ export const DashboardCustomizerModal: React.FC<DashboardCustomizerModalProps> =
     switch (id) {
       case 'welcome':
         return <Calendar size={18} className="text-[#fab518]" />;
+      case 'demandas_atrasadas':
+        return <AlertTriangle size={18} className="text-rose-500" />;
       case 'indicadores':
         return <Layers size={18} className="text-blue-500" />;
       case 'aniversariantes':
         return <Cake size={18} className="text-amber-500" />;
-      case 'atividades':
-        return <Clock size={18} className="text-emerald-500" />;
       case 'mapa':
         return <MapPin size={18} className="text-purple-500" />;
       case 'prioridades':

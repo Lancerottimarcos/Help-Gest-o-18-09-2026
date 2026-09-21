@@ -1,7 +1,7 @@
 import { ApprovalNotificationConfig, Client, DemandItem, NotificationTemplateId } from '../types';
 
 export const DEFAULT_NOTIFICATION_CONFIG: ApprovalNotificationConfig = {
-  autoOpenModalOnMove: true,
+  autoOpenModalOnMove: false,
   defaultChannel: 'whatsapp',
   defaultTemplateId: 'friendly',
   agencySignature: 'Help Agência Digital',

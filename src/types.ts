@@ -254,11 +254,11 @@ export interface ApprovalNotificationConfig {
 
 export type InicioSectionId = 
   | 'welcome' 
+  | 'demandas_atrasadas'
   | 'indicadores' 
+  | 'prioridades'
   | 'aniversariantes' 
-  | 'atividades' 
-  | 'mapa' 
-  | 'prioridades';
+  | 'mapa';
 
 export interface InicioSectionMeta {
   id: InicioSectionId;

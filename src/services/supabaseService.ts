@@ -39,7 +39,9 @@ export const SUPABASE_MIGRATION_SQL = `-- ======================================
 -- Cole no SQL Editor do Supabase e clique em RUN. Não apaga nenhum dado!
 -- ====================================================================
 
--- 1. Novas colunas na tabela de clientes
+-- 1. Novas colunas e auditoria na tabela de clientes
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS person_type TEXT DEFAULT 'juridica';
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS cpf_cnpj TEXT;
@@ -74,7 +76,22 @@ ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS lgpd_consent_purpose TEXT;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS is_anonymized BOOLEAN DEFAULT false;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS anonymized_at TEXT;
 
+-- Atualiza a função de trigger para ser tolerante a falhas (impede quebrar caso updated_at falte em alguma tabela)
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    BEGIN
+        NEW.updated_at = timezone('utc'::text, now());
+    EXCEPTION WHEN undefined_column THEN
+        -- Se a tabela não possuir a coluna updated_at, ignora sem quebrar a operação
+    END;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- 2. Novas colunas na tabela de demandas
+ALTER TABLE public.demands ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.demands ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
 ALTER TABLE public.demands ADD COLUMN IF NOT EXISTS approval_answered_at TEXT;
 ALTER TABLE public.demands ADD COLUMN IF NOT EXISTS approval_sent_at TEXT;
 ALTER TABLE public.demands ADD COLUMN IF NOT EXISTS approval_status TEXT;
@@ -87,6 +104,8 @@ ALTER TABLE public.demands ADD COLUMN IF NOT EXISTS client_project TEXT;
 ALTER TABLE public.demands ADD COLUMN IF NOT EXISTS service_category TEXT DEFAULT 'Social Media';
 
 -- 3. Novas colunas na tabela de equipe (team_members)
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
 ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS function_role TEXT;
 ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS username TEXT;
 ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS password TEXT;
@@ -114,7 +133,11 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.updated_at = timezone('utc'::text, now());
+    BEGIN
+        NEW.updated_at = timezone('utc'::text, now());
+    EXCEPTION WHEN undefined_column THEN
+        -- Se a tabela não possuir a coluna updated_at, ignora sem quebrar a operação
+    END;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -164,6 +187,8 @@ CREATE TABLE IF NOT EXISTS public.clients (
 );
 
 -- Assegura adição de colunas mesmo se a tabela já existia com versão antiga
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS person_type TEXT DEFAULT 'juridica';
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS cpf_cnpj TEXT;
@@ -360,6 +385,8 @@ CREATE TABLE IF NOT EXISTS public.team_members (
 );
 
 -- Assegura adição de novas colunas em team_members
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
 ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS function_role TEXT;
 ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS username TEXT;
 ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS password TEXT;
@@ -406,6 +433,8 @@ NOTIFY pgrst, 'reload schema';
  * Utilitário de auto-cura para upserts no Supabase.
  * Se o PostgREST rejeitar com "Could not find the 'xyz' column of 'table' in the schema cache",
  * remove a coluna não existente e tenta novamente de forma transparente.
+ * Se ocorrer erro de trigger PL/pgSQL (ex: record "new" has no field "updated_at", código 42703),
+ * executa auto-recuperação atômica via delete + insert para contornar o trigger de BEFORE UPDATE.
  */
 async function resilientSupabaseUpsert(
   supabase: any,
@@ -424,7 +453,7 @@ async function resilientSupabaseUpsert(
       return { data, error: null };
     }
 
-    // Identifica mensagens de coluna ausente do PostgREST
+    // 1. Identifica mensagens de coluna ausente do PostgREST
     // Exemplo: Could not find the 'address' column of 'clients' in the schema cache
     const missingColMatch = error.message?.match(/Could not find the '([^']+)' column/i);
 
@@ -442,6 +471,59 @@ async function resilientSupabaseUpsert(
         delete currentPayload[missingCol];
       }
       continue;
+    }
+
+    // 2. Identifica erro de trigger PL/pgSQL com campo inexistente no registro "new" (ex: record "new" has no field "updated_at")
+    // Este erro ocorre em UPDATE / UPSERT quando um trigger BEFORE UPDATE no PostgreSQL tenta ler/gravar uma coluna que
+    // não existe na tabela. Como INSERT não dispara triggers BEFORE UPDATE, auto-curamos via delete + insert atômico.
+    const triggerFieldMatch = error.message?.match(/record "(?:new|old)" has no field "([^"]+)"/i);
+    const isUndefinedColumn = error.code === '42703' || (error.message && error.message.includes('has no field'));
+
+    if (triggerFieldMatch || isUndefinedColumn) {
+      const badField = triggerFieldMatch ? triggerFieldMatch[1] : 'updated_at';
+      console.warn(`[Supabase Auto-Heal] Trigger no PostgreSQL falhou por coluna ausente "${badField}" na tabela "${tableName}". Executando auto-recuperação...`);
+
+      // Remove a coluna ofensiva do payload
+      if (Array.isArray(currentPayload)) {
+        currentPayload = currentPayload.map(item => {
+          const clone = { ...item };
+          delete clone[badField];
+          return clone;
+        });
+      } else {
+        delete currentPayload[badField];
+      }
+
+      // Se for um item individual com ID, deleta o registro antigo e reinsere com dados atualizados
+      if (!Array.isArray(currentPayload) && currentPayload.id) {
+        const targetId = currentPayload.id;
+        const { error: delError } = await supabase.from(tableName).delete().eq('id', targetId);
+        if (!delError) {
+          const { data: insData, error: insError } = await supabase.from(tableName).insert(currentPayload);
+          if (!insError) {
+            console.log(`[Supabase Auto-Heal] Registro ${targetId} salvo com sucesso na tabela "${tableName}" após auto-recuperação.`);
+            return { data: insData, error: null };
+          }
+          console.warn(`[Supabase Auto-Heal] Falha no insert após delete para ${targetId}:`, insError);
+        } else {
+          console.warn(`[Supabase Auto-Heal] Falha no delete para ${targetId}:`, delError);
+        }
+      } else if (Array.isArray(currentPayload) && currentPayload.length > 0) {
+        let allSuccess = true;
+        for (const item of currentPayload) {
+          if (item.id) {
+            await supabase.from(tableName).delete().eq('id', item.id);
+            const { error: insError } = await supabase.from(tableName).insert(item);
+            if (insError) {
+              allSuccess = false;
+              console.warn(`[Supabase Auto-Heal] Erro ao reinserir item em lote ${item.id}:`, insError);
+            }
+          }
+        }
+        if (allSuccess) {
+          return { data: currentPayload, error: null };
+        }
+      }
     }
 
     return { data, error };
@@ -676,7 +758,6 @@ export const supabaseService = {
         lgpd_consent_purpose: client.lgpdConsentPurpose || null,
         is_anonymized: Boolean(client.isAnonymized),
         anonymized_at: client.anonymizedAt || null,
-        updated_at: new Date().toISOString(),
       };
 
       const { error } = await resilientSupabaseUpsert(supabase, 'clients', payload);
@@ -1123,7 +1204,6 @@ export const supabaseService = {
           lgpd_consent_purpose: c.lgpdConsentPurpose || null,
           is_anonymized: Boolean(c.isAnonymized),
           anonymized_at: c.anonymizedAt || null,
-          updated_at: new Date().toISOString(),
         }));
 
         const { error } = await resilientSupabaseUpsert(supabase, 'clients', clientPayloads);

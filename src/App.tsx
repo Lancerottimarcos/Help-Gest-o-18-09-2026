@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Sparkles } from 'lucide-react';
 import { PageId, DemandItem, Client, KanbanColumnId, ClientActivity, Service, TeamMember, KanbanColumn, BudgetProposal, Invoice, UserProfile, UserRole } from './types';
 import { initialDemands, initialClients, initialRecentActivities, initialServices, initialTeamMembers, initialProposals, initialInvoices, currentUser, kanbanColumnsData } from './data/mockData';
 import { Sidebar } from './components/Sidebar';
@@ -156,8 +157,53 @@ export function Layout({ children, onLogout }: LayoutProps) {
       localStorage.setItem('agency_team_members', JSON.stringify(teamMembers));
     } catch {}
   }, [teamMembers]);
+
+  // Sincroniza continuamente a foto de perfil (avatar) e dados do usuário ativo com a Equipe
+  useEffect(() => {
+    if (!teamMembers || teamMembers.length === 0) return;
+    const isOwner =
+      currentUserProfile?.role === 'proprietario' ||
+      (currentUserProfile as any)?.isMaster ||
+      isOwnerOrMarcos(currentUserProfile);
+
+    const matchedMember = teamMembers.find((m) => {
+      if (isOwner && isOwnerOrMarcos(m)) return true;
+      if (currentUserProfile.id && (m.id === currentUserProfile.id || m.id === `tm-${currentUserProfile.id}`)) return true;
+      if (currentUserProfile.email && m.email?.toLowerCase() === currentUserProfile.email.toLowerCase()) return true;
+      if ((currentUserProfile as any).username && m.username?.toLowerCase() === (currentUserProfile as any).username.toLowerCase()) return true;
+      return false;
+    });
+
+    if (matchedMember && matchedMember.avatar) {
+      if (
+        currentUserProfile.avatarUrl !== matchedMember.avatar ||
+        currentUserProfile.name !== matchedMember.name
+      ) {
+        setCurrentUserProfile((prev) => ({
+          ...prev,
+          name: matchedMember.name || prev.name,
+          email: matchedMember.email || prev.email,
+          avatarUrl: matchedMember.avatar,
+        }));
+
+        try {
+          const savedAuth = localStorage.getItem('help_agency_user');
+          if (savedAuth) {
+            const parsed = JSON.parse(savedAuth);
+            localStorage.setItem('help_agency_user', JSON.stringify({
+              ...parsed,
+              name: matchedMember.name || parsed.name,
+              email: matchedMember.email || parsed.email,
+              avatarUrl: matchedMember.avatar,
+            }));
+          }
+        } catch {}
+      }
+    }
+  }, [teamMembers, currentUserProfile.id, currentUserProfile.email, currentUserProfile.role, currentUserProfile.name, currentUserProfile.avatarUrl]);
   const [activities, setActivities] = useState<ClientActivity[]>(initialRecentActivities);
   const [selectedClientForKanban, setSelectedClientForKanban] = useState<string>('todos');
+  const [selectedDemandIdForKanban, setSelectedDemandIdForKanban] = useState<string | null>(null);
 
   const isServerDbLoadedRef = useRef(false);
 
@@ -246,6 +292,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
           try {
             localStorage.setItem('agency_team_members', JSON.stringify(merged));
           } catch {}
+          serverDbService.saveDatabase({ teamMembers: merged });
           return merged;
         });
       }
@@ -285,6 +332,29 @@ export function Layout({ children, onLogout }: LayoutProps) {
           }
           if (remoteData.demands && Array.isArray(remoteData.demands) && remoteData.demands.length > 0) {
             setDemands((prev) => (prev.length === 0 ? remoteData.demands! : prev));
+          }
+          if (remoteData.teamMembers && Array.isArray(remoteData.teamMembers) && remoteData.teamMembers.length > 0) {
+            setTeamMembers((prevLocal) => {
+              const merged = remoteData.teamMembers!.map((rm) => {
+                const local = prevLocal.find((lm) => lm.id === rm.id);
+                const isOwner = isOwnerOrMarcos(rm);
+                return {
+                  ...rm,
+                  username: rm.username || local?.username || (isOwner ? 'lancerotti' : undefined),
+                  password: rm.password || local?.password || (isOwner ? '521Spide#*' : '123456'),
+                };
+              });
+              try {
+                localStorage.setItem('agency_team_members', JSON.stringify(merged));
+              } catch {}
+              return merged;
+            });
+          }
+          if (remoteData.kanbanColumns && Array.isArray(remoteData.kanbanColumns) && remoteData.kanbanColumns.length > 0) {
+            setKanbanColumns(remoteData.kanbanColumns);
+            try {
+              localStorage.setItem('agency_kanban_columns', JSON.stringify(remoteData.kanbanColumns));
+            } catch {}
           }
         }
       } catch {}
@@ -571,12 +641,13 @@ export function Layout({ children, onLogout }: LayoutProps) {
         : {}),
     };
 
-    if (isMovingToApproval) {
-      const config = getNotificationConfig();
-      if (config.autoOpenModalOnMove) {
-        setWhatsAppDemand(updatedDemand);
-      }
-    }
+    // Notificação de WhatsApp ao mover desabilitada temporariamente (implementação futura)
+    // if (isMovingToApproval) {
+    //   const config = getNotificationConfig();
+    //   if (config.autoOpenModalOnMove) {
+    //     setWhatsAppDemand(updatedDemand);
+    //   }
+    // }
 
     if (demand.columnId !== targetColumn) {
       const columnLabels: Record<KanbanColumnId, string> = {
@@ -596,7 +667,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
         projectOrCampaign: demand.clientProject,
         type: targetColumn === 'aprovacao' ? 'client_approval' : 'status_changed',
         description: isMovingToApproval
-          ? `Demanda enviada ao Portal do Cliente e notificação WhatsApp gerada.`
+          ? `Demanda enviada para a etapa de Aprovação.`
           : `Demanda avançou para a etapa de "${label}".`,
         actor: {
           name: currentUser.name,
@@ -661,12 +732,13 @@ export function Layout({ children, onLogout }: LayoutProps) {
     // Sincroniza em background com o Supabase PostgreSQL
     supabaseService.upsertDemand(newDemand);
 
-    if (newDemand.columnId === 'aprovacao') {
-      const config = getNotificationConfig();
-      if (config.autoOpenModalOnMove) {
-        setWhatsAppDemand(newDemand);
-      }
-    }
+    // Notificação de WhatsApp ao criar em aprovação desabilitada temporariamente (recurso futuro)
+    // if (newDemand.columnId === 'aprovacao') {
+    //   const config = getNotificationConfig();
+    //   if (config.autoOpenModalOnMove) {
+    //     setWhatsAppDemand(newDemand);
+    //   }
+    // }
 
     const newActivity: ClientActivity = {
       id: `act-${Date.now()}`,
@@ -719,12 +791,13 @@ export function Layout({ children, onLogout }: LayoutProps) {
     // Sincroniza em background com o Supabase PostgreSQL
     supabaseService.upsertDemand(finalDemand);
 
-    if (wasJustMovedToApproval) {
-      const config = getNotificationConfig();
-      if (config.autoOpenModalOnMove) {
-        setWhatsAppDemand(finalDemand);
-      }
-    }
+    // Notificação de WhatsApp ao mover/salvar para aprovação desabilitada temporariamente (recurso futuro)
+    // if (wasJustMovedToApproval) {
+    //   const config = getNotificationConfig();
+    //   if (config.autoOpenModalOnMove) {
+    //     setWhatsAppDemand(finalDemand);
+    //   }
+    // }
 
     const newActivity: ClientActivity = {
       id: `act-${Date.now()}`,
@@ -734,7 +807,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
       projectOrCampaign: finalDemand.clientProject,
       type: wasJustMovedToApproval ? 'client_approval' : 'status_changed',
       description: wasJustMovedToApproval
-        ? `Demanda enviada para aprovação do cliente via Portal e WhatsApp.`
+        ? `Demanda enviada para a etapa de Aprovação.`
         : `Demanda "${finalDemand.title}" atualizada com sucesso.`,
       actor: {
         name: currentUser.name,
@@ -960,6 +1033,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
       try {
         localStorage.setItem('agency_team_members', JSON.stringify(updated));
       } catch {}
+      serverDbService.saveDatabase({ teamMembers: updated }, true);
       return updated;
     });
     if (supabaseService.isConfigured()) {
@@ -973,6 +1047,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
       try {
         localStorage.setItem('agency_team_members', JSON.stringify(updated));
       } catch {}
+      serverDbService.saveDatabase({ teamMembers: updated }, true);
       return updated;
     });
 
@@ -1030,6 +1105,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
       try {
         localStorage.setItem('agency_team_members', JSON.stringify(updated));
       } catch {}
+      serverDbService.saveDatabase({ teamMembers: updated }, true);
       return updated;
     });
     if (supabaseService.isConfigured()) {
@@ -1049,6 +1125,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
             activities={activities}
             onOpenNewDemandModal={() => setIsNewDemandModalOpen(true)}
             onSelectDemand={(demandId) => {
+              setSelectedDemandIdForKanban(demandId);
               setCurrentPage('demandas');
             }}
             onSelectClient={(client) => {
@@ -1061,11 +1138,14 @@ export function Layout({ children, onLogout }: LayoutProps) {
           <DemandasView
             demands={demands}
             clients={clients}
+            teamMembers={teamMembers}
             columns={kanbanColumns}
             onAddColumn={handleAddColumn}
             onUpdateColumn={handleUpdateColumn}
             onDeleteColumn={handleDeleteColumn}
             initialClientFilter={selectedClientForKanban}
+            initialSelectedDemandId={selectedDemandIdForKanban}
+            onClearInitialSelectedDemand={() => setSelectedDemandIdForKanban(null)}
             onUpdateDemandColumn={handleUpdateDemandColumn}
             onMoveDemand={handleMoveDemand}
             onOpenNewDemandModal={() => setIsNewDemandModalOpen(true)}
@@ -1179,16 +1259,26 @@ export function Layout({ children, onLogout }: LayoutProps) {
         );
       case 'portal-cliente':
         return (
-          <PortalClienteView
-            demands={demands}
-            clients={clients}
-            onClientApprovalAction={handleClientApprovalAction}
-            onOpenWhatsAppNotification={(demand) => setWhatsAppDemand(demand)}
-            onOpenDemandModal={(demand) => {
-              // Open demand in portal modal or go to demandas
-              setClientPortalDemand(demand);
-            }}
-          />
+          <div className="flex-1 p-6 md:p-8 flex items-center justify-center min-h-[60vh]">
+            <div className="max-w-md w-full text-center bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Sparkles size={28} />
+              </div>
+              <h2 className="text-lg font-bold text-[#142142] dark:text-white mb-2">
+                Portal do Cliente (Em Breve)
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+                Esta funcionalidade está temporariamente desativada e será disponibilizada no futuro.
+              </p>
+              <button
+                type="button"
+                onClick={() => setCurrentPage('inicio')}
+                className="px-4 py-2 bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] rounded-xl text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer"
+              >
+                Voltar ao Início
+              </button>
+            </div>
+          </div>
         );
       default:
         return (

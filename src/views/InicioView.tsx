@@ -12,7 +12,6 @@ import {
   Sparkles,
   ExternalLink,
   ChevronRight,
-  ChevronLeft,
   Layers,
   ArrowRight,
   Calendar,
@@ -29,10 +28,15 @@ import {
   EyeOff,
   Undo2,
   Briefcase,
-  FileSpreadsheet
+  FileSpreadsheet,
+  AlertTriangle,
+  CalendarX2,
+  Building2,
+  Flame,
+  ArrowUpDown,
+  ShieldAlert
 } from 'lucide-react';
 import { Client, DemandItem, PageId, ClientActivity, InicioSectionId, InicioSectionMeta, Invoice } from '../types';
-import { RecentClientActivityFeed } from '../components/RecentClientActivityFeed';
 import { DemandsStatusDoughnutChart } from '../components/DemandsStatusDoughnutChart';
 import { ClientLocationMap } from '../components/ClientLocationMap';
 import { ClientBirthdaysSection } from '../components/ClientBirthdaysSection';
@@ -41,10 +45,10 @@ import { initialRecentActivities, currentUser } from '../data/mockData';
 
 const DEFAULT_SECTIONS: InicioSectionId[] = [
   'welcome',
+  'demandas_atrasadas',
   'indicadores',
   'prioridades',
   'aniversariantes',
-  'atividades',
   'mapa',
 ];
 
@@ -55,6 +59,13 @@ const SECTIONS_META: Record<InicioSectionId, InicioSectionMeta> = {
     shortLabel: 'Boas-vindas',
     description: 'Data do dia, saudação personalizada e status',
     iconName: 'calendar',
+  },
+  demandas_atrasadas: {
+    id: 'demandas_atrasadas',
+    title: 'Minhas demandas',
+    shortLabel: 'Minhas demandas',
+    description: 'Demandas atrasadas e cronograma de próximas entregas com foco em prioridades e SLA',
+    iconName: 'kanban',
   },
   indicadores: {
     id: 'indicadores',
@@ -69,13 +80,6 @@ const SECTIONS_META: Record<InicioSectionId, InicioSectionMeta> = {
     shortLabel: 'Aniversariantes',
     description: 'Alertas de aniversários de hoje, semana e mês com felicitações',
     iconName: 'cake',
-  },
-  atividades: {
-    id: 'atividades',
-    title: 'Feed de Atividades Recentes',
-    shortLabel: 'Atividades',
-    description: 'Últimas atualizações e histórico operacional de clientes',
-    iconName: 'clock',
   },
   mapa: {
     id: 'mapa',
@@ -93,8 +97,8 @@ const SECTIONS_META: Record<InicioSectionId, InicioSectionMeta> = {
   },
 };
 
-const STORAGE_ORDER_KEY = 'ideias_digitais_inicio_sections_order_v2';
-const STORAGE_HIDDEN_KEY = 'ideias_digitais_inicio_sections_hidden_v2';
+const STORAGE_ORDER_KEY = 'ideias_digitais_inicio_sections_order_v3';
+const STORAGE_HIDDEN_KEY = 'ideias_digitais_inicio_sections_hidden_v3';
 
 const loadSavedOrder = (): InicioSectionId[] => {
   try {
@@ -124,6 +128,157 @@ const loadSavedHidden = (): InicioSectionId[] => {
     console.warn('Erro ao carregar seções ocultas:', err);
   }
   return [];
+};
+
+interface DemandTimelineInfo {
+  demand: DemandItem;
+  status: 'atrasada' | 'hoje' | 'proxima';
+  daysDiff: number; // < 0: atrasada (dias decorridos), 0: hoje, > 0: proxima (dias restantes)
+  daysLate: number;
+  daysRemaining: number;
+  dueDateFormatted: string;
+}
+
+const getDemandTimelineInfo = (demand: DemandItem): DemandTimelineInfo | null => {
+  if (!demand.dueDate || demand.columnId === 'concluidas') {
+    return null;
+  }
+
+  const raw = demand.dueDate.trim();
+  if (!raw || raw.toLowerCase() === 'sem prazo' || raw.toLowerCase() === 'a definir' || raw.toLowerCase() === 'pendente') {
+    return null;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let targetDate: Date | null = null;
+  const rawLower = raw.toLowerCase();
+
+  // Pattern 1: YYYY-MM-DD
+  const ymdMatch = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymdMatch) {
+    const y = parseInt(ymdMatch[1], 10);
+    const m = parseInt(ymdMatch[2], 10) - 1;
+    const d = parseInt(ymdMatch[3], 10);
+    targetDate = new Date(y, m, d);
+  } else {
+    // Pattern 2: DD/MM/YYYY or DD/MM
+    const dmyMatch = raw.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/);
+    if (dmyMatch) {
+      const d = parseInt(dmyMatch[1], 10);
+      const m = parseInt(dmyMatch[2], 10) - 1;
+      const y = dmyMatch[3] ? parseInt(dmyMatch[3], 10) : today.getFullYear();
+      targetDate = new Date(y, m, d);
+    } else if (rawLower === 'ontem') {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 1);
+      targetDate = d;
+    } else if (rawLower === 'hoje') {
+      targetDate = new Date(today);
+    } else if (rawLower === 'amanhã' || rawLower === 'amanha') {
+      const d = new Date(today);
+      d.setDate(d.getDate() + 1);
+      targetDate = d;
+    } else if (rawLower.includes('próxima semana') || rawLower.includes('proxima semana')) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + 7);
+      targetDate = d;
+    } else if (rawLower.includes('esta semana')) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + 3);
+      targetDate = d;
+    } else {
+      const parsed = Date.parse(raw);
+      if (!isNaN(parsed)) {
+        const pd = new Date(parsed);
+        targetDate = new Date(pd.getFullYear(), pd.getMonth(), pd.getDate());
+      }
+    }
+  }
+
+  if (!targetDate || isNaN(targetDate.getTime())) {
+    return null;
+  }
+
+  targetDate.setHours(0, 0, 0, 0);
+  const diffTime = targetDate.getTime() - today.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+
+  const dayStr = String(targetDate.getDate()).padStart(2, '0');
+  const monthStr = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const yearStr = targetDate.getFullYear();
+  const dueDateFormatted = `${dayStr}/${monthStr}/${yearStr}`;
+
+  if (diffDays < 0) {
+    return {
+      demand,
+      status: 'atrasada',
+      daysDiff: diffDays,
+      daysLate: Math.abs(diffDays),
+      daysRemaining: 0,
+      dueDateFormatted,
+    };
+  } else if (diffDays === 0) {
+    return {
+      demand,
+      status: 'hoje',
+      daysDiff: 0,
+      daysLate: 0,
+      daysRemaining: 0,
+      dueDateFormatted,
+    };
+  } else {
+    return {
+      demand,
+      status: 'proxima',
+      daysDiff: diffDays,
+      daysLate: 0,
+      daysRemaining: diffDays,
+      dueDateFormatted,
+    };
+  }
+};
+
+const getColumnDisplayLabel = (colId: string): string => {
+  switch (colId) {
+    case 'ideias': return 'Ideias / Briefing';
+    case 'producao': return 'Em Produção';
+    case 'aprovacao': return 'Aguardando Aprovação';
+    case 'agendamento': return 'Agendamento';
+    case 'concluidas': return 'Concluída';
+    default: return colId;
+  }
+};
+
+const getDemandPriorityBadge = (priority: string) => {
+  const p = (priority || '').toLowerCase();
+  if (p === 'urgente') {
+    return { 
+      label: 'Urgente', 
+      bg: 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/80', 
+      dot: 'bg-rose-500' 
+    };
+  }
+  if (p === 'alta') {
+    return { 
+      label: 'Alta', 
+      bg: 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/80', 
+      dot: 'bg-amber-500' 
+    };
+  }
+  if (p === 'media' || p === 'média') {
+    return { 
+      label: 'Média', 
+      bg: 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200/80 dark:border-blue-800/80', 
+      dot: 'bg-blue-500' 
+    };
+  }
+  return { 
+    label: 'Baixa', 
+    bg: 'bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700/80', 
+    dot: 'bg-slate-400' 
+  };
 };
 
 interface InicioViewProps {
@@ -316,6 +471,113 @@ export const InicioView: React.FC<InicioViewProps> = ({
   const inProduction = demands.filter((d) => d.columnId === 'producao');
   const scheduledDemands = demands.filter((d) => d.columnId === 'agendamento');
   
+  // Lista unificada de todas as demandas com prazo (atrasadas, hoje e próximas)
+  const timelineDemandsList = useMemo(() => {
+    const list: DemandTimelineInfo[] = [];
+    for (const d of demands) {
+      const info = getDemandTimelineInfo(d);
+      if (info) {
+        list.push(info);
+      }
+    }
+    // Ordenação padrão inteligente por criticidade:
+    // 1. Atrasadas (da mais atrasada para a menos atrasada)
+    // 2. Vencendo hoje
+    // 3. Próximas (da mais iminente para a mais distante)
+    return list.sort((a, b) => a.daysDiff - b.daysDiff);
+  }, [demands]);
+
+  const overdueDemandsList = useMemo(() => {
+    return timelineDemandsList.filter((item) => item.status === 'atrasada');
+  }, [timelineDemandsList]);
+
+  const todayDemandsList = useMemo(() => {
+    return timelineDemandsList.filter((item) => item.status === 'hoje');
+  }, [timelineDemandsList]);
+
+  const upcomingDemandsList = useMemo(() => {
+    return timelineDemandsList.filter((item) => item.status === 'proxima');
+  }, [timelineDemandsList]);
+
+  // Estados para filtro e ordenação da seção de prazos e entregas
+  const [timelineFilter, setTimelineFilter] = useState<'todas' | 'atrasadas' | 'hoje' | 'proximas' | 'criticas'>('todas');
+  const [timelineSort, setTimelineSort] = useState<'prazo' | 'prioridade'>('prazo');
+
+  const timelineMetrics = useMemo(() => {
+    const total = timelineDemandsList.length;
+    const overdueCount = overdueDemandsList.length;
+    const todayCount = todayDemandsList.length;
+    const upcomingCount = upcomingDemandsList.length;
+    const criticalOverdue = overdueDemandsList.filter((o) => o.daysLate >= 3).length;
+    const maxOverdueDays = overdueCount > 0 ? Math.max(...overdueDemandsList.map((o) => o.daysLate)) : 0;
+    const avgOverdueDays = overdueCount > 0 
+      ? Math.round(overdueDemandsList.reduce((acc, o) => acc + o.daysLate, 0) / overdueCount) 
+      : 0;
+    
+    const nextUpcoming = upcomingDemandsList.length > 0 ? upcomingDemandsList[0] : null;
+
+    const urgentCount = timelineDemandsList.filter((o) => {
+      const p = (o.demand.priority || '').toLowerCase();
+      return p === 'urgente' || p === 'alta';
+    }).length;
+
+    const inProduction = timelineDemandsList.filter((o) => o.demand.columnId === 'producao').length;
+    const inApproval = timelineDemandsList.filter((o) => o.demand.columnId === 'aprovacao').length;
+
+    return {
+      total,
+      overdueCount,
+      todayCount,
+      upcomingCount,
+      criticalOverdue,
+      maxOverdueDays,
+      avgOverdueDays,
+      nextUpcoming,
+      urgentCount,
+      inProduction,
+      inApproval,
+    };
+  }, [timelineDemandsList, overdueDemandsList, todayDemandsList, upcomingDemandsList]);
+
+  const filteredAndSortedTimelineList = useMemo(() => {
+    let result = [...timelineDemandsList];
+
+    if (timelineFilter === 'atrasadas') {
+      result = result.filter((item) => item.status === 'atrasada');
+    } else if (timelineFilter === 'hoje') {
+      result = result.filter((item) => item.status === 'hoje');
+    } else if (timelineFilter === 'proximas') {
+      result = result.filter((item) => item.status === 'proxima');
+    } else if (timelineFilter === 'criticas') {
+      result = result.filter((item) => {
+        const isLate = item.status === 'atrasada';
+        const p = (item.demand.priority || '').toLowerCase();
+        return isLate || p === 'urgente' || p === 'alta';
+      });
+    }
+
+    if (timelineSort === 'prioridade') {
+      const priorityWeights: Record<string, number> = {
+        urgente: 4,
+        alta: 3,
+        media: 2,
+        média: 2,
+        baixa: 1,
+      };
+      result.sort((a, b) => {
+        const weightA = priorityWeights[(a.demand.priority || '').toLowerCase()] || 0;
+        const weightB = priorityWeights[(b.demand.priority || '').toLowerCase()] || 0;
+        if (weightB !== weightA) return weightB - weightA;
+        return a.daysDiff - b.daysDiff;
+      });
+    } else {
+      // Ordenação cronológica por prazo: atrasadas (mais graves primeiro), hoje, depois próximas (mais cedo primeiro)
+      result.sort((a, b) => a.daysDiff - b.daysDiff);
+    }
+
+    return result;
+  }, [timelineDemandsList, timelineFilter, timelineSort]);
+  
   const activeClients = clients.filter((c) => c.status === 'Ativo');
   
   // Cálculos financeiros estritamente baseados nas faturas geradas
@@ -356,143 +618,6 @@ export const InicioView: React.FC<InicioViewProps> = ({
     greeting = 'Boa noite';
   }
 
-  // Filter for demands list inspired by the reference image
-  const [demandsFilter, setDemandsFilter] = useState<'todas' | 'producao' | 'aprovacao' | 'agendamento'>('todas');
-
-  // Mini calendar state for September 2026 (0-indexed month: 8 = September)
-  const [miniCalMonth, setMiniCalMonth] = useState<number>(8);
-  const [miniCalYear, setMiniCalYear] = useState<number>(2026);
-
-  const MONTH_NAMES_PT = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-  ];
-
-  const handlePrevCalMonth = () => {
-    if (miniCalMonth === 0) {
-      setMiniCalMonth(11);
-      setMiniCalYear((prev) => prev - 1);
-    } else {
-      setMiniCalMonth((prev) => prev - 1);
-    }
-  };
-
-  const handleNextCalMonth = () => {
-    if (miniCalMonth === 11) {
-      setMiniCalMonth(0);
-      setMiniCalYear((prev) => prev + 1);
-    } else {
-      setMiniCalMonth((prev) => prev + 1);
-    }
-  };
-
-  const calGridCells = useMemo(() => {
-    const cells: Array<{ day: number; isCurrentMonth: boolean; isToday: boolean; hasDemand: boolean }> = [];
-    const firstDayOfWeek = new Date(miniCalYear, miniCalMonth, 1).getDay(); // 0 is Sunday
-    const daysInMonth = new Date(miniCalYear, miniCalMonth + 1, 0).getDate();
-    const daysInPrevMonth = new Date(miniCalYear, miniCalMonth, 0).getDate();
-
-    // Previous month trailing days
-    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-      cells.push({
-        day: daysInPrevMonth - i,
-        isCurrentMonth: false,
-        isToday: false,
-        hasDemand: false,
-      });
-    }
-
-    // Current month days
-    for (let day = 1; day <= daysInMonth; day++) {
-      const isToday = day === 18 && miniCalMonth === 8 && miniCalYear === 2026;
-      const dayStr = String(day).padStart(2, '0');
-      const hasDemand = demands.some((d) => d.dueDate && d.dueDate.includes(dayStr));
-      cells.push({
-        day,
-        isCurrentMonth: true,
-        isToday,
-        hasDemand,
-      });
-    }
-
-    // Next month leading days to complete grid (multiples of 7: 35 or 42)
-    const targetLength = cells.length > 35 ? 42 : 35;
-    const remaining = targetLength - cells.length;
-    for (let day = 1; day <= remaining; day++) {
-      cells.push({
-        day,
-        isCurrentMonth: false,
-        isToday: false,
-        hasDemand: false,
-      });
-    }
-
-    return cells;
-  }, [miniCalYear, miniCalMonth, demands]);
-
-  const getProgressForDemand = (columnId: string): number => {
-    switch (columnId) {
-      case 'ideias': return 25;
-      case 'producao': return 50;
-      case 'aprovacao': return 75;
-      case 'agendamento': return 90;
-      case 'concluidas': return 100;
-      default: return 35;
-    }
-  };
-
-  const getProgressColor = (columnId: string): string => {
-    switch (columnId) {
-      case 'ideias': return '#64748B';
-      case 'producao': return '#8B5CF6';
-      case 'aprovacao': return '#fab518';
-      case 'agendamento': return '#10B981';
-      case 'concluidas': return '#3B82F6';
-      default: return '#fab518';
-    }
-  };
-
-  const renderCircularProgress = (percent: number, color: string) => {
-    const radius = 13;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - (percent / 100) * circumference;
-    return (
-      <div className="relative flex items-center justify-center shrink-0 w-10 h-10">
-        <svg className="w-10 h-10 transform -rotate-90">
-          <circle
-            cx="20"
-            cy="20"
-            r={radius}
-            stroke="currentColor"
-            strokeWidth="2.75"
-            className="text-slate-100 dark:text-slate-800"
-            fill="transparent"
-          />
-          <circle
-            cx="20"
-            cy="20"
-            r={radius}
-            stroke={color}
-            strokeWidth="2.75"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            fill="transparent"
-            className="transition-all duration-700 ease-out"
-          />
-        </svg>
-        <span className="absolute text-[10px] font-black text-slate-700 dark:text-slate-200">
-          {percent}%
-        </span>
-      </div>
-    );
-  };
-
-  const filteredActiveDemands = activeDemands.filter((d) => {
-    if (demandsFilter === 'todas') return true;
-    return d.columnId === demandsFilter;
-  });
-
   // Render individual sections based on ID
   const renderSectionContent = (sectionId: InicioSectionId) => {
     switch (sectionId) {
@@ -526,6 +651,374 @@ export const InicioView: React.FC<InicioViewProps> = ({
             )}
           </div>
         );
+
+      case 'demandas_atrasadas': {
+        if (timelineDemandsList.length === 0) {
+          if (isReorderMode) {
+            return (
+              <div className="bg-white dark:bg-[#0f172a] rounded-[24px] p-5 sm:p-6 border border-dashed border-emerald-300 dark:border-emerald-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/60 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                    <CheckCircle2 size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-black text-[#142142] dark:text-white">
+                        Minhas demandas
+                      </h4>
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        Nenhum prazo pendente
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Todas as demandas estão em dia ou sem prazos estipulados. Novas demandas com data de entrega aparecerão aqui automaticamente.
+                    </p>
+                  </div>
+                </div>
+                <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 italic shrink-0">
+                  Posição reservada no painel
+                </div>
+              </div>
+            );
+          }
+          return null;
+        }
+
+        return (
+          <section aria-label="Seção de Prazos e Próximas Demandas" className="space-y-3">
+            <div className="bg-white dark:bg-[#0f172a] rounded-2xl sm:rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs transition-all">
+              {/* Header da Seção */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800/80">
+                <div className="flex items-center gap-3.5">
+                  <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+                    timelineMetrics.overdueCount > 0
+                      ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200/60 dark:border-rose-900/50 text-rose-600 dark:text-rose-400'
+                      : 'bg-blue-50 dark:bg-blue-950/40 border-blue-200/60 dark:border-blue-900/50 text-blue-600 dark:text-blue-400'
+                  }`}>
+                    <Kanban size={20} className="stroke-[2.2]" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight">
+                        Minhas demandas
+                      </h3>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Controles e Botão Principal */}
+                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('demandas')}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#142142] hover:bg-[#1a2b54] text-white dark:bg-white dark:text-[#142142] dark:hover:bg-slate-100 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs"
+                  >
+                    <Kanban size={13} />
+                    <span>Abrir Kanban</span>
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Barra Integrada de Indicadores (Métricas Rápidas de Cronograma) */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-slate-800/80 bg-slate-50/60 dark:bg-slate-900/40 rounded-xl sm:rounded-2xl border border-slate-200/60 dark:border-slate-800/70 my-4 p-2 sm:p-3">
+                <div className="p-2 sm:px-4">
+                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Demandas Atrasadas
+                  </div>
+                  <div className={`text-xl font-bold mt-0.5 ${
+                    timelineMetrics.overdueCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+                  }`}>
+                    {timelineMetrics.overdueCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">demandas</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    {timelineMetrics.overdueCount > 0 
+                      ? (timelineMetrics.criticalOverdue > 0 ? `${timelineMetrics.criticalOverdue} críticas (≥3d)` : 'Atenção imediata') 
+                      : 'Nenhum atraso'}
+                  </div>
+                </div>
+
+                <div className="p-2 sm:px-4">
+                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Vencem Hoje
+                  </div>
+                  <div className={`text-xl font-bold mt-0.5 ${
+                    timelineMetrics.todayCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'
+                  }`}>
+                    {timelineMetrics.todayCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">entregas</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    {timelineMetrics.todayCount > 0 ? 'Prazo expira hoje' : 'Sem entregas para hoje'}
+                  </div>
+                </div>
+
+                <div className="p-2 sm:px-4">
+                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Próximas Entregas
+                  </div>
+                  <div className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-0.5">
+                    {timelineMetrics.upcomingCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">a vencer</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+                    {timelineMetrics.nextUpcoming ? `Próxima: ${timelineMetrics.nextUpcoming.dueDateFormatted}` : 'Próximos dias'}
+                  </div>
+                </div>
+
+                <div className="p-2 sm:px-4">
+                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Distribuição no Fluxo
+                  </div>
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-1 flex items-center gap-2">
+                    <span className="text-purple-600 dark:text-purple-400 font-bold">{timelineMetrics.inProduction} produção</span>
+                    <span className="text-slate-300 dark:text-slate-600">•</span>
+                    <span className="text-amber-600 dark:text-amber-400 font-bold">{timelineMetrics.inApproval} aprovação</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    Total: {timelineMetrics.total} monitoradas
+                  </div>
+                </div>
+              </div>
+
+              {/* Filtros de Triagem (Pills Clean) */}
+              <div className="flex items-center justify-between gap-3 pt-1 pb-3 flex-wrap">
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-xl border border-slate-200/50 dark:border-slate-700/50 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setTimelineFilter('todas')}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                      timelineFilter === 'todas'
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-semibold'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Todas ({timelineMetrics.total})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTimelineFilter('atrasadas')}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                      timelineFilter === 'atrasadas'
+                        ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-2xs font-semibold'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Atrasadas ({timelineMetrics.overdueCount})
+                  </button>
+
+                  {timelineMetrics.todayCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTimelineFilter('hoje')}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                        timelineFilter === 'hoje'
+                          ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-2xs font-semibold'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      Vencem Hoje ({timelineMetrics.todayCount})
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setTimelineFilter('proximas')}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                      timelineFilter === 'proximas'
+                        ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-2xs font-semibold'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Próximas ({timelineMetrics.upcomingCount})
+                  </button>
+
+                </div>
+
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  Mostrando {filteredAndSortedTimelineList.length} de {timelineMetrics.total}
+                </div>
+              </div>
+
+              {/* Grid de Cards de Demandas (Atrasadas + Próximas) */}
+              {filteredAndSortedTimelineList.length === 0 ? (
+                <div className="py-8 text-center bg-slate-50/60 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 my-3">
+                  <CheckCircle2 size={24} className="text-emerald-500 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Nenhuma demanda encontrada para este filtro selecionado.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTimelineFilter('todas')}
+                    className="mt-2 text-xs font-bold text-[#fab518] hover:underline cursor-pointer"
+                  >
+                    Mostrar todas as demandas monitoradas
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pt-1">
+                  {filteredAndSortedTimelineList.map(({ demand: d, status, daysLate, daysRemaining, dueDateFormatted }) => {
+                    const priorityMeta = getDemandPriorityBadge(d.priority);
+                    const isCritical = status === 'atrasada' && daysLate >= 3;
+
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => {
+                          if (onSelectDemand) onSelectDemand(d.id);
+                          onNavigate('demandas');
+                        }}
+                        className="group bg-white dark:bg-slate-900/40 hover:bg-slate-50/60 dark:hover:bg-slate-800/50 rounded-2xl p-4.5 border border-slate-200/80 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700 shadow-2xs hover:shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between gap-3 relative"
+                      >
+                        <div>
+                          {/* Header do Card: Status do Prazo + Prioridade + Coluna */}
+                          <div className="flex items-center justify-between gap-2 mb-2.5">
+                            {status === 'atrasada' ? (
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold ${
+                                  isCritical
+                                    ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200/70 dark:border-rose-900/60'
+                                    : 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200/70 dark:border-amber-900/60'
+                                }`}
+                              >
+                                <Clock
+                                  size={11}
+                                  className={isCritical ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}
+                                />
+                                {daysLate === 1 ? '1 dia de atraso' : `${daysLate} dias de atraso`}
+                              </span>
+                            ) : status === 'hoje' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200/70 dark:border-amber-900/60">
+                                <Flame size={11} className="text-amber-600 dark:text-amber-400" />
+                                Vence hoje
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold ${
+                                daysRemaining === 1
+                                  ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200/70 dark:border-blue-900/60'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700'
+                              }`}>
+                                <Calendar
+                                  size={11}
+                                  className={daysRemaining === 1 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}
+                                />
+                                {daysRemaining === 1 ? 'Vence amanhã' : `Vence em ${daysRemaining} dias`}
+                              </span>
+                            )}
+
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${priorityMeta.bg}`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${priorityMeta.dot}`} />
+                                {priorityMeta.label}
+                              </span>
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700">
+                                {getColumnDisplayLabel(d.columnId)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Título da Demanda */}
+                          <h4 className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-[#142142] dark:group-hover:text-blue-300 transition-colors line-clamp-2 leading-snug">
+                            {d.title}
+                          </h4>
+
+                          {/* Cliente */}
+                          <div className="flex items-center gap-2 mt-2 text-xs text-slate-500 dark:text-slate-400">
+                            <Building2 size={13} className="text-slate-400 shrink-0" />
+                            <span className="font-medium text-slate-700 dark:text-slate-300 truncate">
+                              {d.client}
+                            </span>
+                          </div>
+
+                          {/* Prazo */}
+                          <div className="flex items-center gap-1.5 text-[11px] font-medium mt-2.5">
+                            {status === 'atrasada' ? (
+                              <>
+                                <CalendarX2 size={12} className="shrink-0 text-rose-500" />
+                                <span className="text-rose-600 dark:text-rose-400">Prazo acordado: {dueDateFormatted}</span>
+                              </>
+                            ) : status === 'hoje' ? (
+                              <>
+                                <Flame size={12} className="shrink-0 text-amber-500" />
+                                <span className="text-amber-700 dark:text-amber-300">Entrega hoje: {dueDateFormatted}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Calendar size={12} className="shrink-0 text-slate-400" />
+                                <span className="text-slate-600 dark:text-slate-400">Prazo de entrega: {dueDateFormatted}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Linha inferior: Responsável + Link */}
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {d.assignee?.avatar ? (
+                              <img
+                                src={d.assignee.avatar}
+                                alt={d.assignee.name}
+                                className="w-5 h-5 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-medium text-slate-600 dark:text-slate-400 shrink-0 border border-slate-200 dark:border-slate-700">
+                                {(d.assignee?.name || 'U').charAt(0)}
+                              </div>
+                            )}
+                            <span className="text-[11px] font-normal text-slate-600 dark:text-slate-400 truncate max-w-[120px]">
+                              {d.assignee?.name || 'Não atribuído'}
+                            </span>
+                          </div>
+
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 dark:text-slate-300 group-hover:text-[#142142] dark:group-hover:text-blue-400 transition-colors">
+                            <span>Ver demanda</span>
+                            <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Rodapé Informativo */}
+              <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <div className="flex items-center gap-2">
+                  {timelineMetrics.overdueCount > 0 ? (
+                    <>
+                      <AlertCircle size={13} className="text-rose-500 shrink-0" />
+                      <span>
+                        Atenção prioritária: <strong>{overdueDemandsList[0].daysLate} dias em atraso</strong> ({overdueDemandsList[0].demand.title})
+                      </span>
+                    </>
+                  ) : timelineMetrics.nextUpcoming ? (
+                    <>
+                      <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                      <span>
+                        Cronograma em dia! Próxima entrega: <strong>{timelineMetrics.nextUpcoming.dueDateFormatted}</strong> ({timelineMetrics.nextUpcoming.demand.title})
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                      <span>Todas as entregas monitoradas estão dentro do prazo previsto.</span>
+                    </>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('demandas')}
+                  className="text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-[#142142] dark:hover:text-white flex items-center gap-1 self-start sm:self-auto cursor-pointer transition-colors"
+                >
+                  <span>Reorganizar prazos no Kanban</span>
+                  <ChevronRight size={12} />
+                </button>
+              </div>
+            </div>
+          </section>
+        );
+      }
 
       case 'indicadores':
         return (
@@ -696,15 +1189,6 @@ export const InicioView: React.FC<InicioViewProps> = ({
           />
         );
 
-      case 'atividades':
-        return (
-          <RecentClientActivityFeed 
-            activities={activities}
-            onNavigate={onNavigate}
-            onSelectDemand={onSelectDemand}
-          />
-        );
-
       case 'mapa':
         return (
           <ClientLocationMap
@@ -715,401 +1199,43 @@ export const InicioView: React.FC<InicioViewProps> = ({
 
       case 'prioridades':
         return (
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-            {/* Left Column (8 cols on XL screens): Activity + Daily Schedule + Demands in Progress */}
-            <div className="xl:col-span-8 space-y-6">
-              {/* Row 1: Split 2 Cards side by side (Hours Activity & Daily Schedule from reference layout) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-                {/* Card 1: Atividade de Produção & Status (Hours Activity style) */}
-                <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3.5 mb-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center border border-purple-100 dark:border-purple-900/50">
-                          <Kanban size={17} />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-[#142142] dark:text-white tracking-tight">
-                            Atividade de Produção
-                          </h4>
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                            Fluxo ativo no Kanban
-                          </p>
-                        </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Coluna 1: Atividade de Produção & Status */}
+            <div className="lg:col-span-7 xl:col-span-8">
+              <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3.5 mb-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center border border-purple-100 dark:border-purple-900/50">
+                        <Kanban size={17} />
                       </div>
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/50">
-                        <TrendingUp size={12} />
-                        <span>+15% no mês</span>
-                      </span>
-                    </div>
-
-                    <div className="pt-1">
-                      <DemandsStatusDoughnutChart
-                        demands={demands}
-                        onNavigate={onNavigate}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 2: Agenda & Prazos da Semana (Daily Schedule style from reference layout) */}
-                <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3.5 mb-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-[#fab518] flex items-center justify-center border border-amber-200/60 dark:border-amber-900/50">
-                          <Calendar size={17} />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-[#142142] dark:text-white tracking-tight">
-                            Prazos da Semana
-                          </h4>
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                            Próximas entregas críticas
-                          </p>
-                        </div>
+                      <div>
+                        <h4 className="text-sm font-black text-[#142142] dark:text-white tracking-tight">
+                          Atividade de Produção
+                        </h4>
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                          Fluxo ativo no Kanban
+                        </p>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => onNavigate('demandas')}
-                        className="text-[11px] font-bold text-[#142142] dark:text-[#fab518] hover:underline flex items-center gap-1 cursor-pointer transition-colors"
-                      >
-                        <span>Ver Kanban</span>
-                        <ChevronRight size={13} />
-                      </button>
                     </div>
-
-                    <div className="space-y-2.5">
-                      {activeDemands.slice(0, 3).map((d, idx) => {
-                        const bgColors = [
-                          'bg-amber-50/80 dark:bg-amber-950/20 text-[#fab518] border-amber-200/60',
-                          'bg-purple-50/80 dark:bg-purple-950/20 text-purple-600 border-purple-200/60',
-                          'bg-blue-50/80 dark:bg-blue-950/20 text-blue-600 border-blue-200/60',
-                        ];
-                        return (
-                          <div
-                            key={d.id}
-                            onClick={() => {
-                              if (onSelectDemand) onSelectDemand(d.id);
-                              onNavigate('demandas');
-                            }}
-                            className="p-2.5 sm:p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100/90 dark:hover:bg-slate-800 transition-all border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between cursor-pointer group"
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center border text-xs font-black shrink-0 ${bgColors[idx % bgColors.length]}`}>
-                                {d.type.charAt(0).toUpperCase()}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-[#142142] dark:text-white group-hover:text-[#fab518] transition-colors truncate">
-                                  {d.title}
-                                </p>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                                  {d.client}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0 ml-2">
-                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200">
-                                {d.dueDate || 'Esta semana'}
-                              </span>
-                              <ChevronRight size={14} className="text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/50">
+                      <TrendingUp size={12} />
+                      <span>+15% no mês</span>
+                    </span>
                   </div>
 
-                  <div className="pt-3 mt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                    <span>Total em fila: <strong>{activeDemands.length} demandas</strong></span>
-                    <button
-                      type="button"
-                      onClick={() => onNavigate('calendario')}
-                      className="text-[#142142] dark:text-amber-400 font-bold hover:underline cursor-pointer flex items-center gap-1"
-                    >
-                      <span>Calendário 2026</span>
-                      <ArrowUpRight size={11} />
-                    </button>
+                  <div className="pt-1">
+                    <DemandsStatusDoughnutChart
+                      demands={demands}
+                      onNavigate={onNavigate}
+                    />
                   </div>
-                </div>
-              </div>
-
-              {/* Row 2: "Demandas em Andamento" (Course You're Taking style from reference layout) */}
-              <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-7 shadow-xs hover:shadow-sm transition-all space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base sm:text-lg font-black text-[#142142] dark:text-white tracking-tight">
-                        Demandas em Andamento
-                      </h3>
-                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                        {filteredActiveDemands.length}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Acompanhe o progresso das entregas prioritárias da sua agência
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                    {/* Filter Pills like "Active v" */}
-                    <div className="flex items-center gap-1 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700 text-[11px] font-bold">
-                      {(['todas', 'producao', 'aprovacao', 'agendamento'] as const).map((filterKey) => {
-                        const labels = {
-                          todas: 'Todas',
-                          producao: 'Produção',
-                          aprovacao: 'Aprovação',
-                          agendamento: 'Agendadas'
-                        };
-                        const isActive = demandsFilter === filterKey;
-                        return (
-                          <button
-                            key={filterKey}
-                            type="button"
-                            onClick={() => setDemandsFilter(filterKey)}
-                            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                              isActive
-                                ? 'bg-white dark:bg-slate-700 text-[#142142] dark:text-white shadow-xs font-black'
-                                : 'text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white'
-                            }`}
-                          >
-                            {labels[filterKey]}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Add Demand Button inspired by the + button */}
-                    <button
-                      type="button"
-                      onClick={onOpenNewDemandModal}
-                      className="px-3.5 py-1.5 rounded-xl bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs hover:shadow-xs shrink-0"
-                      title="Criar nova demanda"
-                    >
-                      <Plus size={14} className="stroke-[3]" />
-                      <span className="hidden sm:inline">Criar Demanda</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* List of Demands (Horizontal Cards with Circular Progress Ring) */}
-                <div className="space-y-3">
-                  {filteredActiveDemands.length === 0 ? (
-                    <div className="py-10 px-4 text-center rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
-                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        Nenhuma demanda encontrada neste filtro
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
-                        Crie novos posts, carrosséis ou campanhas para visualizar o progresso da equipe.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={onOpenNewDemandModal}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#fab518] hover:bg-[#e29f11] text-[#142142] text-xs font-black transition-colors cursor-pointer mt-1"
-                      >
-                        <Plus size={13} className="stroke-[3]" />
-                        <span>Criar Demanda</span>
-                      </button>
-                    </div>
-                  ) : (
-                    filteredActiveDemands.slice(0, 5).map((d) => {
-                      const progress = getProgressForDemand(d.columnId);
-                      const color = getProgressColor(d.columnId);
-                      return (
-                        <div
-                          key={d.id}
-                          className="flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-800/50 hover:bg-slate-100/80 dark:hover:bg-slate-800/90 transition-all border border-slate-200/70 dark:border-slate-700/60 group cursor-pointer"
-                          onClick={() => {
-                            if (onSelectDemand) onSelectDemand(d.id);
-                            onNavigate('demandas');
-                          }}
-                        >
-                          <div className="flex items-center gap-3.5 min-w-0">
-                            {/* Thumbnail or Squircle Icon */}
-                            {d.thumbnail?.trim() ? (
-                              <img
-                                src={d.thumbnail}
-                                alt=""
-                                className="w-12 h-12 rounded-2xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
-                              />
-                            ) : (
-                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-100 to-amber-200 dark:from-slate-700 dark:to-slate-800 text-[#142142] dark:text-[#fab518] flex items-center justify-center font-black text-sm shrink-0 border border-amber-300/40 dark:border-slate-700">
-                                {d.type.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-
-                            {/* Title + Client + Assignee */}
-                            <div className="min-w-0">
-                              <h4 className="text-xs sm:text-sm font-bold text-[#142142] dark:text-white group-hover:text-[#fab518] transition-colors truncate">
-                                {d.title}
-                              </h4>
-                              <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                <span className="font-semibold text-slate-700 dark:text-slate-300">{d.client}</span>
-                                <span>•</span>
-                                <span className="flex items-center gap-1 truncate">
-                                  <span className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-[9px] font-black flex items-center justify-center text-slate-600 dark:text-slate-300">
-                                    {d.assignee.name.charAt(0)}
-                                  </span>
-                                  <span>{d.assignee.name.split(' ')[0]}</span>
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Right: Due Date Pill + Circular Progress Ring */}
-                          <div className="flex items-center gap-3.5 shrink-0 ml-3">
-                            <div className="text-right hidden sm:block">
-                              <div className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300">
-                                <Clock size={10} className="text-slate-400" />
-                                <span>{d.dueDate || 'Pendente'}</span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 capitalize mt-0.5">
-                                {d.columnId}
-                              </p>
-                            </div>
-
-                            {/* Circular Progress Ring matching the reference image */}
-                            {renderCircularProgress(progress, color)}
-
-                            <ChevronRight size={16} className="text-slate-400 group-hover:translate-x-0.5 transition-transform hidden sm:inline" />
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                <div className="pt-2 flex items-center justify-between">
-                  <span className="text-xs text-slate-400 dark:text-slate-500">
-                    Mostrando até 5 demandas em andamento
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('demandas')}
-                    className="text-xs font-bold text-[#142142] dark:text-[#fab518] hover:underline inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Ver todas no Kanban</span>
-                    <ArrowRight size={13} />
-                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Right Column (4 cols on XL screens): Go Premium Banner + Mini Calendar + Quick Assignments */}
-            <div className="xl:col-span-4 space-y-6">
-              {/* Card 1: Portal de Aprovação (Go Premium style from reference layout) */}
-              <div className="bg-gradient-to-br from-[#142142] via-[#1a2b56] to-[#142142] text-white rounded-[26px] p-5 sm:p-6 shadow-sm border border-slate-800 space-y-3 relative overflow-hidden">
-                <div className="absolute -top-10 -right-10 w-28 h-28 rounded-full bg-[#fab518]/10 blur-2xl pointer-events-none" />
-                
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#fab518]/20 text-[#fab518] border border-[#fab518]/30">
-                    <Sparkles size={11} />
-                    <span>Portal do Cliente</span>
-                  </span>
-                  <span className="text-[10px] text-slate-300">Link Direto</span>
-                </div>
-
-                <div>
-                  <h4 className="text-base font-black text-white">Aprovação Instantânea</h4>
-                  <p className="text-xs text-slate-300 leading-relaxed mt-1">
-                    Envie links diretos para seus clientes revisarem e aprovarem criativos sem necessidade de login.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => onNavigate('portal-cliente')}
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs group mt-1"
-                >
-                  <span>Acessar Portal do Cliente</span>
-                  <ExternalLink size={13} className="group-hover:translate-x-0.5 transition-transform" />
-                </button>
-              </div>
-
-              {/* Card 2: Mini Calendário Interativo (Mini Calendar style from reference layout) */}
-              <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs hover:shadow-sm transition-all space-y-3.5">
-                {/* Month Navigation Header */}
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={handlePrevCalMonth}
-                    className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
-                    title="Mês anterior"
-                    aria-label="Mês anterior"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-
-                  <div className="text-center">
-                    <p className="text-xs sm:text-sm font-black text-[#142142] dark:text-white tracking-tight">
-                      {MONTH_NAMES_PT[miniCalMonth]}, {miniCalYear}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleNextCalMonth}
-                    className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
-                    title="Próximo mês"
-                    aria-label="Próximo mês"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-
-                {/* Weekday Headers: D S T Q Q S S */}
-                <div className="grid grid-cols-7 gap-1 text-center">
-                  {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((wd, i) => (
-                    <span key={i} className="text-[11px] font-bold text-slate-400 dark:text-slate-500 py-1">
-                      {wd}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Days Grid with Today Highlighted in lime/amber circle */}
-                <div className="grid grid-cols-7 gap-1 text-center">
-                  {calGridCells.map((cell, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => onNavigate('calendario')}
-                      className={`
-                        h-8 w-8 mx-auto flex flex-col items-center justify-center rounded-full text-xs font-semibold cursor-pointer transition-all relative
-                        ${cell.isToday 
-                          ? 'bg-[#fab518] text-[#142142] font-black shadow-xs ring-2 ring-[#fab518]/30 scale-105' 
-                          : cell.isCurrentMonth
-                            ? 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            : 'text-slate-300 dark:text-slate-600 opacity-50 hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                        }
-                      `}
-                      title={`${cell.day} de ${MONTH_NAMES_PT[miniCalMonth]}`}
-                    >
-                      <span>{cell.day}</span>
-                      {cell.hasDemand && !cell.isToday && (
-                        <span className="w-1 h-1 rounded-full bg-amber-500 dark:bg-amber-400 absolute bottom-1" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Footer link to full calendar */}
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Hoje: <strong>18/09/2026</strong>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('calendario')}
-                    className="text-[11px] font-bold text-[#142142] dark:text-[#fab518] hover:underline cursor-pointer flex items-center gap-1"
-                  >
-                    <span>Calendário 2026</span>
-                    <ChevronRight size={12} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Card 3: Acesso Rápido da Agência (Assignments style from reference layout) */}
+            {/* Coluna 2: Acesso Rápido */}
+            <div className="lg:col-span-5 xl:col-span-4">
               <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs hover:shadow-sm transition-all space-y-3.5">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3">
                   <h3 className="text-sm font-black text-[#142142] dark:text-white tracking-tight">
@@ -1373,6 +1499,11 @@ export const InicioView: React.FC<InicioViewProps> = ({
           </div>
         ) : (
           visibleSections.map((sectionId, index) => {
+            // Se for a seção de prazos e demandas e não houver nenhuma demanda monitorada, não renderiza nada no modo normal
+            if (sectionId === 'demandas_atrasadas' && timelineDemandsList.length === 0 && !isReorderMode) {
+              return null;
+            }
+
             const meta = SECTIONS_META[sectionId];
             const isDraggingThis = draggedSectionIndex === index;
             const isDropSlotActive = dropIndicatorIndex === index && draggedSectionIndex !== index;

@@ -565,9 +565,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
               </span>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2.5 py-1 bg-[#fab518]/20 dark:bg-[#fab518]/20 text-[#142142] dark:text-[#fab518] rounded-xl font-mono">
-                  {client.activeDemandsCount} demandas
-                </span>
                 <span className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 group-hover:bg-[#142142] dark:group-hover:bg-[#fab518] group-hover:text-[#fab518] dark:group-hover:text-[#142142] flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors">
                   <ChevronRight size={15} />
                 </span>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   User, 
@@ -7,6 +7,7 @@ import {
   Sparkles, 
   Check, 
   Image as ImageIcon,
+  Upload,
   Lock,
   KeyRound,
   Eye,
@@ -136,6 +137,53 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
   const [specialties, setSpecialties] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [formError, setFormError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (!result) return;
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 256;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.88);
+          setAvatar(compressed);
+          setCustomAvatarUrl(compressed);
+        } else {
+          setAvatar(result);
+          setCustomAvatarUrl(result);
+        }
+      };
+      img.src = result;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Auto-generate username from name
   const generateUsernameFromName = (inputName: string) => {
@@ -623,9 +671,27 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
 
           {/* Section 4: Foto / Avatar */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-              Foto de Perfil / Avatar
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Foto de Perfil / Avatar
+              </label>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#142142] dark:text-[#fab518] bg-amber-50 dark:bg-amber-950/30 hover:bg-[#fab518] hover:text-[#142142] dark:hover:text-[#142142] px-2.5 py-1 rounded-xl border border-amber-200/80 dark:border-amber-800/40 transition-colors cursor-pointer"
+                title="Carregar foto do computador"
+              >
+                <Upload size={13} />
+                <span>Carregar do Computador</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageFileSelect}
+                className="hidden"
+              />
+            </div>
             <div className="flex items-center gap-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/70 dark:border-slate-700/70">
               <img
                 src={customAvatarUrl.trim() || avatar?.trim() || PRESET_AVATARS[0]}
@@ -637,7 +703,7 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
               />
               <div className="flex-1 space-y-1.5">
                 <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">
-                  Escolha um avatar rápido:
+                  Escolha um avatar rápido ou carregue uma foto do PC:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {PRESET_AVATARS.map((pic, idx) => (
@@ -666,7 +732,7 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
                 type="url"
                 value={customAvatarUrl}
                 onChange={(e) => setCustomAvatarUrl(e.target.value)}
-                placeholder="Ou insira o link da foto de perfil..."
+                placeholder="Ou insira o link/URL da foto de perfil..."
                 className="w-full text-xs px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-hidden focus:border-[#fab518]"
               />
             </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Menu, 
   Search, 
@@ -16,10 +17,7 @@ import {
   ExternalLink, 
   X,
   ShieldCheck,
-  KeyRound,
-  Database,
-  RefreshCw,
-  Cloud
+  KeyRound
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PageId, AgencyNotification } from '../types';
@@ -186,6 +184,7 @@ export const Header: React.FC<HeaderProps> = ({
   });
 
   const notificationsRef = useRef<HTMLDivElement>(null);
+  const mobilePopoverRef = useRef<HTMLDivElement>(null);
 
   // Sync notifications to localStorage
   useEffect(() => {
@@ -212,8 +211,13 @@ export const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     if (!isNotificationsOpen) return;
 
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+      if (
+        notificationsRef.current &&
+        !notificationsRef.current.contains(target) &&
+        (!mobilePopoverRef.current || !mobilePopoverRef.current.contains(target))
+      ) {
         setIsNotificationsOpen(false);
       }
     };
@@ -225,10 +229,12 @@ export const Header: React.FC<HeaderProps> = ({
     };
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside, { passive: true });
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isNotificationsOpen]);
@@ -303,6 +309,233 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const renderNotificationsContent = (isMobile: boolean) => (
+    <>
+      {/* Header */}
+      <div className="p-3.5 sm:p-4.5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-[#fab518]/15 text-[#fab518] flex items-center justify-center shrink-0">
+            <Bell size={16} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-black text-[#142142] dark:text-white tracking-tight truncate">
+              Central de Notificações
+            </h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+              {unreadCount === 0 ? 'Nenhuma pendência não lida' : `${unreadCount} ${unreadCount === 1 ? 'notificação pendente' : 'notificações pendentes'}`}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsNotificationsOpen(false)}
+          className="p-2 sm:p-1.5 rounded-xl sm:rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0 touch-manipulation"
+          title="Fechar"
+          aria-label="Fechar notificações"
+        >
+          <X size={18} className="sm:w-[17px] sm:h-[17px]" />
+        </button>
+      </div>
+
+      {/* Controls: Filter Tabs & Quick Actions */}
+      <div className="px-3 sm:px-4 py-2 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs bg-slate-50/20 dark:bg-slate-900/20 gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl overflow-x-auto no-scrollbar">
+          <button
+            type="button"
+            onClick={() => setActiveFilter('all')}
+            className={`px-2 sm:px-2.5 py-1 rounded-lg font-bold text-[10px] sm:text-[11px] whitespace-nowrap transition-all cursor-pointer touch-manipulation ${
+              activeFilter === 'all'
+                ? 'bg-white dark:bg-slate-700 text-[#142142] dark:text-white shadow-2xs'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            Todas ({notifications.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveFilter('unread')}
+            className={`px-2 sm:px-2.5 py-1 rounded-lg font-bold text-[10px] sm:text-[11px] whitespace-nowrap transition-all cursor-pointer touch-manipulation ${
+              activeFilter === 'unread'
+                ? 'bg-white dark:bg-slate-700 text-[#142142] dark:text-white shadow-2xs'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            Não lidas ({unreadCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveFilter('security')}
+            className={`px-2 sm:px-2.5 py-1 rounded-lg font-bold text-[10px] sm:text-[11px] whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 touch-manipulation ${
+              activeFilter === 'security'
+                ? 'bg-emerald-500 text-white shadow-2xs'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <ShieldCheck size={11} />
+            <span>Segurança ({securityCount})</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={handleMarkAllAsRead}
+              className="p-1 sm:px-1.5 sm:py-0.5 text-[10px] sm:text-[11px] font-bold text-[#fab518] hover:text-[#d89707] flex items-center gap-1 cursor-pointer transition-colors rounded-md hover:bg-[#fab518]/10 touch-manipulation"
+              title="Marcar todas como lidas"
+            >
+              <CheckCheck size={13} />
+              <span className="hidden sm:inline">Marcar lidas</span>
+            </button>
+          )}
+          {notifications.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="p-1 sm:px-1.5 sm:py-0.5 text-[10px] sm:text-[11px] font-bold text-slate-400 hover:text-red-500 flex items-center gap-1 cursor-pointer transition-colors rounded-md hover:bg-red-500/10 touch-manipulation"
+              title="Limpar todas as notificações"
+            >
+              <Trash2 size={12} />
+              <span className="hidden sm:inline">Limpar</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Browser Web Notifications Status Banner */}
+      <div className="px-3 sm:px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] sm:text-[11px] gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-slate-500 dark:text-slate-400 font-medium truncate">
+            Alertas no Navegador:
+          </span>
+          {browserNotifPermission === 'granted' ? (
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 shrink-0">
+              <CheckCircle2 size={12} />
+              Ativo
+            </span>
+          ) : browserNotifPermission === 'denied' ? (
+            <span className="text-rose-500 font-bold shrink-0">Bloqueado</span>
+          ) : (
+            <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0">Não ativado</span>
+          )}
+        </div>
+
+        {browserNotifPermission !== 'granted' && browserNotifPermission !== 'denied' && (
+          <button
+            type="button"
+            onClick={handleRequestBrowserNotif}
+            className="px-2 sm:px-2.5 py-1 rounded-lg bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] font-black text-[10px] hover:opacity-90 transition-all cursor-pointer shrink-0 touch-manipulation"
+          >
+            Ativar Alertas
+          </button>
+        )}
+        {browserNotifPermission === 'granted' && (
+          <button
+            type="button"
+            onClick={() => {
+              setIsNotificationsOpen(false);
+              if (onNavigate) onNavigate('configuracoes');
+            }}
+            className="text-[10px] font-bold text-[#fab518] hover:underline cursor-pointer shrink-0 touch-manipulation"
+          >
+            Ajustar
+          </button>
+        )}
+      </div>
+
+      {/* Notification List */}
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 overscroll-contain">
+        {filteredNotifications.length === 0 ? (
+          <div className="py-10 px-6 text-center space-y-2">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+              <CheckCircle2 size={20} />
+            </div>
+            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+              {activeFilter === 'unread' ? 'Tudo lido por aqui!' : activeFilter === 'security' ? 'Nenhum alerta de segurança registrado' : 'Nenhuma notificação no momento'}
+            </p>
+            <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+              Novos avisos da equipe, aprovações de clientes, 2FA e prazos de campanhas aparecerão aqui automaticamente.
+            </p>
+          </div>
+        ) : (
+          filteredNotifications.map((n) => (
+            <div
+              key={n.id}
+              onClick={() => handleNotificationClick(n)}
+              className={`
+                p-3 sm:p-4 transition-colors cursor-pointer group flex items-start gap-2.5 sm:gap-3 touch-manipulation
+                ${!n.read 
+                  ? 'bg-[#fab518]/[0.05] dark:bg-[#fab518]/[0.08] hover:bg-[#fab518]/[0.1]' 
+                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                }
+              `}
+            >
+              {/* Icon */}
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 mt-0.5 border border-slate-200/60 dark:border-slate-700/60">
+                {getTypeIcon(n.type)}
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <h4 className={`text-xs font-bold truncate ${!n.read ? 'text-[#142142] dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
+                    {n.title}
+                  </h4>
+                  {!n.read && (
+                    <span className="w-2 h-2 rounded-full bg-[#fab518] shrink-0" />
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-1.5 sm:mb-2 line-clamp-2">
+                  {n.message}
+                </p>
+
+                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <Clock size={11} />
+                    <span>{n.timestamp}</span>
+                  </span>
+
+                  <div className="flex items-center gap-2">
+                    {n.actionLabel && (
+                      <span className="font-bold text-[#142142] dark:text-[#fab518] hover:underline flex items-center gap-0.5">
+                        <span>{n.actionLabel}</span>
+                        <ExternalLink size={10} />
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteNotification(n.id, e)}
+                      className="opacity-70 sm:opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity p-1 touch-manipulation"
+                      title="Remover"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="p-2.5 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800/80 text-center shrink-0">
+        <button
+          type="button"
+          onClick={() => {
+            if (onNavigate) onNavigate('configuracoes');
+            setIsNotificationsOpen(false);
+          }}
+          className="text-[11px] font-bold text-slate-500 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white transition-colors cursor-pointer py-1 touch-manipulation"
+        >
+          Configurações de Alertas e Protocolos →
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <header className="h-16 sm:h-20 w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] max-w-[calc(1780px-2rem)] mx-auto bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md border border-slate-200/90 dark:border-slate-800 rounded-2xl sm:rounded-[28px] my-2 sm:my-3 px-3 sm:px-6 md:px-8 flex items-center justify-between sticky top-2 sm:top-3 z-40 shadow-sm shadow-slate-200/40 dark:shadow-black/30 transition-all duration-300 ease-in-out">
       {/* Left: Mobile hamburger & Page Title */}
@@ -333,8 +566,11 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Mobile Search Toggle Button */}
         <button
           type="button"
-          onClick={() => setIsMobileSearchOpen((prev) => !prev)}
-          className={`sm:hidden p-2 rounded-xl transition-colors cursor-pointer ${
+          onClick={() => {
+            setIsNotificationsOpen(false);
+            setIsMobileSearchOpen((prev) => !prev);
+          }}
+          className={`sm:hidden p-2 rounded-xl transition-colors cursor-pointer touch-manipulation ${
             isMobileSearchOpen
               ? 'bg-[#fab518] text-[#142142]'
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -361,39 +597,6 @@ export const Header: React.FC<HeaderProps> = ({
           />
         </div>
 
-        {/* Supabase Cloud Status & Sync Trigger */}
-        <button
-          type="button"
-          id="btn-header-supabase-sync"
-          onClick={() => {
-            if (onRefreshSupabase) {
-              onRefreshSupabase();
-            } else if (onNavigate) {
-              onNavigate('configuracoes');
-            }
-          }}
-          title={
-            supabaseSyncStatus === 'syncing'
-              ? 'Sincronizando com Supabase...'
-              : isSupabaseOnline
-              ? 'Conectado ao Supabase PostgreSQL (Clique para sincronizar agora)'
-              : 'Supabase Offline ou Não Conectado (Clique para configurar)'
-          }
-          className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-            supabaseSyncStatus === 'syncing'
-              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-              : isSupabaseOnline
-              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-800 dark:hover:text-slate-200'
-          }`}
-        >
-          <Database size={13} className={supabaseSyncStatus === 'syncing' ? 'animate-spin' : isSupabaseOnline ? 'text-emerald-500' : ''} />
-          <span className="text-[11px] font-semibold">
-            {supabaseSyncStatus === 'syncing' ? 'Sincronizando...' : isSupabaseOnline ? 'Supabase Nuvem' : 'Supabase'}
-          </span>
-          <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-        </button>
-
         {/* Theme Toggle Button (Light/Dark Mode) */}
         <ThemeToggle variant="icon" />
 
@@ -404,273 +607,79 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              setIsMobileSearchOpen(false);
               setIsNotificationsOpen((prev) => !prev);
             }}
-            className={`relative p-2.5 rounded-xl transition-all duration-150 cursor-pointer flex items-center justify-center ${
+            className={`relative min-w-[44px] min-h-[44px] w-11 h-11 sm:w-10 sm:h-10 sm:min-w-[40px] sm:min-h-[40px] rounded-xl transition-all duration-150 cursor-pointer flex items-center justify-center touch-manipulation select-none active:scale-95 ${
               isNotificationsOpen
                 ? 'bg-[#142142] text-[#fab518] dark:bg-slate-800 dark:text-[#fab518] ring-2 ring-[#fab518]/50 shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95'
+                : 'text-slate-600 dark:text-slate-300 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
             title={unreadCount > 0 ? `${unreadCount} notificações pendentes` : 'Central de Notificações'}
             aria-label="Abrir central de notificações"
             aria-expanded={isNotificationsOpen}
           >
-            <Bell size={18} />
+            <Bell size={20} className="sm:w-[18px] sm:h-[18px]" />
             {unreadCount > 0 ? (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[#fab518] text-[#142142] text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white dark:ring-[#0f172a] shadow-xs">
+              <span className="absolute top-1 right-1 sm:-top-0.5 sm:-right-0.5 min-w-[18px] h-[18px] px-1 bg-[#fab518] text-[#142142] text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white dark:ring-[#0f172a] shadow-xs pointer-events-none">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             ) : (
-              <span className="absolute top-2 right-2 w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full ring-2 ring-white dark:ring-slate-900" />
+              <span className="absolute top-2.5 right-2.5 sm:top-2 sm:right-2 w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full ring-2 ring-white dark:ring-slate-900 pointer-events-none" />
             )}
           </button>
 
-          {/* Mobile Backdrop to dim screen and close on tap outside */}
-          {isNotificationsOpen && (
-            <div 
-              className="fixed inset-0 bg-black/50 backdrop-blur-xs z-40 sm:hidden"
-              onClick={() => setIsNotificationsOpen(false)}
-              aria-hidden="true"
-            />
-          )}
-
-          {/* Notifications Popover Dropdown */}
-          <AnimatePresence>
-            {isNotificationsOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 6, scale: 0.96 }}
-                transition={{ duration: 0.16, ease: 'easeOut' }}
-                className="fixed inset-x-2 sm:inset-x-auto top-14 sm:top-full sm:mt-3 sm:right-0 bottom-3 sm:bottom-auto w-auto sm:w-[420px] max-w-full sm:max-w-[calc(100vw-2rem)] sm:max-h-[540px] bg-white dark:bg-[#0f172a] rounded-2xl sm:rounded-[24px] border border-slate-200/90 dark:border-slate-800 shadow-2xl shadow-slate-900/20 z-50 overflow-hidden flex flex-col"
-              >
-                {/* Header */}
-                <div className="p-3.5 sm:p-4.5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-[#fab518]/15 text-[#fab518] flex items-center justify-center shrink-0">
-                      <Bell size={16} />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-black text-[#142142] dark:text-white tracking-tight truncate">
-                        Central de Notificações
-                      </h3>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                        {unreadCount === 0 ? 'Nenhuma pendência não lida' : `${unreadCount} ${unreadCount === 1 ? 'notificação pendente' : 'notificações pendentes'}`}
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsNotificationsOpen(false)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-                    title="Fechar"
-                    aria-label="Fechar notificações"
-                  >
-                    <X size={17} />
-                  </button>
-                </div>
-
-                {/* Controls: Filter Tabs & Quick Actions */}
-                <div className="px-3 sm:px-4 py-2 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs bg-slate-50/20 dark:bg-slate-900/20 gap-1.5 sm:gap-2 shrink-0">
-                  <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl overflow-x-auto no-scrollbar">
-                    <button
-                      type="button"
-                      onClick={() => setActiveFilter('all')}
-                      className={`px-2 sm:px-2.5 py-1 rounded-lg font-bold text-[10px] sm:text-[11px] whitespace-nowrap transition-all cursor-pointer ${
-                        activeFilter === 'all'
-                          ? 'bg-white dark:bg-slate-700 text-[#142142] dark:text-white shadow-2xs'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                      }`}
-                    >
-                      Todas ({notifications.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveFilter('unread')}
-                      className={`px-2 sm:px-2.5 py-1 rounded-lg font-bold text-[10px] sm:text-[11px] whitespace-nowrap transition-all cursor-pointer ${
-                        activeFilter === 'unread'
-                          ? 'bg-white dark:bg-slate-700 text-[#142142] dark:text-white shadow-2xs'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                      }`}
-                    >
-                      Não lidas ({unreadCount})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveFilter('security')}
-                      className={`px-2 sm:px-2.5 py-1 rounded-lg font-bold text-[10px] sm:text-[11px] whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
-                        activeFilter === 'security'
-                          ? 'bg-emerald-500 text-white shadow-2xs'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                      }`}
-                    >
-                      <ShieldCheck size={11} />
-                      <span>Segurança ({securityCount})</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                    {unreadCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleMarkAllAsRead}
-                        className="p-1 sm:px-1.5 sm:py-0.5 text-[10px] sm:text-[11px] font-bold text-[#fab518] hover:text-[#d89707] flex items-center gap-1 cursor-pointer transition-colors rounded-md hover:bg-[#fab518]/10"
-                        title="Marcar todas como lidas"
-                      >
-                        <CheckCheck size={13} />
-                        <span className="hidden sm:inline">Marcar lidas</span>
-                      </button>
-                    )}
-                    {notifications.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleClearAll}
-                        className="p-1 sm:px-1.5 sm:py-0.5 text-[10px] sm:text-[11px] font-bold text-slate-400 hover:text-red-500 flex items-center gap-1 cursor-pointer transition-colors rounded-md hover:bg-red-500/10"
-                        title="Limpar todas as notificações"
-                      >
-                        <Trash2 size={12} />
-                        <span className="hidden sm:inline">Limpar</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Browser Web Notifications Status Banner */}
-                <div className="px-3 sm:px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] sm:text-[11px] gap-2 shrink-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-slate-500 dark:text-slate-400 font-medium truncate">
-                      Alertas no Navegador:
-                    </span>
-                    {browserNotifPermission === 'granted' ? (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 shrink-0">
-                        <CheckCircle2 size={12} />
-                        Ativo
-                      </span>
-                    ) : browserNotifPermission === 'denied' ? (
-                      <span className="text-rose-500 font-bold shrink-0">Bloqueado</span>
-                    ) : (
-                      <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0">Não ativado</span>
-                    )}
-                  </div>
-
-                  {browserNotifPermission !== 'granted' && browserNotifPermission !== 'denied' && (
-                    <button
-                      type="button"
-                      onClick={handleRequestBrowserNotif}
-                      className="px-2 sm:px-2.5 py-1 rounded-lg bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] font-black text-[10px] hover:opacity-90 transition-all cursor-pointer shrink-0"
-                    >
-                      Ativar Alertas
-                    </button>
-                  )}
-                  {browserNotifPermission === 'granted' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsNotificationsOpen(false);
-                        if (onNavigate) onNavigate('configuracoes');
-                      }}
-                      className="text-[10px] font-bold text-[#fab518] hover:underline cursor-pointer shrink-0"
-                    >
-                      Ajustar
-                    </button>
-                  )}
-                </div>
-
-                {/* Notification List */}
-                <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 overscroll-contain">
-                  {filteredNotifications.length === 0 ? (
-                    <div className="py-10 px-6 text-center space-y-2">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
-                        <CheckCircle2 size={20} />
-                      </div>
-                      <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                        {activeFilter === 'unread' ? 'Tudo lido por aqui!' : activeFilter === 'security' ? 'Nenhum alerta de segurança registrado' : 'Nenhuma notificação no momento'}
-                      </p>
-                      <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
-                        Novos avisos da equipe, aprovações de clientes, 2FA e prazos de campanhas aparecerão aqui automaticamente.
-                      </p>
-                    </div>
-                  ) : (
-                    filteredNotifications.map((n) => (
-                      <div
-                        key={n.id}
-                        onClick={() => handleNotificationClick(n)}
-                        className={`
-                          p-3 sm:p-4 transition-colors cursor-pointer group flex items-start gap-2.5 sm:gap-3
-                          ${!n.read 
-                            ? 'bg-[#fab518]/[0.05] dark:bg-[#fab518]/[0.08] hover:bg-[#fab518]/[0.1]' 
-                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                          }
-                        `}
-                      >
-                        {/* Icon */}
-                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 mt-0.5 border border-slate-200/60 dark:border-slate-700/60">
-                          {getTypeIcon(n.type)}
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <h4 className={`text-xs font-bold truncate ${!n.read ? 'text-[#142142] dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
-                              {n.title}
-                            </h4>
-                            {!n.read && (
-                              <span className="w-2 h-2 rounded-full bg-[#fab518] shrink-0" />
-                            )}
-                          </div>
-
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-1.5 sm:mb-2 line-clamp-2">
-                            {n.message}
-                          </p>
-
-                          <div className="flex items-center justify-between text-[10px] text-slate-400">
-                            <span className="flex items-center gap-1">
-                              <Clock size={11} />
-                              <span>{n.timestamp}</span>
-                            </span>
-
-                            <div className="flex items-center gap-2">
-                              {n.actionLabel && (
-                                <span className="font-bold text-[#142142] dark:text-[#fab518] hover:underline flex items-center gap-0.5">
-                                  <span>{n.actionLabel}</span>
-                                  <ExternalLink size={10} />
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={(e) => handleDeleteNotification(n.id, e)}
-                                className="opacity-70 sm:opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity p-0.5"
-                                title="Remover"
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Footer */}
-                <div className="p-2.5 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800/80 text-center shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onNavigate) onNavigate('configuracoes');
-                      setIsNotificationsOpen(false);
-                    }}
-                    className="text-[11px] font-bold text-slate-500 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white transition-colors cursor-pointer"
-                  >
-                    Configurações de Alertas e Protocolos →
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Desktop Notifications Popover Dropdown (sm and above) */}
+          <div className="hidden sm:block">
+            <AnimatePresence>
+              {isNotificationsOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                  transition={{ duration: 0.16, ease: 'easeOut' }}
+                  className="absolute top-full mt-3 right-0 w-[420px] max-w-[calc(100vw-2rem)] max-h-[540px] bg-white dark:bg-[#0f172a] rounded-[24px] border border-slate-200/90 dark:border-slate-800 shadow-2xl shadow-slate-900/20 z-50 overflow-hidden flex flex-col"
+                >
+                  {renderNotificationsContent(false)}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
+
+      {/* Mobile Notifications Portal (sm:hidden, mounted directly to document.body) */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isNotificationsOpen && (
+            <div className="sm:hidden fixed inset-0 z-[9999] flex flex-col justify-end pointer-events-none">
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 bg-black/60 backdrop-blur-xs pointer-events-auto"
+                onClick={() => setIsNotificationsOpen(false)}
+                aria-hidden="true"
+              />
+
+              {/* Popover Card/Sheet */}
+              <motion.div
+                ref={mobilePopoverRef}
+                initial={{ opacity: 0, y: 36, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 36, scale: 0.98 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className="relative pointer-events-auto m-3 max-h-[calc(100vh-5.5rem)] bg-white dark:bg-[#0f172a] rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xl shadow-black/40 overflow-hidden flex flex-col"
+              >
+                {renderNotificationsContent(true)}
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* Mobile Search Overlay Bar */}
       <AnimatePresence>

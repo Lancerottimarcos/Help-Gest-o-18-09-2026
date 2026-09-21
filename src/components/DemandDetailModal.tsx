@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   X, 
   Calendar, 
@@ -33,8 +33,8 @@ import {
   FileText,
   Loader2
 } from 'lucide-react';
-import { DemandItem, KanbanColumnId, Priority, Client, DemandAttachment, KanbanColumn } from '../types';
-import { kanbanColumnsData } from '../data/mockData';
+import { DemandItem, KanbanColumnId, Priority, Client, DemandAttachment, KanbanColumn, TeamMember } from '../types';
+import { kanbanColumnsData, initialTeamMembers } from '../data/mockData';
 import { FileUploadDropzone } from './FileUploadDropzone';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { CustomDatePicker } from './CustomDatePicker';
@@ -44,6 +44,7 @@ import { processAttachmentFile } from '../utils/fileUtils';
 interface DemandDetailModalProps {
   demand: DemandItem;
   clients?: Client[];
+  teamMembers?: TeamMember[];
   columns?: KanbanColumn[];
   isOpen: boolean;
   onClose: () => void;
@@ -70,6 +71,7 @@ interface DemandComment {
 export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
   demand,
   clients = [],
+  teamMembers = [],
   columns,
   isOpen,
   onClose,
@@ -78,6 +80,23 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
   onOpenWhatsAppNotification,
   onOpenClientApprovalPortal,
 }) => {
+  // List of active team members (prefer props from Equipe page, fallback to localStorage if available, or initialTeamMembers)
+  const activeTeamMembers = useMemo(() => {
+    if (teamMembers && teamMembers.length > 0) {
+      return teamMembers;
+    }
+    try {
+      const saved = localStorage.getItem('agency_team_members');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return initialTeamMembers;
+  }, [teamMembers]);
+
   // Helper to normalize piece types to the new standardized set
   const normalizePieceType = (val?: string): string => {
     if (!val) return 'Post';
@@ -170,8 +189,10 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
       setColumnId(demand.columnId);
       setPriority(demand.priority);
       setDueDate(demand.dueDate || '');
-      setAssigneeName(demand.assignee?.name || '');
-      setAssigneeAvatar(demand.assignee?.avatar || '');
+      const initialAssigneeName = demand.assignee?.name || '';
+      setAssigneeName(initialAssigneeName);
+      const matchedMember = activeTeamMembers.find((m) => m.name === initialAssigneeName);
+      setAssigneeAvatar(demand.assignee?.avatar || matchedMember?.avatar || '');
       
       const initialAttachments = demand.attachments && demand.attachments.length > 0
         ? demand.attachments
@@ -391,75 +412,6 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
         <div id="demand-detail-modal-body" className="p-4 sm:p-6 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 space-y-4">
           {activeTab === 'details' && (
             <form onSubmit={handleSave} className="space-y-4">
-              {/* Interactive Client Approval Banner */}
-              {(columnId === 'aprovacao' || demand.approvalStatus) && (
-                <div className="p-3 sm:p-3.5 bg-linear-to-r from-amber-50/95 via-orange-50/90 to-amber-50/95 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-[#fab518]/20 border border-[#fab518]/40 flex items-center justify-center text-[#fab518] shrink-0">
-                      <Sparkles size={18} className="text-amber-700" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] font-black uppercase tracking-wider text-amber-900">
-                          Fluxo de Aprovação com Cliente
-                        </span>
-                        {demand.approvalStatus === 'aprovado' ? (
-                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                            <CheckCircle2 size={11} className="text-emerald-600" />
-                            Aprovado pelo Cliente
-                          </span>
-                        ) : demand.approvalStatus === 'alteracao_solicitada' ? (
-                          <span className="bg-amber-200 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                            <Edit3 size={11} className="text-amber-700" />
-                            Ajuste Solicitado
-                          </span>
-                        ) : demand.approvalStatus === 'reprovado' ? (
-                          <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                            <XCircle size={11} className="text-rose-600" />
-                            Reprovado pelo Cliente
-                          </span>
-                        ) : (
-                          <span className="bg-amber-200/70 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md animate-pulse flex items-center gap-1">
-                            <Clock size={11} className="text-amber-700" />
-                            Aguardando Resposta do Cliente
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-amber-900/80 mt-0.5">
-                        {demand.approvalFeedback
-                          ? `Feedback: "${demand.approvalFeedback}"`
-                          : 'Material pronto para validação externa pelo cliente no portal.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                    {onOpenClientApprovalPortal && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenClientApprovalPortal(demand)}
-                        className="flex-1 sm:flex-none px-3 py-1.5 bg-white hover:bg-slate-50 text-[#142142] border border-slate-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                        title="Abrir o Portal do Cliente exatamente como o cliente vê"
-                      >
-                        <ExternalLink size={12} />
-                        <span>Portal do Cliente</span>
-                      </button>
-                    )}
-                    {onOpenWhatsAppNotification && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenWhatsAppNotification(demand)}
-                        className="flex-1 sm:flex-none px-3 py-1.5 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                        title="Enviar ou reenviar link por WhatsApp"
-                      >
-                        <MessageCircle size={13} />
-                        <span>Notificar WhatsApp</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Form Container */}
               <div className="space-y-4">
                 {/* Row 1: Título da Demanda */}
@@ -554,12 +506,6 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
                         </option>
                       ))}
                     </select>
-                    {columnId === 'aprovacao' && (
-                      <p className="text-[10.5px] text-emerald-700 dark:text-emerald-400 font-bold mt-1.5 flex items-center gap-1">
-                        <MessageCircle size={11} className="text-[#25D366] shrink-0" />
-                        <span>Ativa Portal & WhatsApp</span>
-                      </p>
-                    )}
                   </div>
 
                   <div>
@@ -603,22 +549,26 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
                       onChange={(e) => {
                         const name = e.target.value;
                         setAssigneeName(name);
-                        if (name.includes('Beatriz')) {
-                          setAssigneeAvatar('https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80');
-                        } else if (name.includes('Lucas')) {
-                          setAssigneeAvatar('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80');
-                        } else if (name.includes('Matheus')) {
-                          setAssigneeAvatar('https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80');
-                        } else {
-                          setAssigneeAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80');
+                        const matched = activeTeamMembers.find((m) => m.name === name);
+                        if (matched) {
+                          setAssigneeAvatar(matched.avatar || '');
                         }
                       }}
                       className="w-full bg-slate-50/70 dark:bg-slate-800/80 hover:bg-slate-100/60 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 pl-10 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer shadow-2xs"
                     >
-                      <option value="Beatriz Lima">Beatriz Lima (Design & Direção de Arte)</option>
-                      <option value="Lucas Rocha">Lucas Rocha (Copywriting & Conteúdo)</option>
-                      <option value="Matheus Costa">Matheus Costa (Web Development & Tech)</option>
-                      <option value="Marcos Lancerotti">Marcos Lancerotti (Gestor de Contas)</option>
+                      {activeTeamMembers.map((member) => {
+                        const roleLabel = member.functionRole || (member.role ? member.role.split('/')[0].trim() : 'Colaborador');
+                        return (
+                          <option key={member.id} value={member.name}>
+                            {member.name} ({roleLabel})
+                          </option>
+                        );
+                      })}
+                      {assigneeName && !activeTeamMembers.some((m) => m.name === assigneeName) && (
+                        <option value={assigneeName}>
+                          {assigneeName} (Responsável atual)
+                        </option>
+                      )}
                     </select>
                   </div>
                 </div>

@@ -11,7 +11,6 @@ import {
   CheckSquare, 
   MoreVertical, 
   ChevronDown, 
-  ChevronUp,
   ChevronLeft,
   ChevronRight,
   LayoutGrid, 
@@ -33,7 +32,6 @@ import {
   XCircle,
   Edit3,
   ExternalLink,
-  GripVertical,
   BellRing,
   Copy,
   Check,
@@ -42,7 +40,7 @@ import {
   Columns,
   AlertTriangle
 } from 'lucide-react';
-import { DemandItem, KanbanColumnId, Priority, Client, KanbanColumn } from '../types';
+import { DemandItem, KanbanColumnId, Priority, Client, KanbanColumn, TeamMember } from '../types';
 import { kanbanColumnsData } from '../data/mockData';
 import { DemandDetailModal } from '../components/DemandDetailModal';
 import { ApprovalNotificationConfigModal } from '../components/ApprovalNotificationConfigModal';
@@ -52,6 +50,7 @@ import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
 interface DemandasViewProps {
   demands: DemandItem[];
   clients?: Client[];
+  teamMembers?: TeamMember[];
   columns?: KanbanColumn[];
   onAddColumn?: (column: KanbanColumn, insertBeforeConcluded?: boolean) => void;
   onUpdateColumn?: (column: KanbanColumn) => void;
@@ -69,11 +68,14 @@ interface DemandasViewProps {
   onDeleteDemand?: (demandId: string) => void;
   onOpenWhatsAppNotification?: (demand: DemandItem) => void;
   onOpenClientApprovalPortal?: (demand: DemandItem) => void;
+  initialSelectedDemandId?: string | null;
+  onClearInitialSelectedDemand?: () => void;
 }
 
 export const DemandasView: React.FC<DemandasViewProps> = ({
   demands,
   clients = [],
+  teamMembers = [],
   columns,
   onAddColumn,
   onUpdateColumn,
@@ -86,6 +88,8 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
   onDeleteDemand,
   onOpenWhatsAppNotification,
   onOpenClientApprovalPortal,
+  initialSelectedDemandId,
+  onClearInitialSelectedDemand,
 }) => {
   // Date formatting helpers
   const formatDemandDate = (dateStr?: string): string => {
@@ -337,9 +341,21 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
   // Modal for editing/viewing selected demand
   const [editingDemand, setEditingDemand] = useState<DemandItem | null>(null);
 
-  // Approval notification configuration modal & quick link copy state
+  // Automatically open demand if initialSelectedDemandId was passed
+  useEffect(() => {
+    if (initialSelectedDemandId) {
+      const found = demands.find((d) => d.id === initialSelectedDemandId);
+      if (found) {
+        setEditingDemand(found);
+      }
+      if (onClearInitialSelectedDemand) {
+        onClearInitialSelectedDemand();
+      }
+    }
+  }, [initialSelectedDemandId, demands, onClearInitialSelectedDemand]);
+
+  // Approval notification configuration modal
   const [isNotificationConfigOpen, setIsNotificationConfigOpen] = useState(false);
-  const [copiedDemandId, setCopiedDemandId] = useState<string | null>(null);
 
   // Drag and Drop state (cross-column and vertical reordering)
   const [draggedDemandId, setDraggedDemandId] = useState<string | null>(null);
@@ -458,23 +474,6 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     setDropTarget(null);
   };
 
-  const handleMoveVertical = (
-    demandId: string,
-    columnId: KanbanColumnId,
-    direction: 'up' | 'down',
-    colDemands: DemandItem[]
-  ) => {
-    const currentIndex = colDemands.findIndex((d) => d.id === demandId);
-    if (currentIndex === -1) return;
-    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= colDemands.length) return;
-    const targetDemand = colDemands[targetIndex];
-
-    if (onMoveDemand) {
-      onMoveDemand(demandId, columnId, targetDemand.id, direction === 'up' ? 'before' : 'after');
-    }
-  };
-
   // Sync initial client filter if prop changes
   useEffect(() => {
     if (initialClientFilter) {
@@ -567,20 +566,6 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     countByClient[d.client] = (countByClient[d.client] || 0) + 1;
   });
 
-  // Client pill options
-  const clientPills: { id: string; label: string; sublabel?: string; count: number }[] = [
-    { id: 'todos', label: 'Quadro Principal', count: demands.length },
-    ...allClientNames.map((name) => {
-      const clientObj = clients.find((c) => c.name === name);
-      return {
-        id: name,
-        label: name,
-        sublabel: clientObj?.segment,
-        count: countByClient[name] || 0,
-      };
-    }),
-  ];
-
   // Filtering
   const filteredDemands = demands.filter((item) => {
     const matchesSearch = 
@@ -616,14 +601,85 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     setTypeFilter('todos');
   };
 
-  const getPriorityColorBars = (priority: Priority, count: number) => {
+  const getPriorityColorBars = (priority?: Priority | string, count?: number) => {
+    const p = (priority || '').toLowerCase();
+
+    // Sincronizar quantidade de barras ativas diretamente com o campo de prioridade
+    let activeBars = 2;
+    if (p === 'urgente' || p === 'alta') {
+      activeBars = 3;
+    } else if (p === 'media' || p === 'média') {
+      activeBars = 2;
+    } else if (p === 'baixa') {
+      activeBars = 1;
+    } else if (typeof count === 'number' && count >= 1 && count <= 3) {
+      activeBars = count;
+    }
+
+    // Configuração de cores e rótulos sincronizados
+    let bar1Color = 'bg-amber-400';
+    let bar2Color = 'bg-amber-500';
+    let bar3Color = 'bg-red-500';
+    let label = 'Média';
+
+    if (p === 'urgente') {
+      bar1Color = 'bg-rose-500';
+      bar2Color = 'bg-rose-500';
+      bar3Color = 'bg-rose-600 animate-pulse';
+      label = 'Urgente';
+    } else if (p === 'alta') {
+      bar1Color = 'bg-amber-400';
+      bar2Color = 'bg-orange-500';
+      bar3Color = 'bg-red-500';
+      label = 'Alta';
+    } else if (p === 'baixa') {
+      bar1Color = 'bg-sky-500';
+      bar2Color = 'bg-sky-500';
+      bar3Color = 'bg-sky-500';
+      label = 'Baixa';
+    }
+
+    const inactiveClass = 'bg-slate-200 dark:bg-slate-700/60';
+
     return (
-      <div className="flex items-center gap-1">
-        <span className={`h-1.5 w-5 rounded-full ${count >= 1 ? 'bg-amber-400' : 'bg-slate-200'}`} />
-        <span className={`h-1.5 w-5 rounded-full ${count >= 2 ? 'bg-amber-500' : 'bg-slate-200'}`} />
-        <span className={`h-1.5 w-5 rounded-full ${count >= 3 ? 'bg-red-500' : 'bg-slate-200'}`} />
+      <div 
+        className="flex items-center gap-1"
+        title={`Prioridade: ${label} (${activeBars} de 3 barras)`}
+        aria-label={`Prioridade: ${label}`}
+      >
+        <span className={`h-1.5 w-5 rounded-full transition-all duration-200 ${activeBars >= 1 ? bar1Color : inactiveClass}`} />
+        <span className={`h-1.5 w-5 rounded-full transition-all duration-200 ${activeBars >= 2 ? bar2Color : inactiveClass}`} />
+        <span className={`h-1.5 w-5 rounded-full transition-all duration-200 ${activeBars >= 3 ? bar3Color : inactiveClass}`} />
       </div>
     );
+  };
+
+  const getPriorityBadgeStyle = (priority?: Priority | string) => {
+    const p = (priority || 'media').toLowerCase();
+    switch (p) {
+      case 'urgente':
+        return {
+          label: 'Urgente',
+          classes: 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200/70 dark:border-rose-800/70',
+        };
+      case 'alta':
+        return {
+          label: 'Alta',
+          classes: 'bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border-orange-200/70 dark:border-orange-800/70',
+        };
+      case 'baixa':
+        return {
+          label: 'Baixa',
+          classes: 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200/70 dark:border-sky-800/70',
+        };
+      case 'media':
+      case 'média':
+      default:
+        return {
+          label: 'Média',
+          classes: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200/70 dark:border-amber-800/70',
+        };
+    }
   };
 
   const getTypeFilterLabel = (key: string) => {
@@ -901,51 +957,6 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
               </span>
             )}
           </div>
-        </div>
-
-
-
-        {/* Tier 4: Client Quick Filter Pills (Horizontal Carousel) */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-1">
-          <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
-            <Building2 size={12} className="text-[#fab518]" />
-            <span>Clientes Rápidos:</span>
-          </span>
-
-          {clientPills.map((pill) => {
-            const isSelected = selectedClientFilter === pill.id;
-            return (
-              <button
-                key={pill.id}
-                type="button"
-                id={`filter-pill-client-${pill.id.replace(/\s+/g, '-').toLowerCase()}`}
-                onClick={() => setSelectedClientFilter(pill.id)}
-                className={`
-                  shrink-0 px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer
-                  flex items-center gap-1.5 border
-                  ${
-                    isSelected
-                      ? 'bg-[#142142] text-white border-[#142142] shadow-xs'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200/90 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/80'
-                  }
-                `}
-              >
-                <span>{pill.label}</span>
-                {pill.sublabel && (
-                  <span className={`text-[10px] ${isSelected ? 'text-slate-300' : 'text-slate-400 dark:text-slate-500'}`}>
-                    • {pill.sublabel}
-                  </span>
-                )}
-                <span
-                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                    isSelected ? 'bg-[#fab518] text-[#142142]' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  {pill.count}
-                </span>
-              </button>
-            );
-          })}
         </div>
 
         {/* Active Filter Chips bar */}
@@ -1270,56 +1281,9 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                             ${isDragging ? 'opacity-35 scale-98 border-dashed border-[#fab518] shadow-none cursor-grabbing' : ''}
                           `}
                         >
-                          {/* Priority bars indicator on top + Vertical controls */}
+                          {/* Priority bars indicator on top */}
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              {/* Vertical Reorder Controls & Grip Handle */}
-                              <div 
-                                className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800/90 px-1 py-0.5 rounded-lg border border-slate-200/70 dark:border-slate-700/70 text-slate-500 dark:text-slate-400"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <span 
-                                  className="cursor-grab active:cursor-grabbing hover:text-[#fab518] transition-colors p-0.5"
-                                  title="Arraste para mover na vertical ou entre colunas"
-                                >
-                                  <GripVertical size={13} />
-                                </span>
-                                <button
-                                  type="button"
-                                  disabled={index === 0}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleMoveVertical(demand.id, col.id, 'up', columnDemands);
-                                  }}
-                                  className={`p-0.5 rounded transition-colors ${
-                                    index === 0 
-                                      ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40' 
-                                      : 'text-slate-600 dark:text-slate-300 hover:text-[#142142] dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 cursor-pointer'
-                                  }`}
-                                  title="Mover demanda para cima nesta coluna"
-                                  aria-label="Mover para cima"
-                                >
-                                  <ChevronUp size={13} className="stroke-[2.5]" />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={index === columnDemands.length - 1}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleMoveVertical(demand.id, col.id, 'down', columnDemands);
-                                  }}
-                                  className={`p-0.5 rounded transition-colors ${
-                                    index === columnDemands.length - 1 
-                                      ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40' 
-                                      : 'text-slate-600 dark:text-slate-300 hover:text-[#142142] dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 cursor-pointer'
-                                  }`}
-                                  title="Mover demanda para baixo nesta coluna"
-                                  aria-label="Mover para baixo"
-                                >
-                                  <ChevronDown size={13} className="stroke-[2.5]" />
-                                </button>
-                              </div>
-
                               {getPriorityColorBars(demand.priority, demand.priorityBars)}
                             </div>
 
@@ -1364,16 +1328,18 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                           </div>
                         </div>
 
-                        {/* Metadata Badges (Matches screenshot: "• Média", "• Post", "• Portal Publicitário", "📅 22 Set") */}
+                        {/* Metadata Badges */}
                         <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
-                            • {demand.priority === 'alta' ? 'Alta' : demand.priority === 'urgente' ? 'Urgente' : 'Média'}
-                          </span>
+                          {(() => {
+                            const pBadge = getPriorityBadgeStyle(demand.priority);
+                            return (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${pBadge.classes}`}>
+                                • {pBadge.label}
+                              </span>
+                            );
+                          })()}
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/60">
                             • {demand.type}
-                          </span>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 truncate max-w-[140px]">
-                            • {demand.client}
                           </span>
                           {demand.dueDate && (
                             <span 
@@ -1385,132 +1351,6 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                             </span>
                           )}
                         </div>
-
-                        {/* Status / Checklist progress */}
-                        {demand.statusLabel && (
-                          <div className="text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-[#F2F2F2] dark:bg-slate-800 group-hover:bg-slate-200/60 dark:group-hover:bg-slate-700/60 px-2.5 py-1 rounded-lg mb-2 flex items-center justify-between transition-colors">
-                            <span className="truncate">{demand.statusLabel}</span>
-                            {demand.checklistTotal && (
-                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                                {demand.checklistCompleted}/{demand.checklistTotal}
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Approval Workflow Badge & Portal / WhatsApp Quick Actions */}
-                        {(col.id === 'aprovacao' || demand.approvalStatus) && (
-                          <div className="mb-2.5 p-2.5 rounded-xl border flex flex-col gap-1.5 transition-all text-xs bg-[#F8F9FA] dark:bg-slate-800/60 border-slate-200 dark:border-slate-700">
-                            <div className="flex items-center justify-between gap-1">
-                              {demand.approvalStatus === 'aprovado' ? (
-                                <span className="flex items-center gap-1 text-[11px] font-extrabold text-emerald-700 dark:text-emerald-400">
-                                  <CheckCircle2 size={12} className="text-emerald-600" />
-                                  <span>Aprovado p/ Cliente</span>
-                                </span>
-                              ) : demand.approvalStatus === 'alteracao_solicitada' ? (
-                                <span className="flex items-center gap-1 text-[11px] font-extrabold text-amber-700 dark:text-amber-400">
-                                  <Edit3 size={12} className="text-amber-600" />
-                                  <span>Ajuste Solicitado</span>
-                                </span>
-                              ) : demand.approvalStatus === 'reprovado' ? (
-                                <span className="flex items-center gap-1 text-[11px] font-extrabold text-rose-700 dark:text-rose-400">
-                                  <XCircle size={12} className="text-rose-600" />
-                                  <span>Reprovado p/ Cliente</span>
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-400">
-                                  <Clock size={12} className="text-amber-600 animate-pulse" />
-                                  <span>Aguardando Cliente</span>
-                                </span>
-                              )}
-
-                              {demand.whatsappNotified ? (
-                                <span className="text-[10px] font-bold text-[#128C7E] flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-800/60">
-                                  <CheckCircle2 size={10} className="text-[#25D366]" />
-                                  <span>Notificado</span>
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1 bg-amber-100/70 dark:bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-200/80 dark:border-amber-800/80">
-                                  <AlertCircle size={10} className="text-amber-600" />
-                                  <span>Pendente</span>
-                                </span>
-                              )}
-                            </div>
-
-                            {demand.approvalFeedback && (
-                              <p className="text-[10.5px] text-amber-900 dark:text-amber-200 bg-amber-100/70 dark:bg-amber-900/40 p-1.5 rounded-lg italic line-clamp-2 font-normal font-sofia-regular">
-                                "{demand.approvalFeedback}"
-                              </p>
-                            )}
-
-                            <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200/80 dark:border-slate-700">
-                              {/* Copiar Link de Validação com feedback */}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const origin = window.location.origin;
-                                  const portalUrl = `${origin}/?portal=aprovacao&demandId=${demand.id}`;
-                                  navigator.clipboard.writeText(portalUrl);
-                                  setCopiedDemandId(demand.id);
-                                  setTimeout(() => setCopiedDemandId(null), 2000);
-                                }}
-                                className="py-1 px-2 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                                title="Copiar link direto de aprovação do cliente"
-                              >
-                                {copiedDemandId === demand.id ? (
-                                  <>
-                                    <Check size={10} className="text-emerald-600 stroke-[3]" />
-                                    <span className="text-emerald-700 dark:text-emerald-300">Copiado</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy size={10} />
-                                    <span>Link</span>
-                                  </>
-                                )}
-                              </button>
-
-                              {onOpenClientApprovalPortal && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenClientApprovalPortal(demand);
-                                  }}
-                                  className="py-1 px-2 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 text-[#142142] dark:text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                                  title="Abrir Portal do Cliente para validação"
-                                >
-                                  <ExternalLink size={10} />
-                                  <span>Portal</span>
-                                </button>
-                              )}
-
-                              {onOpenWhatsAppNotification && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenWhatsAppNotification(demand);
-                                  }}
-                                  className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs ${
-                                    demand.whatsappNotified
-                                      ? 'bg-slate-100 dark:bg-slate-700 hover:bg-[#25D366] hover:text-white text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600'
-                                      : 'bg-[#25D366] hover:bg-[#20bd5a] text-white'
-                                  }`}
-                                  title={
-                                    demand.whatsappNotified
-                                      ? 'Reenviar notificação de aprovação via WhatsApp'
-                                      : 'Disparar notificação no WhatsApp com link do portal'
-                                  }
-                                >
-                                  <MessageCircle size={11} />
-                                  <span>{demand.whatsappNotified ? 'Reenviar' : 'WhatsApp'}</span>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        )}
 
                         {/* Bottom Card Footer: Assignee & Move Action */}
                         <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-slate-400 text-xs">
@@ -1849,6 +1689,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
         <DemandDetailModal
           demand={editingDemand}
           clients={clients}
+          teamMembers={teamMembers}
           columns={activeColumns}
           isOpen={Boolean(editingDemand)}
           onClose={() => setEditingDemand(null)}

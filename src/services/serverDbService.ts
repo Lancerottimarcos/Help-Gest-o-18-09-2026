@@ -1,4 +1,4 @@
-import { Client, DemandItem, Service, BudgetProposal, Invoice, ClientActivity } from '../types';
+import { Client, DemandItem, Service, BudgetProposal, Invoice, ClientActivity, TeamMember, KanbanColumn } from '../types';
 
 export interface AppDatabasePayload {
   clients?: Client[];
@@ -7,6 +7,8 @@ export interface AppDatabasePayload {
   proposals?: BudgetProposal[];
   invoices?: Invoice[];
   activities?: ClientActivity[];
+  teamMembers?: TeamMember[];
+  kanbanColumns?: KanbanColumn[];
   updatedAt?: number;
 }
 

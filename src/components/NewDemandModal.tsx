@@ -267,11 +267,14 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
                 onChange={(e) => setAssigneeName(e.target.value)}
                 className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-xs font-semibold text-[#142142] dark:text-slate-100 p-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:outline-none transition-colors"
               >
-                {activeMembersList.map((m) => (
-                  <option key={m.id} value={m.name}>
-                    {m.name} ({m.role.split('/')[0]})
-                  </option>
-                ))}
+                {activeMembersList.map((m) => {
+                  const roleLabel = m.functionRole || (m.role ? m.role.split('/')[0].trim() : 'Colaborador');
+                  return (
+                    <option key={m.id} value={m.name}>
+                      {m.name} ({roleLabel})
+                    </option>
+                  );
+                })}
               </select>
             </div>
 

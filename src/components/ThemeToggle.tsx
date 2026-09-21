@@ -107,7 +107,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
 
       {/* Subtle indicator ring/dot */}
       <span
-        className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 transition-colors ${
+        className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 transition-colors pointer-events-none ${
           isDark ? 'bg-amber-400 ring-slate-800' : 'bg-slate-400 ring-white'
         }`}
       />

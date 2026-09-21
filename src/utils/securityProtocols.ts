@@ -983,8 +983,9 @@ export async function validateMasterCredentials(
 
   // Recupera equipe atualizada do localStorage ou mock
   let team: TeamMember[] = initialTeamMembers;
+  let storedTeam: string | null = null;
   try {
-    const storedTeam = localStorage.getItem('agency_team_members');
+    storedTeam = localStorage.getItem('agency_team_members');
     if (storedTeam) {
       const parsed = JSON.parse(storedTeam);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -992,6 +993,22 @@ export async function validateMasterCredentials(
       }
     }
   } catch {}
+
+  // Se não houver equipe no localStorage deste computador, busca da base de dados centralizada do servidor
+  if (!storedTeam) {
+    try {
+      const res = await fetch('/api/database');
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.data?.teamMembers && Array.isArray(json.data.teamMembers) && json.data.teamMembers.length > 0) {
+          team = json.data.teamMembers;
+          try {
+            localStorage.setItem('agency_team_members', JSON.stringify(team));
+          } catch {}
+        }
+      }
+    } catch {}
+  }
 
   // Localiza registro do Marcos na equipe
   const marcosMember = team.find((m) => isOwnerOrMarcos(m));

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   Users, 
@@ -43,6 +43,7 @@ interface NavItemConfig {
   icon: React.ComponentType<{ className?: string; size?: number }>;
   badge?: string | number;
   badgeColor?: string;
+  disabled?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -59,6 +60,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentUser: externalCurrentUser,
 }) => {
   const activeUser = externalCurrentUser || currentUser;
+  const [avatarImgError, setAvatarImgError] = useState(false);
+
+  useEffect(() => {
+    setAvatarImgError(false);
+  }, [activeUser.avatarUrl]);
+
   const navItems: NavItemConfig[] = [
     {
       id: 'inicio',
@@ -89,6 +96,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'portal-cliente',
       label: 'Portal do Cliente',
       icon: Sparkles,
+      disabled: true,
+      badge: 'Em breve',
+      badgeColor: 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 text-[10px]',
     },
     {
       id: 'financeiro',
@@ -220,25 +230,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id;
+              const isDisabled = Boolean(item.disabled);
 
               return (
                 <button
                   key={item.id}
                   id={`nav-link-${item.id}`}
                   type="button"
+                  disabled={isDisabled}
+                  aria-disabled={isDisabled}
                   onClick={() => {
+                    if (isDisabled) return;
                     onSelectPage(item.id);
                     onCloseMobile();
                   }}
-                  title={isCollapsed ? item.label : undefined}
+                  title={
+                    isDisabled
+                      ? `${item.label} (Funcionalidade desativada)`
+                      : isCollapsed
+                      ? item.label
+                      : undefined
+                  }
                   className={`
                     w-full flex items-center rounded-2xl text-left
-                    text-sm font-semibold transition-all duration-200 group relative cursor-pointer
+                    text-sm font-semibold transition-all duration-200 group relative
                     ${isCollapsed ? 'justify-center w-12 h-12 mx-auto p-0' : 'justify-between px-3.5 py-2.5'}
                     ${
-                      isActive
-                        ? 'bg-[#142142] text-white shadow-md shadow-[#142142]/20 dark:bg-[#fab518] dark:text-[#142142]'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100/90 dark:hover:bg-slate-800/80'
+                      isDisabled
+                        ? 'opacity-40 cursor-not-allowed text-slate-400 dark:text-slate-500 bg-transparent select-none'
+                        : isActive
+                        ? 'bg-[#142142] text-white shadow-md shadow-[#142142]/20 dark:bg-[#fab518] dark:text-[#142142] cursor-pointer'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100/90 dark:hover:bg-slate-800/80 cursor-pointer'
                     }
                   `}
                 >
@@ -247,7 +269,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className={`
                         p-1.5 rounded-xl transition-colors shrink-0
                         ${
-                          isActive
+                          isDisabled
+                            ? 'text-slate-400 dark:text-slate-600 bg-transparent'
+                            : isActive
                             ? 'bg-white/10 dark:bg-[#142142]/10 text-[#fab518] dark:text-[#142142]'
                             : 'text-slate-400 dark:text-slate-400 group-hover:text-[#142142] dark:group-hover:text-white group-hover:bg-white dark:group-hover:bg-slate-700'
                         }
@@ -259,7 +283,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
 
                   {isCollapsed ? (
-                    item.badge ? (
+                    item.badge && !isDisabled ? (
                       <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#fab518] ring-2 ring-white" />
                     ) : null
                   ) : (
@@ -281,17 +305,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </span>
                       )}
 
-                      <ChevronRight
-                        size={14}
-                        className={`
-                          transition-transform duration-200
-                          ${
-                            isActive
-                              ? 'text-[#fab518] translate-x-0.5'
-                              : 'text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5'
-                          }
-                        `}
-                      />
+                      {!isDisabled && (
+                        <ChevronRight
+                          size={14}
+                          className={`
+                            transition-transform duration-200
+                            ${
+                              isActive
+                                ? 'text-[#fab518] translate-x-0.5'
+                                : 'text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5'
+                            }
+                          `}
+                        />
+                      )}
                     </div>
                   )}
                 </button>
@@ -309,24 +335,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Current User Card */}
           <div 
-            className={`flex items-center justify-between rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors ${isCollapsed ? 'justify-center p-1.5' : 'p-2'}`}
-            title={isCollapsed ? `${activeUser.name} - ${activeUser.roleLabel}` : undefined}
+            onClick={() => onSelectPage('equipe')}
+            className={`flex items-center justify-between rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors cursor-pointer group/user ${isCollapsed ? 'justify-center p-1.5' : 'p-2'}`}
+            title={isCollapsed ? `${activeUser.name} - ${activeUser.roleLabel} (Clique para ver perfil na Equipe)` : 'Clique para ver o perfil na Equipe'}
           >
             <div className={`flex items-center min-w-0 ${isCollapsed ? 'justify-center' : 'gap-3 flex-1'}`}>
-              {activeUser.avatarUrl?.trim() ? (
+              {activeUser.avatarUrl?.trim() && !avatarImgError ? (
                 <img
                   src={activeUser.avatarUrl}
                   alt={activeUser.name}
-                  className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[#fab518] shrink-0"
+                  referrerPolicy="no-referrer"
+                  onError={() => setAvatarImgError(true)}
+                  className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[#fab518] shrink-0 group-hover/user:scale-105 transition-transform"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-2xl bg-[#142142] text-[#fab518] text-sm font-black flex items-center justify-center ring-2 ring-[#fab518] shrink-0">
+                <div className="w-10 h-10 rounded-2xl bg-[#142142] text-[#fab518] text-sm font-black flex items-center justify-center ring-2 ring-[#fab518] shrink-0 group-hover/user:scale-105 transition-transform">
                   {activeUser.name.charAt(0).toUpperCase()}
                 </div>
               )}
               {!isCollapsed && (
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-[#142142] dark:text-white truncate leading-snug">
+                  <p className="text-sm font-bold text-[#142142] dark:text-white truncate leading-snug group-hover/user:text-[#fab518] transition-colors">
                     {activeUser.name}
                   </p>
                   <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
@@ -342,7 +371,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 id="btn-sidebar-logout"
-                onClick={onLogout}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLogout();
+                }}
                 className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors cursor-pointer shrink-0 ml-1"
                 title="Sair do sistema (Logout)"
                 aria-label="Sair do sistema"
