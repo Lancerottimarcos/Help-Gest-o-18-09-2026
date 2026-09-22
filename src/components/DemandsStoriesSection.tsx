@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -209,28 +209,31 @@ export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedStoryIndex, setSelectedStoryIndex] = useState(0);
 
-  // Merge clients from props with localStorage clients to ensure we never miss an uploaded photo
+  // Keep clients in sync directly from props with fallback to localStorage
   const allKnownClients = useMemo(() => {
     const clientMap = new Map<string, Client>();
+
+    // 1. Live props always take absolute precedence
+    (clients || []).forEach((c) => {
+      if (c && c.id) {
+        clientMap.set(c.id, c);
+      }
+    });
+
+    // 2. Extra offline clients fallback (do not overwrite live props)
     try {
       const saved = localStorage.getItem('agency_clients');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           parsed.forEach((c) => {
-            if (c && (c.id || c.name)) {
-              clientMap.set(c.id || c.name, c);
+            if (c && c.id && !clientMap.has(c.id)) {
+              clientMap.set(c.id, c);
             }
           });
         }
       }
     } catch {}
-
-    (clients || []).forEach((c) => {
-      if (c && (c.id || c.name)) {
-        clientMap.set(c.id || c.name, c);
-      }
-    });
 
     return Array.from(clientMap.values());
   }, [clients]);
@@ -255,7 +258,7 @@ export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
 
     // Map existing registered clients first
     allKnownClients.forEach((c) => {
-      const displayName = c.companyName || c.name;
+      const displayName = (c.name || c.companyName || 'Cliente').trim();
       const avatar = (c.avatar && c.avatar.trim())
         ? c.avatar.trim()
         : getAvatarForClient(displayName, c.avatar, allKnownClients);
@@ -278,14 +281,22 @@ export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
     // Match all ACTIVE demands to their clients or create dynamic client entries
     activeDemands.forEach((demand) => {
       const rawClient = (demand.client || '').trim();
-      if (!rawClient) return;
+      if (!rawClient && !demand.clientId) return;
 
-      const matchedClient = findRegisteredClient(rawClient, allKnownClients);
+      // 1. Match by demand.clientId if available
+      let matchedClient: Client | undefined = undefined;
+      if (demand.clientId) {
+        matchedClient = allKnownClients.find((c) => c.id === demand.clientId);
+      }
+      // 2. Match by registered client search
+      if (!matchedClient && rawClient) {
+        matchedClient = findRegisteredClient(rawClient, allKnownClients);
+      }
 
       if (matchedClient && clientDemandsMap.has(matchedClient.id)) {
         clientDemandsMap.get(matchedClient.id)!.demands.push(demand);
       } else if (matchedClient) {
-        const displayName = matchedClient.companyName || matchedClient.name;
+        const displayName = (matchedClient.name || matchedClient.companyName || rawClient).trim();
         const avatar = (matchedClient.avatar && matchedClient.avatar.trim())
           ? matchedClient.avatar.trim()
           : getAvatarForClient(displayName, matchedClient.avatar, allKnownClients);
@@ -370,20 +381,20 @@ export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
   }, [allKnownClients, demands, viewedSignatures]);
 
   // Scroll checking
-  const updateScrollButtons = () => {
+  const updateScrollButtons = useCallback(() => {
     if (!scrollContainerRef.current) return;
     const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
     setCanScrollLeft(scrollLeft > 10);
     setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
-  };
+  }, []);
 
   useEffect(() => {
     updateScrollButtons();
     window.addEventListener('resize', updateScrollButtons);
     return () => window.removeEventListener('resize', updateScrollButtons);
-  }, [storyClients]);
+  }, [storyClients.length, updateScrollButtons]);
 
-  const handleScroll = (direction: 'left' | 'right') => {
+  const handleScroll = useCallback((direction: 'left' | 'right') => {
     if (!scrollContainerRef.current) return;
     const scrollAmount = 280;
     scrollContainerRef.current.scrollBy({
@@ -391,15 +402,15 @@ export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
       behavior: 'smooth',
     });
     setTimeout(updateScrollButtons, 350);
-  };
+  }, [updateScrollButtons]);
 
-  const handleOpenStory = (index: number) => {
+  const handleOpenStory = useCallback((index: number) => {
     setSelectedStoryIndex(index);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  // Mark client as viewed by storing current signature
-  const handleMarkAsViewed = (clientId: string) => {
+  // Mark client as viewed by storing current signature (guards against redundant re-renders)
+  const handleMarkAsViewed = useCallback((clientId: string) => {
     const target = storyClients.find((c) => c.id === clientId);
     if (!target) return;
 
@@ -407,26 +418,35 @@ export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
     const currentSignature = `${sortedDemands.length}_${sortedDemands.map((d) => `${d.id}-${d.columnId}`).join('_')}`;
 
     setViewedSignatures((prev) => {
+      if (prev[clientId] === currentSignature) {
+        return prev; // Do not trigger state update if signature is unchanged
+      }
       const updated = { ...prev, [clientId]: currentSignature };
       try {
         localStorage.setItem(STORAGE_VIEWED_SIGNATURES_KEY, JSON.stringify(updated));
       } catch {}
       return updated;
     });
-  };
+  }, [storyClients]);
 
   // Mark all as viewed
-  const handleMarkAllAsViewed = () => {
+  const handleMarkAllAsViewed = useCallback(() => {
     const updated: Record<string, string> = {};
     storyClients.forEach((c) => {
       const sorted = [...c.demands].sort((a, b) => a.id.localeCompare(b.id));
       updated[c.id] = `${sorted.length}_${sorted.map((d) => `${d.id}-${d.columnId}`).join('_')}`;
     });
-    setViewedSignatures(updated);
-    try {
-      localStorage.setItem(STORAGE_VIEWED_SIGNATURES_KEY, JSON.stringify(updated));
-    } catch {}
-  };
+    setViewedSignatures((prev) => {
+      const isIdentical = Object.keys(updated).every((key) => prev[key] === updated[key]);
+      if (isIdentical && Object.keys(updated).length === Object.keys(prev).length) {
+        return prev;
+      }
+      try {
+        localStorage.setItem(STORAGE_VIEWED_SIGNATURES_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, [storyClients]);
 
   return (
     <section 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   X, 
   ChevronLeft, 
@@ -90,13 +90,20 @@ export const DemandStoryModal: React.FC<DemandStoryModalProps> = ({
   const currentClient = storyClients[clientIndex];
   const clientDemands = currentClient?.demands || [];
   const currentDemand = clientDemands[demandIndex] || null;
+  const currentClientId = currentClient?.id;
+  const lastMarkedClientRef = useRef<string | null>(null);
 
-  // Mark client as viewed when opened
+  // Mark client as viewed once when opened or when switching client
   useEffect(() => {
-    if (isOpen && currentClient && onMarkAsViewed) {
-      onMarkAsViewed(currentClient.id);
+    if (isOpen && currentClientId && onMarkAsViewed) {
+      if (lastMarkedClientRef.current !== currentClientId) {
+        lastMarkedClientRef.current = currentClientId;
+        onMarkAsViewed(currentClientId);
+      }
+    } else if (!isOpen) {
+      lastMarkedClientRef.current = null;
     }
-  }, [isOpen, currentClient, onMarkAsViewed]);
+  }, [isOpen, currentClientId, onMarkAsViewed]);
 
   const goToNextStory = useCallback(() => {
     if (!currentClient) return;
@@ -136,8 +143,8 @@ export const DemandStoryModal: React.FC<DemandStoryModalProps> = ({
 
     const timer = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 100) {
-          goToNextStory();
+        if (prev + step >= 100) {
+          setTimeout(() => goToNextStory(), 0);
           return 0;
         }
         return prev + step;

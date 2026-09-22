@@ -12,7 +12,6 @@ import {
   Sparkles,
   ExternalLink,
   ChevronRight,
-  Layers,
   ArrowRight,
   Calendar,
   Plus,
@@ -37,7 +36,6 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { Client, DemandItem, PageId, ClientActivity, InicioSectionId, InicioSectionMeta, Invoice, TeamMember } from '../types';
-import { DemandsStatusDoughnutChart } from '../components/DemandsStatusDoughnutChart';
 import { ClientLocationMap } from '../components/ClientLocationMap';
 import { ClientBirthdaysSection } from '../components/ClientBirthdaysSection';
 import { DashboardCustomizerModal, DASHBOARD_PRESETS, DashboardCustomizerPreset } from '../components/DashboardCustomizerModal';
@@ -754,76 +752,6 @@ export const InicioView: React.FC<InicioViewProps> = ({
                 </div>
 
                 {/* Controles e Botão Principal */}
-                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('demandas')}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#142142] hover:bg-[#1a2b54] text-white dark:bg-white dark:text-[#142142] dark:hover:bg-slate-100 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs"
-                  >
-                    <Kanban size={13} />
-                    <span>Abrir Kanban</span>
-                    <ChevronRight size={13} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Barra Integrada de Indicadores (Métricas Rápidas de Cronograma) */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-slate-800/80 bg-slate-50/60 dark:bg-slate-900/40 rounded-xl sm:rounded-2xl border border-slate-200/60 dark:border-slate-800/70 my-4 p-2 sm:p-3">
-                <div className="p-2 sm:px-4">
-                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Demandas Atrasadas
-                  </div>
-                  <div className={`text-xl font-bold mt-0.5 ${
-                    timelineMetrics.overdueCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
-                  }`}>
-                    {timelineMetrics.overdueCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">demandas</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                    {timelineMetrics.overdueCount > 0 
-                      ? (timelineMetrics.criticalOverdue > 0 ? `${timelineMetrics.criticalOverdue} críticas (≥3d)` : 'Atenção imediata') 
-                      : 'Nenhum atraso'}
-                  </div>
-                </div>
-
-                <div className="p-2 sm:px-4">
-                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Vencem Hoje
-                  </div>
-                  <div className={`text-xl font-bold mt-0.5 ${
-                    timelineMetrics.todayCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'
-                  }`}>
-                    {timelineMetrics.todayCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">entregas</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                    {timelineMetrics.todayCount > 0 ? 'Prazo expira hoje' : 'Sem entregas para hoje'}
-                  </div>
-                </div>
-
-                <div className="p-2 sm:px-4">
-                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Próximas Entregas
-                  </div>
-                  <div className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-0.5">
-                    {timelineMetrics.upcomingCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">a vencer</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
-                    {timelineMetrics.nextUpcoming ? `Próxima: ${timelineMetrics.nextUpcoming.dueDateFormatted}` : 'Próximos dias'}
-                  </div>
-                </div>
-
-                <div className="p-2 sm:px-4">
-                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Distribuição no Fluxo
-                  </div>
-                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-1 flex items-center gap-2">
-                    <span className="text-purple-600 dark:text-purple-400 font-bold">{timelineMetrics.inProduction} produção</span>
-                    <span className="text-slate-300 dark:text-slate-600">•</span>
-                    <span className="text-amber-600 dark:text-amber-400 font-bold">{timelineMetrics.inApproval} aprovação</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                    Total: {timelineMetrics.total} monitoradas
-                  </div>
-                </div>
               </div>
 
               {/* Filtros de Triagem (Pills Clean) */}
@@ -1082,55 +1010,8 @@ export const InicioView: React.FC<InicioViewProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-              {/* 1. Total Active Demands */}
-              <div 
-                id="summary-card-active-demands"
-                onClick={() => onNavigate('demandas')}
-                className="bg-white dark:bg-[#0f172a] p-5 sm:p-6 rounded-[26px] border border-slate-200/90 dark:border-slate-800 shadow-xs hover:border-[#fab518] hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between group"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-[#fab518] flex items-center justify-center shadow-2xs group-hover:scale-105 transition-transform border border-amber-200/60 dark:border-amber-900/40">
-                      <Layers size={22} />
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900/50">
-                      <Clock size={12} />
-                      <span>Em andamento</span>
-                    </span>
-                  </div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                    Total de Demandas Ativas
-                  </span>
-                  <div className="text-3xl sm:text-4xl font-black text-[#142142] dark:text-white mt-1.5 tracking-tight">
-                    {activeDemands.length}
-                    <span className="text-xs font-semibold text-slate-400 ml-2">peças em fluxo</span>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800/80">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Status</p>
-                      <p className="font-semibold text-slate-700 dark:text-slate-200">
-                        {inProduction.length} produção
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Aprovação</p>
-                      <p className="font-semibold text-amber-600 dark:text-amber-400">
-                        {pendingApprovals.length} pendentes
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center text-xs font-bold text-[#142142] dark:text-slate-200 group-hover:text-[#fab518] dark:group-hover:text-[#fab518] transition-colors">
-                    <span>Visualizar no Kanban</span>
-                    <ChevronRight size={14} className="ml-1 group-hover:translate-x-1 transition-transform text-[#fab518]" />
-                  </div>
-                </div>
-              </div>
-
-              {/* 2. Monthly Recurring Revenue (MRR) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+              {/* 1. Monthly Recurring Revenue (MRR) */}
               <div 
                 id="summary-card-mrr"
                 onClick={() => onNavigate('financeiro')}
@@ -1248,136 +1129,97 @@ export const InicioView: React.FC<InicioViewProps> = ({
 
       case 'prioridades':
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Coluna 1: Atividade de Produção & Status */}
-            <div className="lg:col-span-7 xl:col-span-8">
-              <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs hover:shadow-sm transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3.5 mb-4">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center border border-purple-100 dark:border-purple-900/50">
-                        <Kanban size={17} />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-black text-[#142142] dark:text-white tracking-tight">
-                          Atividade de Produção
-                        </h4>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                          Fluxo ativo no Kanban
-                        </p>
-                      </div>
-                    </div>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/50">
-                      <TrendingUp size={12} />
-                      <span>+15% no mês</span>
-                    </span>
-                  </div>
-
-                  <div className="pt-1">
-                    <DemandsStatusDoughnutChart
-                      demands={demands}
-                      onNavigate={onNavigate}
-                    />
-                  </div>
-                </div>
-              </div>
+          <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs hover:shadow-sm transition-all space-y-3.5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3">
+              <h3 className="text-sm font-black text-[#142142] dark:text-white tracking-tight">
+                Acesso Rápido
+              </h3>
+              <button
+                type="button"
+                onClick={onOpenNewDemandModal}
+                className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-[#fab518] hover:text-[#142142] flex items-center justify-center transition-colors cursor-pointer"
+                title="Criar Demanda Rápida"
+              >
+                <Plus size={15} />
+              </button>
             </div>
 
-            {/* Coluna 2: Acesso Rápido */}
-            <div className="lg:col-span-5 xl:col-span-4">
-              <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs hover:shadow-sm transition-all space-y-3.5">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3">
-                  <h3 className="text-sm font-black text-[#142142] dark:text-white tracking-tight">
-                    Acesso Rápido
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={onOpenNewDemandModal}
-                    className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-[#fab518] hover:text-[#142142] flex items-center justify-center transition-colors cursor-pointer"
-                    title="Criar Demanda Rápida"
-                  >
-                    <Plus size={15} />
-                  </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <button
+                type="button"
+                onClick={onOpenNewDemandModal}
+                className="w-full text-left p-2.5 sm:p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-950/40 transition-colors border border-amber-200/60 dark:border-amber-900/40 flex items-center justify-between cursor-pointer group"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-[#fab518] text-[#142142] flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                    <Plus size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-[#142142] dark:text-white truncate">Criar Nova Demanda</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Post, Carrossel ou Campanha</p>
+                  </div>
                 </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800 shrink-0">
+                  Atalho
+                </span>
+              </button>
 
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={onOpenNewDemandModal}
-                    className="w-full text-left p-2.5 sm:p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-950/40 transition-colors border border-amber-200/60 dark:border-amber-900/40 flex items-center justify-between cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-[#fab518] text-[#142142] flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                        <Plus size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#142142] dark:text-white truncate">Criar Nova Demanda</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Post, Carrossel ou Campanha</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800 shrink-0">
-                      Atalho
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('calendario')}
-                    className="w-full text-left p-2.5 sm:p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0">
-                        <Calendar size={15} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#142142] dark:text-white truncate">Datas Comemorativas</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Feriados e ideias de posts</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
-                      2026
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('orcamentos')}
-                    className="w-full text-left p-2.5 sm:p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0">
-                        <FileSpreadsheet size={15} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#142142] dark:text-white truncate">Novo Orçamento</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Proposta e contrato comercial</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
-                      Comercial
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('clientes')}
-                    className="w-full text-left p-2.5 sm:p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
-                        <UserPlus size={15} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#142142] dark:text-white truncate">Cadastrar Cliente</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Contatos, redes e acessos</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
-                      Base
-                    </span>
-                  </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('calendario')}
+                className="w-full text-left p-2.5 sm:p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between cursor-pointer group"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0">
+                    <Calendar size={15} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-[#142142] dark:text-white truncate">Datas Comemorativas</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Feriados e ideias de posts</p>
+                  </div>
                 </div>
-              </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                  2026
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onNavigate('orcamentos')}
+                className="w-full text-left p-2.5 sm:p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between cursor-pointer group"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0">
+                    <FileSpreadsheet size={15} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-[#142142] dark:text-white truncate">Novo Orçamento</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Proposta e contrato comercial</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
+                  Comercial
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onNavigate('clientes')}
+                className="w-full text-left p-2.5 sm:p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between cursor-pointer group"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                    <UserPlus size={15} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-[#142142] dark:text-white truncate">Cadastrar Cliente</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Contatos, redes e acessos</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                  Base
+                </span>
+              </button>
             </div>
           </div>
         );

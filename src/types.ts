@@ -49,6 +49,7 @@ export interface DemandAttachment {
 export interface DemandItem {
   id: string;
   title: string;
+  clientId?: string;
   client: string;
   clientProject?: string;
   description?: string;

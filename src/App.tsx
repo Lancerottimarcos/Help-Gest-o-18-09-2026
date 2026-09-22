@@ -40,6 +40,7 @@ import {
 import { supabaseService } from './services/supabaseService';
 import { syncSupabaseCredentialsWithServer } from './lib/supabaseClient';
 import { serverDbService } from './services/serverDbService';
+import { findRegisteredClient } from './components/DemandsStoriesSection';
 
 export interface LayoutProps {
   children?: React.ReactNode;
@@ -988,9 +989,89 @@ export function Layout({ children, onLogout }: LayoutProps) {
   };
 
   const handleUpdateClient = (updatedClient: Client) => {
-    setClients((prev) =>
-      prev.map((c) => (c.id === updatedClient.id ? updatedClient : c))
-    );
+    const prevClient = clients.find((c) => c.id === updatedClient.id);
+    const oldName = prevClient?.name?.trim();
+    const oldCompanyName = prevClient?.companyName?.trim();
+    const newDisplayName = (updatedClient.name || updatedClient.companyName || '').trim();
+
+    // 1. Update clients list
+    const newClients = clients.map((c) => (c.id === updatedClient.id ? updatedClient : c));
+    setClients(newClients);
+    try {
+      localStorage.setItem('agency_clients', JSON.stringify(newClients));
+    } catch {}
+    if (isServerDbLoadedRef.current) {
+      serverDbService.saveDatabase({ clients: newClients });
+    }
+
+    // 2. Cascade update all associated demands
+    setDemands((prevDemands) => {
+      let changed = false;
+      const updatedDemands = prevDemands.map((demand) => {
+        const matchesById = demand.clientId && demand.clientId === updatedClient.id;
+        const demandClientTrimmed = (demand.client || '').trim().toLowerCase();
+        const matchesByOldName = Boolean(oldName && demandClientTrimmed === oldName.toLowerCase());
+        const matchesByOldCompany = Boolean(oldCompanyName && demandClientTrimmed === oldCompanyName.toLowerCase());
+
+        const clientCandidates = prevClient ? [prevClient, updatedClient] : [updatedClient];
+        const matchesByFuzzy = Boolean(findRegisteredClient(demand.client, clientCandidates));
+
+        if (matchesById || matchesByOldName || matchesByOldCompany || matchesByFuzzy) {
+          changed = true;
+          return {
+            ...demand,
+            clientId: updatedClient.id,
+            client: newDisplayName,
+            clientProject: demand.clientProject && (
+              (oldName && demand.clientProject.toLowerCase().includes(oldName.toLowerCase())) ||
+              (oldCompanyName && demand.clientProject.toLowerCase().includes(oldCompanyName.toLowerCase())) ||
+              (prevClient?.name && demand.clientProject.toLowerCase().includes(prevClient.name.toLowerCase()))
+            )
+              ? newDisplayName
+              : demand.clientProject,
+          };
+        }
+        return demand;
+      });
+
+      if (changed) {
+        try {
+          localStorage.setItem('agency_demands', JSON.stringify(updatedDemands));
+        } catch {}
+        if (isServerDbLoadedRef.current) {
+          serverDbService.saveDatabase({ demands: updatedDemands });
+        }
+      }
+      return changed ? updatedDemands : prevDemands;
+    });
+
+    // 3. Cascade update proposals & invoices
+    setProposals((prevProposals) => {
+      let changed = false;
+      const updated = prevProposals.map((prop) => {
+        const propClientTrimmed = (prop.clientName || '').trim().toLowerCase();
+        if ((oldName && propClientTrimmed === oldName.toLowerCase()) || (oldCompanyName && propClientTrimmed === oldCompanyName.toLowerCase())) {
+          changed = true;
+          return { ...prop, clientName: newDisplayName };
+        }
+        return prop;
+      });
+      return changed ? updated : prevProposals;
+    });
+
+    setInvoices((prevInvoices) => {
+      let changed = false;
+      const updated = prevInvoices.map((inv) => {
+        const invClientTrimmed = (inv.clientName || '').trim().toLowerCase();
+        if ((oldName && invClientTrimmed === oldName.toLowerCase()) || (oldCompanyName && invClientTrimmed === oldCompanyName.toLowerCase())) {
+          changed = true;
+          return { ...inv, clientName: newDisplayName };
+        }
+        return inv;
+      });
+      return changed ? updated : prevInvoices;
+    });
+
     supabaseService.upsertClient(updatedClient);
   };
 

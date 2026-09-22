@@ -83,11 +83,17 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
       return false;
     });
 
+    const matchingClient = clients.find(
+      (c) => c.name === selectedClient || c.companyName === selectedClient || c.id === selectedClient
+    );
+    const resolvedClientName = matchingClient ? (matchingClient.name || matchingClient.companyName || selectedClient) : selectedClient;
+
     const newDemand: DemandItem = {
       id: `DEM-${Math.floor(100 + Math.random() * 900)}`,
       title: sanitizedTitle,
-      client: selectedClient,
-      clientProject: selectedClient,
+      clientId: matchingClient?.id,
+      client: resolvedClientName,
+      clientProject: resolvedClientName,
       description: sanitizedDesc,
       type,
       serviceCategory: category,
