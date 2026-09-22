@@ -818,36 +818,21 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                {/* Valor */}
-                <div>
-                  <label className="block text-xs font-bold text-[#142142] dark:text-slate-200 mb-1.5">
-                    Valor (R$) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Ex: 3500.00"
-                    value={newValue}
-                    onChange={(e) => setNewValue(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#fab518]"
-                    required
-                  />
-                </div>
-
-                {/* Vencimento */}
-                <div>
-                  <label className="block text-xs font-bold text-[#142142] dark:text-slate-200 mb-1.5">
-                    Data de Vencimento
-                  </label>
-                  <input
-                    type="date"
-                    value={newDueDate}
-                    onChange={(e) => setNewDueDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#fab518]"
-                  />
-                </div>
+              {/* Valor */}
+              <div>
+                <label className="block text-xs font-bold text-[#142142] dark:text-slate-200 mb-1.5">
+                  Valor (R$) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Ex: 3500.00"
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#fab518]"
+                  required
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

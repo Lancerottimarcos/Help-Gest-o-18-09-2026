@@ -40,33 +40,33 @@ export const DASHBOARD_PRESETS: DashboardCustomizerPreset[] = [
   {
     id: 'padrao',
     name: 'Completo (Padrão)',
-    badge: '6 seções',
-    description: 'Todas as seções visíveis no fluxo balanceado',
-    order: ['welcome', 'demandas_atrasadas', 'indicadores', 'prioridades', 'aniversariantes', 'mapa'],
+    badge: '7 seções',
+    description: 'Todas as seções visíveis no fluxo balanceado com stories de demandas',
+    order: ['welcome', 'demandas_stories', 'demandas_atrasadas', 'indicadores', 'prioridades', 'aniversariantes', 'mapa'],
     hidden: [],
   },
   {
     id: 'operacional',
     name: 'Foco Operacional',
-    badge: '4 seções',
-    description: 'Prioriza atrasos, indicadores, prazos de kanban e mapa',
-    order: ['demandas_atrasadas', 'indicadores', 'prioridades', 'welcome', 'aniversariantes', 'mapa'],
+    badge: '5 seções',
+    description: 'Prioriza stories de atualizações, atrasos, indicadores e kanban',
+    order: ['demandas_stories', 'demandas_atrasadas', 'indicadores', 'prioridades', 'welcome', 'aniversariantes', 'mapa'],
     hidden: ['aniversariantes', 'mapa'],
   },
   {
     id: 'crm',
     name: 'Gestão & Clientes',
-    badge: '5 seções',
-    description: 'Foco em relacionamento, aniversariantes e mapa de clientes',
-    order: ['welcome', 'demandas_atrasadas', 'indicadores', 'aniversariantes', 'mapa', 'prioridades'],
+    badge: '6 seções',
+    description: 'Foco em relacionamento, stories das contas, aniversariantes e mapa',
+    order: ['welcome', 'demandas_stories', 'demandas_atrasadas', 'indicadores', 'aniversariantes', 'mapa', 'prioridades'],
     hidden: ['prioridades'],
   },
   {
     id: 'essencial',
     name: 'Visão Compacta',
-    badge: '3 seções',
-    description: 'Apenas boas-vindas, alertas de atraso, KPIs e status prioritários',
-    order: ['welcome', 'demandas_atrasadas', 'indicadores', 'prioridades', 'aniversariantes', 'mapa'],
+    badge: '4 seções',
+    description: 'Apenas boas-vindas, stories de atualizações, alertas de atraso e KPIs',
+    order: ['welcome', 'demandas_stories', 'demandas_atrasadas', 'indicadores', 'prioridades', 'aniversariantes', 'mapa'],
     hidden: ['aniversariantes', 'mapa'],
   },
 ];
@@ -170,6 +170,8 @@ export const DashboardCustomizerModal: React.FC<DashboardCustomizerModalProps> =
     switch (id) {
       case 'welcome':
         return <Calendar size={18} className="text-[#fab518]" />;
+      case 'demandas_stories':
+        return <Sparkles size={18} className="text-[#e4405f]" />;
       case 'demandas_atrasadas':
         return <AlertTriangle size={18} className="text-rose-500" />;
       case 'indicadores':

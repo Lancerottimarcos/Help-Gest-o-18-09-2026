@@ -129,7 +129,35 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
   const [priority, setPriority] = useState<Priority>(demand?.priority || 'media');
   const [dueDate, setDueDate] = useState(demand?.dueDate || '');
   const [assigneeName, setAssigneeName] = useState(demand?.assignee?.name || '');
-  const [assigneeAvatar, setAssigneeAvatar] = useState(demand?.assignee?.avatar || '');
+  const [assigneeAvatar, setAssigneeAvatar] = useState(() => {
+    const rawName = demand?.assignee?.name || '';
+    const cleanName = rawName.trim().toLowerCase();
+    const firstName = cleanName.split(' ')[0];
+    const matched = activeTeamMembers.find((m) => {
+      const mName = (m.name || '').trim().toLowerCase();
+      const mFirst = mName.split(' ')[0];
+      const mUser = (m.username || '').trim().toLowerCase();
+      return mName === cleanName || mFirst === firstName || (mUser && mUser === cleanName);
+    });
+    return matched?.avatar || demand?.assignee?.avatar || '';
+  });
+
+  // Resolve dynamically the most up-to-date avatar for the selected assignee from activeTeamMembers
+  const resolvedAssigneeAvatar = useMemo(() => {
+    if (!assigneeName) return '';
+    const cleanName = assigneeName.trim().toLowerCase();
+    const firstName = cleanName.split(' ')[0];
+    const matched = activeTeamMembers.find((m) => {
+      const mName = (m.name || '').trim().toLowerCase();
+      const mFirst = mName.split(' ')[0];
+      const mUser = (m.username || '').trim().toLowerCase();
+      return mName === cleanName || mFirst === firstName || (mUser && mUser === cleanName);
+    });
+    if (matched?.avatar) {
+      return matched.avatar;
+    }
+    return assigneeAvatar || '';
+  }, [assigneeName, activeTeamMembers, assigneeAvatar]);
 
   // Attachments state (files, images, videos up to 200MB)
   const [attachments, setAttachments] = useState<DemandAttachment[]>(
@@ -191,8 +219,15 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
       setDueDate(demand.dueDate || '');
       const initialAssigneeName = demand.assignee?.name || '';
       setAssigneeName(initialAssigneeName);
-      const matchedMember = activeTeamMembers.find((m) => m.name === initialAssigneeName);
-      setAssigneeAvatar(demand.assignee?.avatar || matchedMember?.avatar || '');
+      const cleanName = initialAssigneeName.trim().toLowerCase();
+      const firstName = cleanName.split(' ')[0];
+      const matchedMember = activeTeamMembers.find((m) => {
+        const mName = (m.name || '').trim().toLowerCase();
+        const mFirst = mName.split(' ')[0];
+        const mUser = (m.username || '').trim().toLowerCase();
+        return mName === cleanName || mFirst === firstName || (mUser && mUser === cleanName);
+      });
+      setAssigneeAvatar(matchedMember?.avatar || demand.assignee?.avatar || '');
       
       const initialAttachments = demand.attachments && demand.attachments.length > 0
         ? demand.attachments
@@ -343,7 +378,7 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
       thumbnail: effectiveThumbnail,
       assignee: {
         name: assigneeName,
-        avatar: assigneeAvatar,
+        avatar: resolvedAssigneeAvatar || assigneeAvatar,
       },
       checklistTotal: checklist.length,
       checklistCompleted: completedCount,
@@ -535,8 +570,8 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
                   </label>
                   <div className="relative flex items-center">
                     <div className="absolute left-3 pointer-events-none flex items-center">
-                      {assigneeAvatar ? (
-                        <img src={assigneeAvatar} alt="" className="w-5 h-5 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700" />
+                      {resolvedAssigneeAvatar ? (
+                        <img src={resolvedAssigneeAvatar} alt="" className="w-5 h-5 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700" />
                       ) : (
                         <div className="w-5 h-5 rounded-full bg-[#142142] text-[#fab518] text-[9px] font-bold flex items-center justify-center">
                           {assigneeName.charAt(0) || 'U'}
@@ -549,9 +584,18 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
                       onChange={(e) => {
                         const name = e.target.value;
                         setAssigneeName(name);
-                        const matched = activeTeamMembers.find((m) => m.name === name);
-                        if (matched) {
-                          setAssigneeAvatar(matched.avatar || '');
+                        const clean = name.trim().toLowerCase();
+                        const first = clean.split(' ')[0];
+                        const matched = activeTeamMembers.find((m) => {
+                          const mName = (m.name || '').trim().toLowerCase();
+                          const mFirst = mName.split(' ')[0];
+                          const mUser = (m.username || '').trim().toLowerCase();
+                          return mName === clean || mFirst === first || (mUser && mUser === clean);
+                        });
+                        if (matched?.avatar) {
+                          setAssigneeAvatar(matched.avatar);
+                        } else if (matched) {
+                          setAssigneeAvatar('');
                         }
                       }}
                       className="w-full bg-slate-50/70 dark:bg-slate-800/80 hover:bg-slate-100/60 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 pl-10 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer shadow-2xs"

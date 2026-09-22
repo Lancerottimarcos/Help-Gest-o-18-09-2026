@@ -1051,6 +1051,40 @@ export function Layout({ children, onLogout }: LayoutProps) {
       return updated;
     });
 
+    // Sincroniza as demandas atribuídas a este colaborador para atualizar foto e nome
+    if (updatedMember.avatar || updatedMember.name) {
+      setDemands((prevDemands) => {
+        let hasChanges = false;
+        const updatedDemands = prevDemands.map((d) => {
+          const isAssigned =
+            d.assignee?.name?.trim().toLowerCase() === updatedMember.name?.trim().toLowerCase() ||
+            d.assignee?.name?.split(' ')[0]?.toLowerCase() === updatedMember.name?.split(' ')[0]?.toLowerCase() ||
+            (updatedMember.username && d.assignee?.name?.toLowerCase() === updatedMember.username.toLowerCase());
+
+          if (isAssigned && (d.assignee.avatar !== updatedMember.avatar || d.assignee.name !== updatedMember.name)) {
+            hasChanges = true;
+            return {
+              ...d,
+              assignee: {
+                ...d.assignee,
+                name: updatedMember.name || d.assignee.name,
+                avatar: updatedMember.avatar || d.assignee.avatar,
+              },
+            };
+          }
+          return d;
+        });
+
+        if (hasChanges) {
+          try {
+            localStorage.setItem('agency_demands_v2', JSON.stringify(updatedDemands));
+          } catch {}
+          serverDbService.saveDatabase({ demands: updatedDemands }, true);
+        }
+        return updatedDemands;
+      });
+    }
+
     // Se o membro atualizado for Marcos Lancerotti (Dono da Agência), sincroniza a Senha Mestra e o Perfil Atual
     if (isOwnerOrMarcos(updatedMember)) {
       if (updatedMember.password) {
@@ -1121,6 +1155,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
             onNavigate={setCurrentPage}
             demands={demands}
             clients={clients}
+            teamMembers={teamMembers}
             invoices={invoices}
             activities={activities}
             onOpenNewDemandModal={() => setIsNewDemandModalOpen(true)}

@@ -36,15 +36,17 @@ import {
   ArrowUpDown,
   ShieldAlert
 } from 'lucide-react';
-import { Client, DemandItem, PageId, ClientActivity, InicioSectionId, InicioSectionMeta, Invoice } from '../types';
+import { Client, DemandItem, PageId, ClientActivity, InicioSectionId, InicioSectionMeta, Invoice, TeamMember } from '../types';
 import { DemandsStatusDoughnutChart } from '../components/DemandsStatusDoughnutChart';
 import { ClientLocationMap } from '../components/ClientLocationMap';
 import { ClientBirthdaysSection } from '../components/ClientBirthdaysSection';
 import { DashboardCustomizerModal, DASHBOARD_PRESETS, DashboardCustomizerPreset } from '../components/DashboardCustomizerModal';
+import { DemandsStoriesSection } from '../components/DemandsStoriesSection';
 import { initialRecentActivities, currentUser } from '../data/mockData';
 
 const DEFAULT_SECTIONS: InicioSectionId[] = [
   'welcome',
+  'demandas_stories',
   'demandas_atrasadas',
   'indicadores',
   'prioridades',
@@ -59,6 +61,13 @@ const SECTIONS_META: Record<InicioSectionId, InicioSectionMeta> = {
     shortLabel: 'Boas-vindas',
     description: 'Data do dia, saudação personalizada e status',
     iconName: 'calendar',
+  },
+  demandas_stories: {
+    id: 'demandas_stories',
+    title: 'Atualizações das Demandas (Stories)',
+    shortLabel: 'Stories das Contas',
+    description: 'Carrossel estilo Stories do Instagram com novidades e movimentações das contas',
+    iconName: 'sparkles',
   },
   demandas_atrasadas: {
     id: 'demandas_atrasadas',
@@ -97,8 +106,8 @@ const SECTIONS_META: Record<InicioSectionId, InicioSectionMeta> = {
   },
 };
 
-const STORAGE_ORDER_KEY = 'ideias_digitais_inicio_sections_order_v3';
-const STORAGE_HIDDEN_KEY = 'ideias_digitais_inicio_sections_hidden_v3';
+const STORAGE_ORDER_KEY = 'ideias_digitais_inicio_sections_order_v4';
+const STORAGE_HIDDEN_KEY = 'ideias_digitais_inicio_sections_hidden_v4';
 
 const loadSavedOrder = (): InicioSectionId[] => {
   try {
@@ -107,6 +116,14 @@ const loadSavedOrder = (): InicioSectionId[] => {
     const parsed = JSON.parse(saved) as InicioSectionId[];
     if (Array.isArray(parsed) && parsed.length > 0) {
       const validSections = parsed.filter((id) => DEFAULT_SECTIONS.includes(id));
+      if (!validSections.includes('demandas_stories')) {
+        const welcomeIndex = validSections.indexOf('welcome');
+        if (welcomeIndex !== -1) {
+          validSections.splice(welcomeIndex + 1, 0, 'demandas_stories');
+        } else {
+          validSections.unshift('demandas_stories');
+        }
+      }
       const missingSections = DEFAULT_SECTIONS.filter((id) => !validSections.includes(id));
       return [...validSections, ...missingSections];
     }
@@ -285,6 +302,7 @@ interface InicioViewProps {
   onNavigate: (page: PageId) => void;
   demands: DemandItem[];
   clients: Client[];
+  teamMembers?: TeamMember[];
   invoices?: Invoice[];
   activities?: ClientActivity[];
   onOpenNewDemandModal: () => void;
@@ -296,12 +314,31 @@ export const InicioView: React.FC<InicioViewProps> = ({
   onNavigate,
   demands,
   clients,
+  teamMembers = [],
   invoices = [],
   activities = initialRecentActivities,
   onOpenNewDemandModal,
   onSelectDemand,
   onSelectClient,
 }) => {
+  // Sincronização dinâmica de responsável com a Equipe
+  const getAssigneeInfo = (assignee?: { name?: string; avatar?: string }) => {
+    const rawName = assignee?.name || '';
+    const rawAvatar = assignee?.avatar || '';
+    if (!rawName) {
+      return { name: 'Não atribuído', avatar: '' };
+    }
+    const matched = teamMembers.find(
+      (m) =>
+        m.name?.trim().toLowerCase() === rawName.trim().toLowerCase() ||
+        m.name?.split(' ')[0]?.toLowerCase() === rawName.split(' ')[0]?.toLowerCase() ||
+        (m.username && m.username.toLowerCase() === rawName.toLowerCase())
+    );
+    return {
+      name: matched?.name || rawName,
+      avatar: matched?.avatar || rawAvatar,
+    };
+  };
   // Reordering & Visibility state with automatic persistence
   const [sectionsOrder, setSectionsOrder] = useState<InicioSectionId[]>(loadSavedOrder);
   const [hiddenSections, setHiddenSections] = useState<InicioSectionId[]>(loadSavedHidden);
@@ -652,6 +689,16 @@ export const InicioView: React.FC<InicioViewProps> = ({
           </div>
         );
 
+      case 'demandas_stories':
+        return (
+          <DemandsStoriesSection
+            clients={clients}
+            demands={demands}
+            onSelectDemand={onSelectDemand}
+            onOpenNewDemandModal={onOpenNewDemandModal}
+          />
+        );
+
       case 'demandas_atrasadas': {
         if (timelineDemandsList.length === 0) {
           if (isReorderMode) {
@@ -912,9 +959,6 @@ export const InicioView: React.FC<InicioViewProps> = ({
                                 <span className={`w-1.5 h-1.5 rounded-full ${priorityMeta.dot}`} />
                                 {priorityMeta.label}
                               </span>
-                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700">
-                                {getColumnDisplayLabel(d.columnId)}
-                              </span>
                             </div>
                           </div>
 
@@ -954,22 +998,27 @@ export const InicioView: React.FC<InicioViewProps> = ({
 
                         {/* Linha inferior: Responsável + Link */}
                         <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 text-xs">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {d.assignee?.avatar ? (
-                              <img
-                                src={d.assignee.avatar}
-                                alt={d.assignee.name}
-                                className="w-5 h-5 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                              />
-                            ) : (
-                              <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-medium text-slate-600 dark:text-slate-400 shrink-0 border border-slate-200 dark:border-slate-700">
-                                {(d.assignee?.name || 'U').charAt(0)}
+                          {(() => {
+                            const assigneeInfo = getAssigneeInfo(d.assignee);
+                            return (
+                              <div className="flex items-center gap-2 min-w-0">
+                                {assigneeInfo.avatar ? (
+                                  <img
+                                    src={assigneeInfo.avatar}
+                                    alt={assigneeInfo.name}
+                                    className="w-5 h-5 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-medium text-slate-600 dark:text-slate-400 shrink-0 border border-slate-200 dark:border-slate-700">
+                                    {(assigneeInfo.name || 'U').charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <span className="text-[11px] font-normal text-slate-600 dark:text-slate-400 truncate max-w-[120px]">
+                                  {assigneeInfo.name}
+                                </span>
                               </div>
-                            )}
-                            <span className="text-[11px] font-normal text-slate-600 dark:text-slate-400 truncate max-w-[120px]">
-                              {d.assignee?.name || 'Não atribuído'}
-                            </span>
-                          </div>
+                            );
+                          })()}
 
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 dark:text-slate-300 group-hover:text-[#142142] dark:group-hover:text-blue-400 transition-colors">
                             <span>Ver demanda</span>

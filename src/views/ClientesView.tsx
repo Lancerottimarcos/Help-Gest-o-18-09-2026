@@ -25,11 +25,29 @@ import {
   CheckSquare,
   Square,
   RefreshCw,
-  Database
+  Database,
+  Upload,
+  Camera,
+  Image,
+  X,
+  Sparkles
 } from 'lucide-react';
 import { Client, DemandItem } from '../types';
 import { ClientDetailDrawer } from '../components/ClientDetailDrawer';
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
+
+export const PRESET_AVATARS = [
+  { label: 'Empresarial 1', url: 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=150&auto=format&fit=crop&q=80' },
+  { label: 'Profissional Masc 1', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80' },
+  { label: 'Profissional Fem 1', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' },
+  { label: 'Executivo Masc', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80' },
+  { label: 'Executiva Fem', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80' },
+  { label: 'Corporativo 2', url: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80' },
+  { label: 'Consultoria', url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80' },
+  { label: 'Agência Criativa', url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80' },
+];
+
+export const DEFAULT_CLIENT_AVATAR = 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=150&auto=format&fit=crop&q=80';
 
 export const CLIENT_COVER_COLORS = [
   { hex: '#142142', name: 'Azul Marinho', textClass: 'text-white' },
@@ -89,6 +107,11 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   // Mantidos
   const [newClientBirthDate, setNewClientBirthDate] = useState('');
   const [newClientCoverColor, setNewClientCoverColor] = useState('#142142');
+  
+  // Avatar states for New Client
+  const [newClientAvatar, setNewClientAvatar] = useState('');
+  const [newClientAvatarUrlInput, setNewClientAvatarUrlInput] = useState('');
+  const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
 
   // Edit Client States
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -111,6 +134,50 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   const [editCoverColor, setEditCoverColor] = useState('#142142');
   const [editStatus, setEditStatus] = useState<'Ativo' | 'Pausado' | 'Cancelado' | 'Em Onboarding'>('Ativo');
   const [editMonthlyFee, setEditMonthlyFee] = useState(0);
+  const [editAvatar, setEditAvatar] = useState('');
+  const [editAvatarUrlInput, setEditAvatarUrlInput] = useState('');
+  const [isDraggingEditAvatar, setIsDraggingEditAvatar] = useState(false);
+
+  // Helper for avatar file upload
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Por favor, selecione um arquivo de imagem válido (JPG, PNG, WebP).');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (isEdit) {
+          setEditAvatar(result);
+        } else {
+          setNewClientAvatar(result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAvatarFileDrop = (e: React.DragEvent<HTMLDivElement>, isEdit: boolean = false) => {
+    e.preventDefault();
+    if (isEdit) setIsDraggingEditAvatar(false);
+    else setIsDraggingAvatar(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (isEdit) {
+          setEditAvatar(result);
+        } else {
+          setNewClientAvatar(result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const filteredClients = clients.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -141,6 +208,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     setEditCoverColor(client.coverColor || '#142142');
     setEditStatus(client.status);
     setEditMonthlyFee(client.monthlyFee || 0);
+    setEditAvatar(client.avatar || '');
+    setEditAvatarUrlInput('');
   };
 
   const handleDeleteClient = (clientId: string) => {
@@ -188,6 +257,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
       address: formattedAddress,
       birthDate: editBirthDate || undefined,
       coverColor: editCoverColor,
+      avatar: editAvatar.trim() || editingClient.avatar || 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=120&auto=format&fit=crop&q=80',
       status: editStatus,
       monthlyFee: editingClient.monthlyFee || 0,
     };
@@ -214,6 +284,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
       ? `${newClientStreet}${newClientNumber ? `, ${newClientNumber}` : ''}${newClientComplement ? ` - ${newClientComplement}` : ''}${newClientNeighborhood ? `, ${newClientNeighborhood}` : ''}${newClientCity ? ` - ${newClientCity}/${newClientState}` : ''}${newClientCep ? ` (CEP: ${newClientCep})` : ''}`
       : undefined;
 
+    const defaultFallbackAvatar = 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=120&auto=format&fit=crop&q=80';
+
     const newClient: Client = {
       id: `cli-${Date.now()}`,
       personType: newPersonType,
@@ -236,7 +308,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
       address: formattedAddress,
       birthDate: newClientBirthDate || undefined,
       coverColor: newClientCoverColor,
-      avatar: 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=120&auto=format&fit=crop&q=80',
+      avatar: newClientAvatar.trim() || defaultFallbackAvatar,
       status: 'Ativo',
       monthlyFee: 0,
       services: ['Gestão de Redes Sociais', 'Tráfego Pago'],
@@ -263,6 +335,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     setNewClientState('');
     setNewClientBirthDate('');
     setNewClientCoverColor('#142142');
+    setNewClientAvatar('');
+    setNewClientAvatarUrlInput('');
   };
 
   const handleToggleSelectClient = (clientId: string, e?: React.MouseEvent) => {
@@ -622,6 +696,167 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
 
             {/* Modal Form Scrollable Body */}
             <form onSubmit={handleCreate} className="overflow-y-auto p-6 space-y-6 flex-1">
+              {/* Seção: Foto de Perfil / Avatar do Cliente */}
+              <div id="new-client-avatar-section" className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Camera size={16} className="text-[#fab518]" />
+                    <label className="text-xs font-bold text-[#142142] dark:text-white uppercase tracking-wider">
+                      Foto de Perfil / Logotipo (Avatar)
+                    </label>
+                  </div>
+                  {newClientAvatar && (
+                    <button
+                      type="button"
+                      id="btn-remove-new-client-avatar"
+                      onClick={() => {
+                        setNewClientAvatar('');
+                        setNewClientAvatarUrlInput('');
+                      }}
+                      className="text-[11px] font-bold text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Remover foto personalizada"
+                    >
+                      <X size={13} />
+                      <span>Restaurar padrão</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5">
+                  {/* Avatar Circular Preview */}
+                  <div className="relative group shrink-0">
+                    <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full p-1 bg-gradient-to-tr from-[#142142] to-[#fab518] shadow-md flex items-center justify-center">
+                      <img
+                        id="new-client-avatar-preview"
+                        src={newClientAvatar || DEFAULT_CLIENT_AVATAR}
+                        alt="Preview do avatar do cliente"
+                        className="w-full h-full rounded-full object-cover bg-white dark:bg-slate-900"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = DEFAULT_CLIENT_AVATAR;
+                        }}
+                      />
+                    </div>
+                    {/* Badge */}
+                    <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#142142] text-[#fab518] border-2 border-white dark:border-slate-800 flex items-center justify-center shadow-xs">
+                      <Camera size={12} />
+                    </span>
+                  </div>
+
+                  {/* Upload / Drag-and-drop Zone */}
+                  <div className="flex-1 w-full space-y-2.5">
+                    <div
+                      id="dropzone-new-client-avatar"
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingAvatar(true);
+                      }}
+                      onDragLeave={() => setIsDraggingAvatar(false)}
+                      onDrop={(e) => handleAvatarFileDrop(e, false)}
+                      className={`border-2 border-dashed rounded-xl p-3.5 sm:p-4 text-center transition-all cursor-pointer ${
+                        isDraggingAvatar
+                          ? 'border-[#fab518] bg-[#fab518]/10'
+                          : 'border-slate-300 dark:border-slate-600 hover:border-[#fab518] bg-white dark:bg-slate-900/60'
+                      }`}
+                      onClick={() => {
+                        const fileInput = document.getElementById('input-new-client-avatar-file');
+                        fileInput?.click();
+                      }}
+                    >
+                      <input
+                        type="file"
+                        id="input-new-client-avatar-file"
+                        accept="image/png, image/jpeg, image/webp, image/gif"
+                        className="hidden"
+                        onChange={(e) => handleAvatarFileChange(e, false)}
+                      />
+                      <div className="flex items-center justify-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        <Upload size={15} className="text-[#fab518]" />
+                        <span>Clique para escolher foto ou arraste aqui</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        PNG, JPG ou WebP (armazenado automaticamente)
+                      </p>
+                    </div>
+
+                    {/* Direct Image URL input */}
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Image size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="url"
+                          id="input-new-client-avatar-url"
+                          placeholder="Ou cole a URL direta de uma imagem (https://...)"
+                          value={newClientAvatarUrlInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNewClientAvatarUrlInput(val);
+                            if (val.trim().startsWith('http')) {
+                              setNewClientAvatar(val.trim());
+                            }
+                          }}
+                          className="w-full bg-white dark:bg-slate-900 text-xs text-[#142142] dark:text-white pl-8.5 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:outline-none transition-all placeholder:text-slate-400"
+                        />
+                      </div>
+                      {newClientAvatarUrlInput && (
+                        <button
+                          type="button"
+                          id="btn-apply-new-client-avatar-url"
+                          onClick={() => {
+                            if (newClientAvatarUrlInput.trim()) {
+                              setNewClientAvatar(newClientAvatarUrlInput.trim());
+                            }
+                          }}
+                          className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-[#142142] dark:text-white text-xs font-bold hover:bg-[#fab518] hover:text-[#142142] transition-colors cursor-pointer shrink-0"
+                        >
+                          Aplicar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Presets Row */}
+                <div>
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2">
+                    <Sparkles size={12} className="text-[#fab518]" />
+                    <span>Ou selecione um modelo pronto:</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-none">
+                    {PRESET_AVATARS.map((preset, idx) => {
+                      const isSelected = newClientAvatar === preset.url;
+                      return (
+                        <button
+                          key={idx}
+                          id={`btn-preset-avatar-new-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setNewClientAvatar(preset.url);
+                            setNewClientAvatarUrlInput('');
+                          }}
+                          title={preset.label}
+                          className={`relative rounded-full shrink-0 transition-transform cursor-pointer p-0.5 ${
+                            isSelected
+                              ? 'ring-2 ring-[#fab518] scale-110 shadow-xs'
+                              : 'opacity-70 hover:opacity-100 hover:scale-105'
+                          }`}
+                        >
+                          <img
+                            src={preset.url}
+                            alt={preset.label}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                          {isSelected && (
+                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#fab518] text-[#142142] flex items-center justify-center text-[9px] font-black shadow-xs">
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
               {/* Seção: Tipo de Pessoa */}
               <div>
                 <label className="block text-xs font-bold text-[#142142] dark:text-slate-200 mb-2">
@@ -803,50 +1038,34 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                 </div>
 
                 {/* CEP com busca automática */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-[#142142] dark:text-slate-200 mb-1">
-                      CEP
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="00000-000"
-                      value={newClientCep}
-                      onChange={async (e) => {
-                        const raw = e.target.value;
-                        setNewClientCep(raw);
-                        const cleanCep = raw.replace(/\D/g, '');
-                        if (cleanCep.length === 8) {
-                          try {
-                            const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-                            const data = await res.json();
-                            if (!data.erro) {
-                              if (data.logradouro) setNewClientStreet(data.logradouro);
-                              if (data.bairro) setNewClientNeighborhood(data.bairro);
-                              if (data.localidade) setNewClientCity(data.localidade);
-                              if (data.uf) setNewClientState(data.uf);
-                            }
-                          } catch {
-                            // Silencioso em caso de erro na rede
+                <div>
+                  <label className="block text-xs font-bold text-[#142142] dark:text-slate-200 mb-1">
+                    CEP
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="00000-000"
+                    value={newClientCep}
+                    onChange={async (e) => {
+                      const raw = e.target.value;
+                      setNewClientCep(raw);
+                      const cleanCep = raw.replace(/\D/g, '');
+                      if (cleanCep.length === 8) {
+                        try {
+                          const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+                          const data = await res.json();
+                          if (!data.erro) {
+                            if (data.bairro) setNewClientNeighborhood(data.bairro);
+                            if (data.localidade) setNewClientCity(data.localidade);
+                            if (data.uf) setNewClientState(data.uf);
                           }
+                        } catch {
+                          // Silencioso em caso de erro na rede
                         }
-                      }}
-                      className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-sm text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono transition-all"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-[#142142] dark:text-slate-200 mb-1">
-                      Rua / Logradouro
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Av. Paulista, Rua das Flores..."
-                      value={newClientStreet}
-                      onChange={(e) => setNewClientStreet(e.target.value)}
-                      className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-sm text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 font-medium transition-all"
-                    />
-                  </div>
+                      }
+                    }}
+                    className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-sm text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono transition-all"
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1021,6 +1240,166 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
 
             {/* Edit Form */}
             <form onSubmit={handleSaveEdit} className="overflow-y-auto p-6 space-y-6 flex-1">
+              {/* Seção: Foto de Perfil / Avatar do Cliente */}
+              <div id="edit-client-avatar-section" className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Camera size={16} className="text-[#fab518]" />
+                    <label className="text-xs font-bold text-[#142142] dark:text-white uppercase tracking-wider">
+                      Foto de Perfil / Logotipo (Avatar)
+                    </label>
+                  </div>
+                  {editAvatar && (
+                    <button
+                      type="button"
+                      id="btn-remove-edit-client-avatar"
+                      onClick={() => {
+                        setEditAvatar('');
+                        setEditAvatarUrlInput('');
+                      }}
+                      className="text-[11px] font-bold text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Remover foto personalizada"
+                    >
+                      <X size={13} />
+                      <span>Restaurar padrão</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5">
+                  {/* Avatar Circular Preview */}
+                  <div className="relative group shrink-0">
+                    <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full p-1 bg-gradient-to-tr from-[#142142] to-[#fab518] shadow-md flex items-center justify-center">
+                      <img
+                        id="edit-client-avatar-preview"
+                        src={editAvatar || editingClient.avatar || DEFAULT_CLIENT_AVATAR}
+                        alt="Preview do avatar do cliente"
+                        className="w-full h-full rounded-full object-cover bg-white dark:bg-slate-900"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = DEFAULT_CLIENT_AVATAR;
+                        }}
+                      />
+                    </div>
+                    <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#142142] text-[#fab518] border-2 border-white dark:border-slate-800 flex items-center justify-center shadow-xs">
+                      <Camera size={12} />
+                    </span>
+                  </div>
+
+                  {/* Upload / Drag-and-drop Zone */}
+                  <div className="flex-1 w-full space-y-2.5">
+                    <div
+                      id="dropzone-edit-client-avatar"
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingEditAvatar(true);
+                      }}
+                      onDragLeave={() => setIsDraggingEditAvatar(false)}
+                      onDrop={(e) => handleAvatarFileDrop(e, true)}
+                      className={`border-2 border-dashed rounded-xl p-3.5 sm:p-4 text-center transition-all cursor-pointer ${
+                        isDraggingEditAvatar
+                          ? 'border-[#fab518] bg-[#fab518]/10'
+                          : 'border-slate-300 dark:border-slate-600 hover:border-[#fab518] bg-white dark:bg-slate-900/60'
+                      }`}
+                      onClick={() => {
+                        const fileInput = document.getElementById('input-edit-client-avatar-file');
+                        fileInput?.click();
+                      }}
+                    >
+                      <input
+                        type="file"
+                        id="input-edit-client-avatar-file"
+                        accept="image/png, image/jpeg, image/webp, image/gif"
+                        className="hidden"
+                        onChange={(e) => handleAvatarFileChange(e, true)}
+                      />
+                      <div className="flex items-center justify-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        <Upload size={15} className="text-[#fab518]" />
+                        <span>Clique para escolher foto ou arraste aqui</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        PNG, JPG ou WebP (armazenado automaticamente)
+                      </p>
+                    </div>
+
+                    {/* Direct Image URL input */}
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Image size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="url"
+                          id="input-edit-client-avatar-url"
+                          placeholder="Ou cole a URL direta de uma imagem (https://...)"
+                          value={editAvatarUrlInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditAvatarUrlInput(val);
+                            if (val.trim().startsWith('http')) {
+                              setEditAvatar(val.trim());
+                            }
+                          }}
+                          className="w-full bg-white dark:bg-slate-900 text-xs text-[#142142] dark:text-white pl-8.5 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:outline-none transition-all placeholder:text-slate-400"
+                        />
+                      </div>
+                      {editAvatarUrlInput && (
+                        <button
+                          type="button"
+                          id="btn-apply-edit-client-avatar-url"
+                          onClick={() => {
+                            if (editAvatarUrlInput.trim()) {
+                              setEditAvatar(editAvatarUrlInput.trim());
+                            }
+                          }}
+                          className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-[#142142] dark:text-white text-xs font-bold hover:bg-[#fab518] hover:text-[#142142] transition-colors cursor-pointer shrink-0"
+                        >
+                          Aplicar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Presets Row */}
+                <div>
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2">
+                    <Sparkles size={12} className="text-[#fab518]" />
+                    <span>Ou selecione um modelo pronto:</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-none">
+                    {PRESET_AVATARS.map((preset, idx) => {
+                      const isSelected = editAvatar === preset.url;
+                      return (
+                        <button
+                          key={idx}
+                          id={`btn-preset-avatar-edit-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setEditAvatar(preset.url);
+                            setEditAvatarUrlInput('');
+                          }}
+                          title={preset.label}
+                          className={`relative rounded-full shrink-0 transition-transform cursor-pointer p-0.5 ${
+                            isSelected
+                              ? 'ring-2 ring-[#fab518] scale-110 shadow-xs'
+                              : 'opacity-70 hover:opacity-100 hover:scale-105'
+                          }`}
+                        >
+                          <img
+                            src={preset.url}
+                            alt={preset.label}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                          {isSelected && (
+                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#fab518] text-[#142142] flex items-center justify-center text-[9px] font-black shadow-xs">
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
               {/* Tipo de Pessoa */}
               <div>
                 <label className="block text-xs font-bold text-[#142142] dark:text-slate-200 mb-2">

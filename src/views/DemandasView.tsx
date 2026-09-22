@@ -702,6 +702,25 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     }
   };
 
+  // Resolve dinamicamente os dados do responsável atualizados a partir de teamMembers
+  const getAssigneeDisplay = (assignee?: { name?: string; avatar?: string }) => {
+    const rawName = assignee?.name || '';
+    const rawAvatar = assignee?.avatar || '';
+    if (!rawName) {
+      return { name: 'Não atribuído', avatar: '' };
+    }
+    const matched = teamMembers.find(
+      (m) =>
+        m.name?.trim().toLowerCase() === rawName.trim().toLowerCase() ||
+        m.name?.split(' ')[0]?.toLowerCase() === rawName.split(' ')[0]?.toLowerCase() ||
+        (m.username && m.username.toLowerCase() === rawName.toLowerCase())
+    );
+    return {
+      name: matched?.name || rawName,
+      avatar: matched?.avatar || rawAvatar,
+    };
+  };
+
   return (
     <div className="space-y-4 sm:space-y-5 pb-6">
       {/* Top Filter and Controls Bar */}
@@ -844,32 +863,6 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                 </button>
               </div>
             )}
-
-            {/* + Nova Sessão (Coluna) CTA */}
-            <button
-              type="button"
-              id="btn-new-column-primary"
-              onClick={() => {
-                setColumnToEdit(null);
-                setIsAddColumnModalOpen(true);
-              }}
-              className="px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-[#fab518] hover:text-[#fab518] text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-98 cursor-pointer shadow-2xs shrink-0"
-              title="Adicionar nova sessão / coluna de demandas"
-            >
-              <Plus size={15} className="stroke-[2.5]" />
-              <span className="hidden sm:inline">Nova Sessão</span>
-            </button>
-
-            {/* + Nova Demanda CTA */}
-            <button
-              type="button"
-              id="btn-new-demand-primary"
-              onClick={onOpenNewDemandModal}
-              className="px-4 py-2.5 rounded-xl bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs flex items-center gap-1.5 transition-all active:scale-98 cursor-pointer shadow-xs shrink-0"
-            >
-              <Plus size={16} className="stroke-[2.5]" />
-              <span>Nova Demanda</span>
-            </button>
           </div>
         </div>
 
@@ -1354,26 +1347,31 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
 
                         {/* Bottom Card Footer: Assignee & Move Action */}
                         <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-slate-400 text-xs">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {demand.assignee.avatar?.trim() ? (
-                              <img
-                                src={demand.assignee.avatar}
-                                alt={demand.assignee.name}
-                                title={`Responsável: ${demand.assignee.name}`}
-                                className="w-6 h-6 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700 pointer-events-none shrink-0"
-                              />
-                            ) : (
-                              <div
-                                title={`Responsável: ${demand.assignee.name}`}
-                                className="w-6 h-6 rounded-full bg-[#142142] text-[#fab518] text-[10px] font-bold flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
-                              >
-                                {demand.assignee.name.charAt(0).toUpperCase()}
+                          {(() => {
+                            const assigneeDisplay = getAssigneeDisplay(demand.assignee);
+                            return (
+                              <div className="flex items-center gap-2 min-w-0">
+                                {assigneeDisplay.avatar?.trim() ? (
+                                  <img
+                                    src={assigneeDisplay.avatar}
+                                    alt={assigneeDisplay.name}
+                                    title={`Responsável: ${assigneeDisplay.name}`}
+                                    className="w-6 h-6 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700 pointer-events-none shrink-0"
+                                  />
+                                ) : (
+                                  <div
+                                    title={`Responsável: ${assigneeDisplay.name}`}
+                                    className="w-6 h-6 rounded-full bg-[#142142] text-[#fab518] text-[10px] font-bold flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
+                                  >
+                                    {assigneeDisplay.name.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 hidden sm:inline truncate max-w-[80px]">
+                                  {assigneeDisplay.name.split(' ')[0]}
+                                </span>
                               </div>
-                            )}
-                            <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 hidden sm:inline truncate max-w-[80px]">
-                              {demand.assignee.name.split(' ')[0]}
-                            </span>
-                          </div>
+                            );
+                          })()}
 
                           {/* Quick Column Advancement */}
                           <div className="flex items-center gap-1">
@@ -1613,16 +1611,21 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                     })()}
                   </td>
                   <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      {demand.assignee.avatar?.trim() ? (
-                        <img src={demand.assignee.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-[#142142] text-[#fab518] text-[10px] font-bold flex items-center justify-center shrink-0">
-                          {demand.assignee.name.charAt(0).toUpperCase()}
+                    {(() => {
+                      const assigneeDisplay = getAssigneeDisplay(demand.assignee);
+                      return (
+                        <div className="flex items-center gap-2">
+                          {assigneeDisplay.avatar?.trim() ? (
+                            <img src={assigneeDisplay.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-[#142142] text-[#fab518] text-[10px] font-bold flex items-center justify-center shrink-0">
+                              {assigneeDisplay.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{assigneeDisplay.name}</span>
                         </div>
-                      )}
-                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{demand.assignee.name}</span>
-                    </div>
+                      );
+                    })()}
                   </td>
                   <td className="p-4 font-medium text-slate-600 dark:text-slate-300">
                     <div className="flex items-center gap-1.5">
