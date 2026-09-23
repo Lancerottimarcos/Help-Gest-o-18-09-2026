@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
-import { DemandItem, KanbanColumnId, PageId } from '../types';
+import { DemandItem, KanbanColumn, KanbanColumnId, PageId } from '../types';
 import { 
   TrendingUp, 
   CheckCircle2, 
@@ -13,6 +13,7 @@ import {
 
 interface DemandsProgressChartProps {
   demands: DemandItem[];
+  columns?: KanbanColumn[];
   onNavigate?: (page: PageId) => void;
   onFilterStage?: (stageId: string | null) => void;
   selectedStage?: string | null;
@@ -30,53 +31,17 @@ interface StageProgressMeta {
   percent: number;
 }
 
-const STAGE_CONFIG: Record<KanbanColumnId, { name: string; shortName: string; color: string; twBg: string; twText: string; twBorder: string }> = {
-  ideias: {
-    name: 'Ideias & Briefing',
-    shortName: 'Briefing',
-    color: '#94A3B8', // slate-400
-    twBg: 'bg-slate-100 dark:bg-slate-800',
-    twText: 'text-slate-700 dark:text-slate-300',
-    twBorder: 'border-slate-200 dark:border-slate-700',
-  },
-  producao: {
-    name: 'Em Produção',
-    shortName: 'Produção',
-    color: '#8B5CF6', // violet-500
-    twBg: 'bg-purple-50 dark:bg-purple-950/40',
-    twText: 'text-purple-700 dark:text-purple-300',
-    twBorder: 'border-purple-200 dark:border-purple-800/60',
-  },
-  aprovacao: {
-    name: 'Aguardando Aprovação',
-    shortName: 'Aprovação',
-    color: '#F59E0B', // amber-500
-    twBg: 'bg-amber-50 dark:bg-amber-950/40',
-    twText: 'text-amber-800 dark:text-amber-300',
-    twBorder: 'border-amber-200 dark:border-amber-800/60',
-  },
-  agendamento: {
-    name: 'Agendamento',
-    shortName: 'Agendadas',
-    color: '#10B981', // emerald-500
-    twBg: 'bg-emerald-50 dark:bg-emerald-950/40',
-    twText: 'text-emerald-700 dark:text-emerald-300',
-    twBorder: 'border-emerald-200 dark:border-emerald-800/60',
-  },
-  concluidas: {
-    name: 'Concluídas',
-    shortName: 'Concluídas',
-    color: '#3B82F6', // blue-500
-    twBg: 'bg-blue-50 dark:bg-blue-950/40',
-    twText: 'text-blue-700 dark:text-blue-300',
-    twBorder: 'border-blue-200 dark:border-blue-800/60',
-  },
-};
-
-const STAGE_ORDER: KanbanColumnId[] = ['ideias', 'producao', 'aprovacao', 'agendamento', 'concluidas'];
+const DEFAULT_FALLBACK_COLUMNS: KanbanColumn[] = [
+  { id: 'ideias', title: 'Ideias', count: 0, color: '#EF4444', buttonBg: 'bg-red-500' },
+  { id: 'producao', title: 'Em Produção', count: 0, color: '#8B5CF6', buttonBg: 'bg-purple-500' },
+  { id: 'aprovacao', title: 'Aprovação', count: 0, color: '#FAB518', buttonBg: 'bg-amber-500' },
+  { id: 'agendamento', title: 'Agendamento', count: 0, color: '#10B981', buttonBg: 'bg-emerald-500' },
+  { id: 'concluidas', title: 'Concluídas', count: 0, color: '#64748B', buttonBg: 'bg-slate-500' },
+];
 
 export const DemandsProgressChart: React.FC<DemandsProgressChartProps> = ({
   demands,
+  columns,
   onNavigate,
   onFilterStage,
   selectedStage,
@@ -85,23 +50,29 @@ export const DemandsProgressChart: React.FC<DemandsProgressChartProps> = ({
 
   const totalDemands = demands.length;
 
-  // Calculate statistics per stage
-  const stagesData: StageProgressMeta[] = STAGE_ORDER.map((stageId) => {
-    const count = demands.filter((d) => d.columnId === stageId).length;
-    const percent = totalDemands > 0 ? Math.round((count / totalDemands) * 100) : 0;
-    const cfg = STAGE_CONFIG[stageId];
-    return {
-      id: stageId,
-      name: cfg.name,
-      shortName: cfg.shortName,
-      color: cfg.color,
-      twBg: cfg.twBg,
-      twText: cfg.twText,
-      twBorder: cfg.twBorder,
-      count,
-      percent,
-    };
-  });
+  const effectiveColumns = useMemo(() => {
+    if (columns && columns.length > 0) return columns;
+    return DEFAULT_FALLBACK_COLUMNS;
+  }, [columns]);
+
+  // Calculate statistics per stage dynamically from real columns & demands
+  const stagesData: StageProgressMeta[] = useMemo(() => {
+    return effectiveColumns.map((col) => {
+      const count = demands.filter((d) => d.columnId === col.id).length;
+      const percent = totalDemands > 0 ? Math.round((count / totalDemands) * 100) : 0;
+      return {
+        id: col.id,
+        name: col.title,
+        shortName: col.title,
+        color: col.color || '#3b82f6',
+        twBg: '',
+        twText: '',
+        twBorder: '',
+        count,
+        percent,
+      };
+    });
+  }, [effectiveColumns, demands, totalDemands]);
 
   // Chart data for Pie/Donut (only stages with count > 0)
   const chartPieData = stagesData.filter((s) => s.count > 0);
@@ -305,24 +276,40 @@ export const DemandsProgressChart: React.FC<DemandsProgressChartProps> = ({
                   onClick={() => onFilterStage && onFilterStage(isSelected ? null : stage.id)}
                   onMouseEnter={() => setHoveredStage(stage.id)}
                   onMouseLeave={() => setHoveredStage(null)}
+                  style={
+                    isSelected
+                      ? {
+                          borderColor: stage.color,
+                          boxShadow: `0 0 0 1.5px ${stage.color}40`,
+                        }
+                      : {}
+                  }
                   className={`text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-white dark:bg-slate-800 border-[#fab518] shadow-xs ring-1 ring-[#fab518]/50'
+                      ? 'bg-white dark:bg-slate-800 shadow-xs'
                       : isHovered
-                      ? 'bg-white/80 dark:bg-slate-800/80 border-slate-300 dark:border-slate-700 shadow-2xs'
+                      ? 'bg-white/90 dark:bg-slate-800/90 border-slate-300 dark:border-slate-700 shadow-2xs'
                       : 'bg-white/50 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800/80 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1 mb-1">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span
-                        className="w-2 h-2 rounded-full shrink-0"
+                        className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white dark:ring-slate-900"
                         style={{ backgroundColor: stage.color }}
                       />
                       <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate">
                         {stage.shortName}
                       </span>
                     </div>
+                    {isSelected && (
+                      <span 
+                        className="text-[9px] font-bold px-1 rounded uppercase tracking-wider"
+                        style={{ backgroundColor: `${stage.color}18`, color: stage.color }}
+                      >
+                        Ativo
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-baseline justify-between gap-1">
@@ -335,7 +322,7 @@ export const DemandsProgressChart: React.FC<DemandsProgressChartProps> = ({
                   </div>
 
                   {/* Micro Progress Track */}
-                  <div className="w-full bg-slate-100 dark:bg-slate-700/60 h-1 rounded-full overflow-hidden mt-1.5">
+                  <div className="w-full bg-slate-100 dark:bg-slate-700/60 h-1.5 rounded-full overflow-hidden mt-1.5">
                     <div
                       className="h-full rounded-full transition-all duration-300"
                       style={{ 

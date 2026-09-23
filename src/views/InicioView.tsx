@@ -33,9 +33,10 @@ import {
   Building2,
   Flame,
   ArrowUpDown,
-  ShieldAlert
+  ShieldAlert,
+  RefreshCw
 } from 'lucide-react';
-import { Client, DemandItem, PageId, ClientActivity, InicioSectionId, InicioSectionMeta, Invoice, TeamMember } from '../types';
+import { Client, DemandItem, KanbanColumn, PageId, ClientActivity, InicioSectionId, InicioSectionMeta, Invoice, TeamMember } from '../types';
 import { ClientLocationMap } from '../components/ClientLocationMap';
 import { ClientBirthdaysSection } from '../components/ClientBirthdaysSection';
 import { DashboardCustomizerModal, DASHBOARD_PRESETS, DashboardCustomizerPreset } from '../components/DashboardCustomizerModal';
@@ -148,21 +149,46 @@ const loadSavedHidden = (): InicioSectionId[] => {
 
 interface DemandTimelineInfo {
   demand: DemandItem;
-  status: 'atrasada' | 'hoje' | 'proxima';
+  status: 'atrasada' | 'hoje' | 'proxima' | 'sem_prazo' | 'concluida';
   daysDiff: number; // < 0: atrasada (dias decorridos), 0: hoje, > 0: proxima (dias restantes)
   daysLate: number;
   daysRemaining: number;
   dueDateFormatted: string;
 }
 
-const getDemandTimelineInfo = (demand: DemandItem): DemandTimelineInfo | null => {
-  if (!demand.dueDate || demand.columnId === 'concluidas') {
-    return null;
+const getDemandTimelineInfo = (demand: DemandItem): DemandTimelineInfo => {
+  // If concluded, categorize properly as concluded
+  if (demand.columnId === 'concluidas') {
+    let formatted = 'Concluída';
+    if (demand.dueDate && demand.dueDate.trim()) {
+      const raw = demand.dueDate.trim();
+      const ymdMatch = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (ymdMatch) {
+        formatted = `${String(ymdMatch[3]).padStart(2, '0')}/${String(ymdMatch[2]).padStart(2, '0')}/${ymdMatch[1]}`;
+      } else {
+        formatted = raw;
+      }
+    }
+    return {
+      demand,
+      status: 'concluida',
+      daysDiff: 10000,
+      daysLate: 0,
+      daysRemaining: 0,
+      dueDateFormatted: formatted,
+    };
   }
 
-  const raw = demand.dueDate.trim();
+  const raw = (demand.dueDate || '').trim();
   if (!raw || raw.toLowerCase() === 'sem prazo' || raw.toLowerCase() === 'a definir' || raw.toLowerCase() === 'pendente') {
-    return null;
+    return {
+      demand,
+      status: 'sem_prazo',
+      daysDiff: 9999,
+      daysLate: 0,
+      daysRemaining: 0,
+      dueDateFormatted: 'Sem prazo estipulado',
+    };
   }
 
   const today = new Date();
@@ -214,7 +240,14 @@ const getDemandTimelineInfo = (demand: DemandItem): DemandTimelineInfo | null =>
   }
 
   if (!targetDate || isNaN(targetDate.getTime())) {
-    return null;
+    return {
+      demand,
+      status: 'sem_prazo',
+      daysDiff: 9999,
+      daysLate: 0,
+      daysRemaining: 0,
+      dueDateFormatted: raw,
+    };
   }
 
   targetDate.setHours(0, 0, 0, 0);
@@ -256,7 +289,11 @@ const getDemandTimelineInfo = (demand: DemandItem): DemandTimelineInfo | null =>
   }
 };
 
-const getColumnDisplayLabel = (colId: string): string => {
+const getColumnDisplayLabel = (colId: string, columnsList?: KanbanColumn[]): string => {
+  if (columnsList && columnsList.length > 0) {
+    const found = columnsList.find((c) => c.id === colId);
+    if (found) return found.title;
+  }
   switch (colId) {
     case 'ideias': return 'Ideias / Briefing';
     case 'producao': return 'Em Produção';
@@ -301,6 +338,7 @@ interface InicioViewProps {
   onNavigate: (page: PageId) => void;
   demands: DemandItem[];
   clients: Client[];
+  columns?: KanbanColumn[];
   teamMembers?: TeamMember[];
   invoices?: Invoice[];
   activities?: ClientActivity[];
@@ -313,6 +351,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
   onNavigate,
   demands,
   clients,
+  columns = [],
   teamMembers = [],
   invoices = [],
   activities = initialRecentActivities,
@@ -507,20 +546,11 @@ export const InicioView: React.FC<InicioViewProps> = ({
   const inProduction = demands.filter((d) => d.columnId === 'producao');
   const scheduledDemands = demands.filter((d) => d.columnId === 'agendamento');
   
-  // Lista unificada de todas as demandas com prazo (atrasadas, hoje e próximas)
+  // Lista unificada de todas as demandas com categorização de prazos e etapas
   const timelineDemandsList = useMemo(() => {
-    const list: DemandTimelineInfo[] = [];
-    for (const d of demands) {
-      const info = getDemandTimelineInfo(d);
-      if (info) {
-        list.push(info);
-      }
-    }
-    // Ordenação padrão inteligente por criticidade:
-    // 1. Atrasadas (da mais atrasada para a menos atrasada)
-    // 2. Vencendo hoje
-    // 3. Próximas (da mais iminente para a mais distante)
-    return list.sort((a, b) => a.daysDiff - b.daysDiff);
+    return demands
+      .map((d) => getDemandTimelineInfo(d))
+      .sort((a, b) => a.daysDiff - b.daysDiff);
   }, [demands]);
 
   const overdueDemandsList = useMemo(() => {
@@ -535,16 +565,21 @@ export const InicioView: React.FC<InicioViewProps> = ({
     return timelineDemandsList.filter((item) => item.status === 'proxima');
   }, [timelineDemandsList]);
 
+  const withoutDueDateList = useMemo(() => {
+    return timelineDemandsList.filter((item) => item.status === 'sem_prazo');
+  }, [timelineDemandsList]);
+
   // Estados para filtro e ordenação da seção de prazos e entregas
-  const [timelineFilter, setTimelineFilter] = useState<'todas' | 'atrasadas' | 'hoje' | 'proximas' | 'criticas'>('todas');
+  const [timelineFilter, setTimelineFilter] = useState<'todas' | 'atrasadas' | 'hoje' | 'proximas' | 'sem_prazo' | 'criticas'>('todas');
   const [timelineSort, setTimelineSort] = useState<'prazo' | 'prioridade'>('prazo');
   const [timelineStageFilter, setTimelineStageFilter] = useState<string | null>(null);
 
   const timelineMetrics = useMemo(() => {
-    const total = timelineDemandsList.length;
+    const total = demands.length;
     const overdueCount = overdueDemandsList.length;
     const todayCount = todayDemandsList.length;
     const upcomingCount = upcomingDemandsList.length;
+    const noDueDateCount = withoutDueDateList.length;
     const criticalOverdue = overdueDemandsList.filter((o) => o.daysLate >= 3).length;
     const maxOverdueDays = overdueCount > 0 ? Math.max(...overdueDemandsList.map((o) => o.daysLate)) : 0;
     const avgOverdueDays = overdueCount > 0 
@@ -566,6 +601,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
       overdueCount,
       todayCount,
       upcomingCount,
+      noDueDateCount,
       criticalOverdue,
       maxOverdueDays,
       avgOverdueDays,
@@ -574,23 +610,31 @@ export const InicioView: React.FC<InicioViewProps> = ({
       inProduction,
       inApproval,
     };
-  }, [timelineDemandsList, overdueDemandsList, todayDemandsList, upcomingDemandsList]);
+  }, [demands.length, timelineDemandsList, overdueDemandsList, todayDemandsList, upcomingDemandsList, withoutDueDateList]);
 
   const filteredAndSortedTimelineList = useMemo(() => {
     let result = [...timelineDemandsList];
 
-    if (timelineFilter === 'atrasadas') {
-      result = result.filter((item) => item.status === 'atrasada');
-    } else if (timelineFilter === 'hoje') {
-      result = result.filter((item) => item.status === 'hoje');
-    } else if (timelineFilter === 'proximas') {
-      result = result.filter((item) => item.status === 'proxima');
-    } else if (timelineFilter === 'criticas') {
-      result = result.filter((item) => {
-        const isLate = item.status === 'atrasada';
-        const p = (item.demand.priority || '').toLowerCase();
-        return isLate || p === 'urgente' || p === 'alta';
-      });
+    // Se o usuário selecionou uma etapa específica no Gráfico de Andamento, filtra exatamente essa etapa
+    if (timelineStageFilter) {
+      result = result.filter((item) => item.demand.columnId === timelineStageFilter);
+    } else {
+      if (timelineFilter === 'atrasadas') {
+        result = result.filter((item) => item.status === 'atrasada');
+      } else if (timelineFilter === 'hoje') {
+        result = result.filter((item) => item.status === 'hoje');
+      } else if (timelineFilter === 'proximas') {
+        result = result.filter((item) => item.status === 'proxima');
+      } else if (timelineFilter === 'sem_prazo') {
+        result = result.filter((item) => item.status === 'sem_prazo');
+      } else if (timelineFilter === 'criticas') {
+        result = result.filter((item) => {
+          const isLate = item.status === 'atrasada';
+          const p = (item.demand.priority || '').toLowerCase();
+          return isLate || p === 'urgente' || p === 'alta';
+        });
+      }
+      // 'todas' exibe todas as demandas
     }
 
     if (timelineSort === 'prioridade') {
@@ -608,12 +652,8 @@ export const InicioView: React.FC<InicioViewProps> = ({
         return a.daysDiff - b.daysDiff;
       });
     } else {
-      // Ordenação cronológica por prazo: atrasadas (mais graves primeiro), hoje, depois próximas (mais cedo primeiro)
+      // Ordenação cronológica por prazo: atrasadas (mais graves primeiro), hoje, depois próximas (mais cedo primeiro), sem prazo ao final
       result.sort((a, b) => a.daysDiff - b.daysDiff);
-    }
-
-    if (timelineStageFilter) {
-      result = result.filter((item) => item.demand.columnId === timelineStageFilter);
     }
 
     return result;
@@ -753,14 +793,41 @@ export const InicioView: React.FC<InicioViewProps> = ({
                       <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight">
                         Minhas demandas
                       </h3>
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700">
+                        {timelineMetrics.total} no total
+                      </span>
                     </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Visão unificada das demandas com sincronização instantânea do Kanban e clientes
+                    </p>
                   </div>
+                </div>
+
+                {/* Sincronização em tempo real & Atualizar */}
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/70 dark:border-emerald-800/60 text-xs font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Sincronizado</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTimelineStageFilter(null);
+                      setTimelineFilter('todas');
+                    }}
+                    title="Resetar filtros e atualizar exibição das demandas"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200/80 dark:hover:bg-slate-700 border border-slate-200/70 dark:border-slate-700 transition-all cursor-pointer"
+                  >
+                    <RefreshCw size={12} className="stroke-[2.2]" />
+                    <span>Atualizar</span>
+                  </button>
                 </div>
               </div>
 
               {/* GRÁFICO VISUAL DE ANDAMENTO DAS DEMANDAS */}
               <DemandsProgressChart
                 demands={demands}
+                columns={columns}
                 onNavigate={onNavigate}
                 onFilterStage={setTimelineStageFilter}
                 selectedStage={timelineStageFilter}
@@ -786,9 +853,12 @@ export const InicioView: React.FC<InicioViewProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setTimelineFilter('atrasadas')}
+                    onClick={() => {
+                      setTimelineFilter('atrasadas');
+                      setTimelineStageFilter(null);
+                    }}
                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                      timelineFilter === 'atrasadas'
+                      timelineFilter === 'atrasadas' && !timelineStageFilter
                         ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-2xs font-semibold'
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                     }`}
@@ -799,9 +869,12 @@ export const InicioView: React.FC<InicioViewProps> = ({
                   {timelineMetrics.todayCount > 0 && (
                     <button
                       type="button"
-                      onClick={() => setTimelineFilter('hoje')}
+                      onClick={() => {
+                        setTimelineFilter('hoje');
+                        setTimelineStageFilter(null);
+                      }}
                       className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                        timelineFilter === 'hoje'
+                        timelineFilter === 'hoje' && !timelineStageFilter
                           ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-2xs font-semibold'
                           : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                       }`}
@@ -812,9 +885,12 @@ export const InicioView: React.FC<InicioViewProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setTimelineFilter('proximas')}
+                    onClick={() => {
+                      setTimelineFilter('proximas');
+                      setTimelineStageFilter(null);
+                    }}
                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                      timelineFilter === 'proximas'
+                      timelineFilter === 'proximas' && !timelineStageFilter
                         ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-2xs font-semibold'
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                     }`}
@@ -822,9 +898,26 @@ export const InicioView: React.FC<InicioViewProps> = ({
                     Próximas ({timelineMetrics.upcomingCount})
                   </button>
 
+                  {timelineMetrics.noDueDateCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTimelineFilter('sem_prazo');
+                        setTimelineStageFilter(null);
+                      }}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                        timelineFilter === 'sem_prazo' && !timelineStageFilter
+                          ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 shadow-2xs font-semibold'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      Sem Prazo ({timelineMetrics.noDueDateCount})
+                    </button>
+                  )}
+
                   {timelineStageFilter && (
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100/90 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 text-xs font-bold border border-amber-300 dark:border-amber-800/80">
-                      <span>Etapa: {getColumnDisplayLabel(timelineStageFilter)}</span>
+                      <span>Etapa: {getColumnDisplayLabel(timelineStageFilter, columns)}</span>
                       <button
                         type="button"
                         onClick={() => setTimelineStageFilter(null)}
@@ -842,7 +935,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
                 </div>
               </div>
 
-              {/* Grid de Cards de Demandas (Atrasadas + Próximas) */}
+              {/* Grid de Cards de Demandas (Atrasadas + Próximas + Todas) */}
               {filteredAndSortedTimelineList.length === 0 ? (
                 <div className="py-8 text-center bg-slate-50/60 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 my-3">
                   <CheckCircle2 size={24} className="text-emerald-500 mx-auto mb-2" />
@@ -851,7 +944,10 @@ export const InicioView: React.FC<InicioViewProps> = ({
                   </p>
                   <button
                     type="button"
-                    onClick={() => setTimelineFilter('todas')}
+                    onClick={() => {
+                      setTimelineFilter('todas');
+                      setTimelineStageFilter(null);
+                    }}
                     className="mt-2 text-xs font-bold text-[#fab518] hover:underline cursor-pointer"
                   >
                     Mostrar todas as demandas monitoradas
@@ -894,7 +990,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
                                 <Flame size={11} className="text-amber-600 dark:text-amber-400" />
                                 Vence hoje
                               </span>
-                            ) : (
+                            ) : status === 'proxima' ? (
                               <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold ${
                                 daysRemaining === 1
                                   ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200/70 dark:border-blue-900/60'
@@ -906,9 +1002,40 @@ export const InicioView: React.FC<InicioViewProps> = ({
                                 />
                                 {daysRemaining === 1 ? 'Vence amanhã' : `Vence em ${daysRemaining} dias`}
                               </span>
+                            ) : status === 'concluida' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-900/60">
+                                <CheckCircle2 size={11} className="text-emerald-600 dark:text-emerald-400" />
+                                Concluída
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/70 dark:border-slate-700">
+                                <Clock size={11} className="text-slate-400" />
+                                Sem prazo
+                              </span>
                             )}
 
                             <div className="flex items-center gap-1.5">
+                              {/* Stage / Coluna Badge */}
+                              {(() => {
+                                const col = (columns || []).find((c) => c.id === d.columnId);
+                                const colLabel = col?.title || getColumnDisplayLabel(d.columnId, columns);
+                                const colColor = col?.color || '#64748B';
+                                return (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border"
+                                    style={{
+                                      backgroundColor: `${colColor}15`,
+                                      borderColor: `${colColor}35`,
+                                      color: colColor,
+                                    }}
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colColor }} />
+                                    <span>{colLabel}</span>
+                                  </span>
+                                );
+                              })()}
+
+                              {/* Prioridade Badge */}
                               <span
                                 className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${priorityMeta.bg}`}
                               >
@@ -923,11 +1050,11 @@ export const InicioView: React.FC<InicioViewProps> = ({
                             {d.title}
                           </h4>
 
-                          {/* Cliente */}
+                          {/* Cliente sincronizado */}
                           <div className="flex items-center gap-2 mt-2 text-xs text-slate-500 dark:text-slate-400">
                             <Building2 size={13} className="text-slate-400 shrink-0" />
                             <span className="font-medium text-slate-700 dark:text-slate-300 truncate">
-                              {d.client}
+                              {d.client || d.clientProject || 'Cliente não definido'}
                             </span>
                           </div>
 
@@ -943,10 +1070,20 @@ export const InicioView: React.FC<InicioViewProps> = ({
                                 <Flame size={12} className="shrink-0 text-amber-500" />
                                 <span className="text-amber-700 dark:text-amber-300">Entrega hoje: {dueDateFormatted}</span>
                               </>
-                            ) : (
+                            ) : status === 'proxima' ? (
                               <>
                                 <Calendar size={12} className="shrink-0 text-slate-400" />
                                 <span className="text-slate-600 dark:text-slate-400">Prazo de entrega: {dueDateFormatted}</span>
+                              </>
+                            ) : status === 'concluida' ? (
+                              <>
+                                <CheckCircle2 size={12} className="shrink-0 text-emerald-500" />
+                                <span className="text-emerald-700 dark:text-emerald-300">Entregue / Concluída</span>
+                              </>
+                            ) : (
+                              <>
+                                <Clock size={12} className="shrink-0 text-slate-400" />
+                                <span className="text-slate-500 dark:text-slate-400 italic">Prazo a definir</span>
                               </>
                             )}
                           </div>

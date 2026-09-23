@@ -1242,6 +1242,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
             onNavigate={setCurrentPage}
             demands={demands}
             clients={clients}
+            columns={kanbanColumns}
             teamMembers={teamMembers}
             invoices={invoices}
             activities={activities}
@@ -1408,6 +1409,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
             onNavigate={setCurrentPage}
             demands={demands}
             clients={clients}
+            columns={kanbanColumns}
             activities={activities}
             onOpenNewDemandModal={() => setIsNewDemandModalOpen(true)}
             onSelectDemand={() => setCurrentPage('demandas')}
