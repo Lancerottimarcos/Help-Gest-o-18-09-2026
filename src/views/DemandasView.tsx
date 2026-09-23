@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Search, 
   Filter, 
@@ -542,13 +542,17 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     return typ === filt;
   };
 
-  // Distinct clients list
-  const allClientNames = Array.from(
-    new Set([
-      ...(clients ? clients.map((c) => c.name) : []),
-      ...demands.map((d) => d.client),
-    ])
-  ).filter(Boolean);
+  // Distinct clients list sorted alphabetically (A-Z)
+  const allClientNames = useMemo(() => {
+    return Array.from(
+      new Set([
+        ...(clients ? clients.map((c) => c.name) : []),
+        ...demands.map((d) => d.client),
+      ])
+    )
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base', numeric: true }));
+  }, [clients, demands]);
 
   // Demand counts for type filters
   const countByType = {
@@ -1313,9 +1317,9 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                             <h4 className="text-xs sm:text-sm font-bold text-[#142142] dark:text-white leading-tight group-hover:underline line-clamp-2">
                               {demand.title}
                             </h4>
-                            {demand.clientProject && (
+                            {(demand.client || demand.clientProject) && (
                               <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                                {demand.clientProject}
+                                {demand.client || demand.clientProject}
                               </p>
                             )}
                           </div>

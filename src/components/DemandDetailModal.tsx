@@ -120,6 +120,12 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
   };
 
   // Form states initialized safely with demand values
+  const sortedClients = useMemo(() => {
+    return (clients || []).slice().sort((a, b) =>
+      a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base', numeric: true })
+    );
+  }, [clients]);
+
   const [title, setTitle] = useState(demand?.title || '');
   const [client, setClient] = useState(demand?.client || '');
   const [description, setDescription] = useState(demand?.description || '');
@@ -363,10 +369,16 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
     });
     const effectiveThumbnail = firstImageAttachment ? (firstImageAttachment.thumbnailUrl || firstImageAttachment.url) : undefined;
 
+    const matchingClient = clients.find(
+      (c) => c.name.trim().toLowerCase() === client.trim().toLowerCase()
+    );
+
     const updatedDemand: DemandItem = {
       ...demand,
       title: title.trim() || demand.title,
-      client,
+      client: client.trim(),
+      clientId: matchingClient?.id || demand.clientId,
+      clientProject: client.trim(),
       description: description.trim() || undefined,
       type,
       serviceCategory,
@@ -477,8 +489,8 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
                       onChange={(e) => setClient(e.target.value)}
                       className="w-full bg-slate-50/70 dark:bg-slate-800/80 hover:bg-slate-100/60 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer shadow-2xs"
                     >
-                      {clients.length > 0 ? (
-                        clients.map((c) => (
+                      {sortedClients.length > 0 ? (
+                        sortedClients.map((c) => (
                           <option key={c.id} value={c.name}>
                             {c.name}
                           </option>

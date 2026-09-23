@@ -772,8 +772,14 @@ export function Layout({ children, onLogout }: LayoutProps) {
       updatedDemand.columnId === 'aprovacao' && 
       (!existingDemand || existingDemand.columnId !== 'aprovacao');
 
+    const matchedClient = clients.find(
+      (c) => c.name.trim().toLowerCase() === (updatedDemand.client || '').trim().toLowerCase()
+    );
+
     const finalDemand: DemandItem = {
       ...updatedDemand,
+      clientId: matchedClient?.id || updatedDemand.clientId,
+      clientProject: updatedDemand.client,
       ...(wasJustMovedToApproval
         ? {
             approvalStatus: 'pendente',

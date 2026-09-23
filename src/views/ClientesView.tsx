@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Building2, 
   Mail, 
@@ -179,13 +179,17 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     }
   };
 
-  const filteredClients = clients.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.segment.toLowerCase().includes(search.toLowerCase()) ||
-    (c.companyName && c.companyName.toLowerCase().includes(search.toLowerCase())) ||
-    (c.cpfCnpj && c.cpfCnpj.includes(search)) ||
-    (c.city && c.city.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filteredClients = useMemo(() => {
+    return clients
+      .filter((c) =>
+        c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.segment.toLowerCase().includes(search.toLowerCase()) ||
+        (c.companyName && c.companyName.toLowerCase().includes(search.toLowerCase())) ||
+        (c.cpfCnpj && c.cpfCnpj.includes(search)) ||
+        (c.city && c.city.toLowerCase().includes(search.toLowerCase()))
+      )
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base', numeric: true }));
+  }, [clients, search]);
 
   const handleOpenEdit = (client: Client, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();

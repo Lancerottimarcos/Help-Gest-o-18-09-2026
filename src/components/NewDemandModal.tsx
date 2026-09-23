@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, Plus, Calendar, User, Tag, Sparkles, UploadCloud } from 'lucide-react';
 import { Client, DemandItem, KanbanColumnId, Priority, DemandAttachment, TeamMember, KanbanColumn } from '../types';
 import { initialTeamMembers } from '../data/mockData';
@@ -33,8 +33,14 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
 }) => {
   const activeMembersList = teamMembers && teamMembers.length > 0 ? teamMembers : initialTeamMembers;
 
+  const sortedClients = useMemo(() => {
+    return (clients || []).slice().sort((a, b) =>
+      a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base', numeric: true })
+    );
+  }, [clients]);
+
   const [title, setTitle] = useState(initialData?.title || '');
-  const [selectedClient, setSelectedClient] = useState(initialData?.client || clients[0]?.name || '');
+  const [selectedClient, setSelectedClient] = useState(initialData?.client || sortedClients[0]?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
 
   // Sync selected client if clients list updates or initialData changes
@@ -48,10 +54,10 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
   }, [initialData]);
 
   React.useEffect(() => {
-    if (clients.length > 0 && !selectedClient && !initialData?.client) {
-      setSelectedClient(clients[0].name);
+    if (sortedClients.length > 0 && !selectedClient && !initialData?.client) {
+      setSelectedClient(sortedClients[0].name);
     }
-  }, [clients, selectedClient, initialData]);
+  }, [sortedClients, selectedClient, initialData]);
   const [type, setType] = useState('Post');
   const [category, setCategory] = useState<'Social Media' | 'Tráfego Pago' | 'Criação de Sites' | 'Design Geral'>('Social Media');
   const [priority, setPriority] = useState<Priority>('media');
@@ -165,7 +171,7 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
             <label className="block text-xs font-bold text-[#142142] dark:text-white mb-1">
               Cliente *
             </label>
-            {clients && clients.length > 0 ? (
+            {sortedClients && sortedClients.length > 0 ? (
               <select
                 required
                 value={selectedClient}
@@ -173,7 +179,7 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
                 className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-xs sm:text-sm font-semibold text-[#142142] dark:text-slate-100 p-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:outline-none transition-colors"
               >
                 <option value="" disabled>Selecione um cliente...</option>
-                {clients.map((c) => (
+                {sortedClients.map((c) => (
                   <option key={c.id} value={c.name}>
                     {c.name}
                   </option>

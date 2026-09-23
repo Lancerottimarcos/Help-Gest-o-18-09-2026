@@ -294,7 +294,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full pb-8">
       {/* Toast Notification */}
       {copyToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#142142] text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 border border-slate-700 animate-in fade-in slide-in-from-bottom-4 duration-200">
@@ -568,7 +568,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
         </div>
       ) : viewMode === 'grid' ? (
         /* GRID VIEW (Modern Card Layout) */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5">
           {filteredMembers.map((member) => {
             const memberFunc = getMemberFunctionRole(member);
             const badgeInfo = getFunctionBadge(memberFunc);
