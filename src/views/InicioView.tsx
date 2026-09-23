@@ -756,18 +756,6 @@ export const InicioView: React.FC<InicioViewProps> = ({
                     </div>
                   </div>
                 </div>
-
-                {/* Controles e Botão Principal */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={onOpenNewDemandModal}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer"
-                  >
-                    <Plus size={14} className="stroke-[3]" />
-                    <span>Nova Demanda</span>
-                  </button>
-                </div>
               </div>
 
               {/* GRÁFICO VISUAL DE ANDAMENTO DAS DEMANDAS */}

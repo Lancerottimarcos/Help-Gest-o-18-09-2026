@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ArrowRight, 
+  LogIn, 
   Eye, 
   EyeOff, 
-  Lock, 
-  User, 
   AlertCircle,
   Check,
   ShieldAlert,
-  Clock
+  Clock,
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { 
   checkBruteForceStatus, 
@@ -37,6 +37,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCapsLockOn, setIsCapsLockOn] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
@@ -52,6 +53,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Detect Caps Lock state on key events
+  const handleKeyActivity = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.getModifierState) {
+      setIsCapsLockOn(e.getModifierState('CapsLock'));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,9 +84,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       recordFailedLoginAttempt({
         username: username.trim().slice(0, 40) || 'payload_malicioso',
         reason: 'tentativa_injecao',
-        reasonText: 'Tentativa de injeção de payload malicioso ou script interceptada pelo WAF no formulário de login.'
+        reasonText: 'Tentativa de injeção de payload malicioso interceptada pelo WAF.'
       });
-      setErrorMessage('Tentativa de inserção de caracteres suspeitos bloqueada pelo firewall de segurança.');
+      setErrorMessage('Caracteres inválidos detectados pelo sistema de segurança.');
       return;
     }
 
@@ -89,7 +97,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const validation = await validateMasterCredentials(cleanUser, password);
 
       if (validation.isValid) {
-        // Record successful login (clears brute force counters and logs event)
         recordSuccessfulLogin(cleanUser);
         recordSessionActivity();
 
@@ -107,19 +114,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           try {
             localStorage.setItem('help_agency_auth', 'true');
             localStorage.setItem('help_agency_user', JSON.stringify(authUser));
-          } catch {
-            // ignore localStorage quota/privacy error
-          }
+          } catch {}
         }
         setIsLoading(false);
         onLoginSuccess(authUser);
       } else {
         setIsLoading(false);
-        // Record failed attempt in security protocol with detailed reason
         const failReason = !validation.usernameMatched ? 'usuario_inexistente' : 'senha_incorreta';
         const failText = !validation.usernameMatched
           ? 'Usuário informado não consta no cofre de credenciais autorizadas.'
-          : 'Senha informada não corresponde ao hash SHA-256 da credencial mestra.';
+          : 'Senha informada não confere com o cadastro.';
 
         const failStatus = recordFailedLoginAttempt({
           username: cleanUser || 'desconhecido',
@@ -129,239 +133,250 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         setLockStatus(failStatus);
 
         if (failStatus.isLocked) {
-          setErrorMessage(`Múltiplas falhas detectadas! Sistema bloqueado temporariamente por ${Math.ceil(failStatus.remainingSeconds / 60)} minutos para proteger contra invasão.`);
+          setErrorMessage(`Sistema bloqueado temporariamente por ${Math.ceil(failStatus.remainingSeconds / 60)} min devido a múltiplas tentativas incorretas.`);
         } else {
           const remainingAttempts = 5 - failStatus.attempts;
           if (!validation.usernameMatched) {
-            setErrorMessage(`Usuário não encontrado. (${remainingAttempts} ${remainingAttempts === 1 ? 'tentativa restante' : 'tentativas restantes'} antes do bloqueio temporário).`);
+            setErrorMessage(`Usuário não encontrado. (${remainingAttempts} ${remainingAttempts === 1 ? 'tentativa restante' : 'tentativas restantes'}).`);
           } else {
-            setErrorMessage(`Senha incorreta. (${remainingAttempts} ${remainingAttempts === 1 ? 'tentativa restante' : 'tentativas restantes'} antes do bloqueio temporário).`);
+            setErrorMessage(`Senha incorreta. (${remainingAttempts} ${remainingAttempts === 1 ? 'tentativa restante' : 'tentativas restantes'}).`);
           }
         }
       }
     } catch {
       setIsLoading(false);
-      setErrorMessage('Erro ao validar credenciais. Tente novamente.');
+      setErrorMessage('Erro ao autenticar. Tente novamente.');
     }
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#0a1224] text-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-10 relative overflow-hidden font-sans selection:bg-[#fab518] selection:text-[#142142]">
-      {/* Brand background glowing gradients matching internal system palette */}
-      <div className="absolute -top-32 right-[-10%] w-[620px] h-[620px] bg-gradient-to-b from-[#fab518]/15 via-[#1d2e56]/30 to-transparent rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -left-20 w-[550px] h-[550px] bg-gradient-to-tr from-[#142142] via-[#1d2e56]/40 to-transparent rounded-full blur-3xl pointer-events-none" />
-      
-      {/* Subtle architectural background grid */}
-      <div 
-        className="absolute inset-0 opacity-[0.035] pointer-events-none"
-        style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, #fab518 1px, transparent 0)`,
-          backgroundSize: '32px 32px'
-        }}
-      />
+    <div 
+      className="min-h-screen w-full flex items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden selection:bg-[#f99616] selection:text-white"
+      style={{
+        background: 'radial-gradient(130% 130% at 50% 45%, #ffffff 0%, #faf8f5 28%, #f3efe8 60%, #e6e0d5 100%)'
+      }}
+    >
+      {/* Subtle studio ambient diffusion glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[650px] bg-gradient-to-tr from-[#f99616]/4 via-[#fef3e7]/40 to-transparent rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-32 -right-32 w-96 h-96 bg-[#faf5ed]/60 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-[#ede6db]/60 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Main Container - Login Card */}
-      <div className="w-full max-w-md relative z-10 my-auto">
-        <div className="w-full bg-[#142142]/95 backdrop-blur-xl rounded-3xl border border-[#1d2e56] p-7 sm:p-9 shadow-2xl shadow-black/50 space-y-6 relative">
-          
-          {/* Logo & Header */}
-          <div className="flex flex-col items-center text-center space-y-3">
-            <img
-              id="login-brand-logo"
-              src="/icone-help.png"
-              alt="Help Ideias Digitais"
-              className="h-16 sm:h-20 w-auto object-contain drop-shadow-md mb-1"
-              referrerPolicy="no-referrer"
-            />
+      {/* Login Card matching exact reference image */}
+      <div className="w-full max-w-[440px] bg-white rounded-[32px] p-8 sm:p-11 shadow-[0_25px_60px_-15px_rgba(20,33,66,0.08),0_10px_25px_-5px_rgba(0,0,0,0.04)] border border-white/90 relative z-10">
+        
+        {/* Top Circular Badge with Door/Login Icon */}
+        <div className="w-12 h-12 rounded-full bg-[#fef3e7] flex items-center justify-center mb-6">
+          <LogIn size={20} className="text-[#f99616] stroke-[2.2]" />
+        </div>
 
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Entrar
-              </h2>
-              <p className="text-xs text-slate-300 mt-1 font-medium">
-                Digite suas credenciais para acessar o painel
+        {/* Title & Subtitle */}
+        <div className="space-y-1.5">
+          <h1 className="text-3xl font-normal text-[#1e293b] tracking-tight">
+            Entrar
+          </h1>
+          <p className="text-sm text-slate-500 font-normal">
+            Acesse o painel da sua agência
+          </p>
+        </div>
+
+        {/* Dotted Divider */}
+        <div className="my-6 border-b border-dotted border-slate-200" />
+
+        {/* Lockout or Error Alerts */}
+        {lockStatus.isLocked ? (
+          <div 
+            id="login-lockout-alert"
+            className="mb-4 p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5 animate-fadeIn"
+          >
+            <ShieldAlert size={18} className="shrink-0 text-red-500 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold text-red-800">Acesso Temporariamente Bloqueado</p>
+              <p className="text-red-600 text-[11px] leading-relaxed">
+                Múltiplas tentativas incorretas foram detectadas.
               </p>
+              <div className="flex items-center gap-1.5 font-mono font-bold text-red-700 text-[11px] pt-0.5">
+                <Clock size={13} />
+                <span>Desbloqueio em: {lockStatus.remainingSeconds}s</span>
+              </div>
+            </div>
+          </div>
+        ) : errorMessage ? (
+          <div 
+            id="login-error-alert"
+            className="mb-4 p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2 animate-fadeIn"
+          >
+            <AlertCircle size={15} className="shrink-0 text-red-500 mt-0.5" />
+            <span className="leading-snug">{errorMessage}</span>
+          </div>
+        ) : null}
+
+        {/* Caps Lock Alert */}
+        {isCapsLockOn && (
+          <div className="mb-4 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+            <AlertCircle size={14} className="shrink-0 text-amber-600" />
+            <span className="text-[11px]">Aviso: <b>Caps Lock</b> está ativado.</span>
+          </div>
+        )}
+
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          
+          {/* Email / Username field */}
+          <div>
+            <label 
+              htmlFor="login-username"
+              className="block text-xs font-medium text-slate-500 mb-2"
+            >
+              Email
+            </label>
+            <input
+              id="login-username"
+              type="text"
+              required
+              disabled={lockStatus.isLocked}
+              autoComplete="username"
+              placeholder="voce@agencia.com"
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                if (errorMessage) setErrorMessage('');
+              }}
+              onKeyDown={handleKeyActivity}
+              onKeyUp={handleKeyActivity}
+              className="w-full bg-[#f1f3f7] hover:bg-[#ebedf2] focus:bg-white text-sm text-slate-800 placeholder:text-slate-400 px-4 py-3 rounded-2xl border border-transparent focus:border-[#f99616] focus:ring-2 focus:ring-[#f99616]/20 outline-none transition-all font-normal disabled:opacity-50"
+            />
+          </div>
+
+          {/* Password field */}
+          <div>
+            <label 
+              htmlFor="login-password"
+              className="block text-xs font-medium text-slate-500 mb-2"
+            >
+              Senha
+            </label>
+            <div className="relative">
+              <input
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                disabled={lockStatus.isLocked}
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errorMessage) setErrorMessage('');
+                }}
+                onKeyDown={handleKeyActivity}
+                onKeyUp={handleKeyActivity}
+                className="w-full bg-[#f1f3f7] hover:bg-[#ebedf2] focus:bg-white text-sm text-slate-800 placeholder:text-slate-400 pl-4 pr-11 py-3 rounded-2xl border border-transparent focus:border-[#f99616] focus:ring-2 focus:ring-[#f99616]/20 outline-none transition-all font-normal tracking-wider disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 transition-colors cursor-pointer"
+                title={showPassword ? 'Ocultar senha' : 'Ver senha'}
+                aria-label={showPassword ? 'Ocultar senha' : 'Ver senha'}
+              >
+                {showPassword ? <Eye size={17} /> : <EyeOff size={17} />}
+              </button>
             </div>
           </div>
 
-            {/* Lockout Notification when Brute Force is detected */}
-            {lockStatus.isLocked ? (
+          {/* Options: Remember me & Forgot password */}
+          <div className="flex items-center justify-between pt-1">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                id="login-remember-checkbox"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="sr-only"
+              />
               <div 
-                id="login-lockout-alert"
-                className="p-4 rounded-2xl bg-red-950/80 border border-red-500/80 text-red-100 text-xs flex items-start gap-3 shadow-lg shadow-red-950/50 animate-in fade-in"
+                className={`w-4 h-4 rounded-[4px] flex items-center justify-center transition-colors ${
+                  rememberMe 
+                    ? 'bg-[#f99616] text-white' 
+                    : 'border border-slate-300 bg-white'
+                }`}
               >
-                <ShieldAlert size={20} className="shrink-0 text-red-400 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-black text-sm text-white">Bloqueio de Segurança Ativado</p>
-                  <p className="text-red-200/90 leading-relaxed">
-                    Múltiplas tentativas incorretas foram neutralizadas. O acesso foi suspenso temporariamente para proteger o sistema contra ataques de força bruta.
-                  </p>
-                  <div className="pt-2 flex items-center gap-1.5 font-mono font-bold text-amber-300">
-                    <Clock size={14} />
-                    <span>Desbloqueio em: {lockStatus.remainingSeconds}s</span>
-                  </div>
-                </div>
+                {rememberMe && <Check size={11} className="stroke-[3.5]" />}
               </div>
-            ) : errorMessage ? (
-              <div 
-                id="login-error-alert"
-                className="p-3.5 rounded-xl bg-red-950/60 border border-red-500/40 text-red-200 text-xs flex items-start gap-2.5 animate-fadeIn"
-              >
-                <AlertCircle size={16} className="shrink-0 text-red-400 mt-0.5" />
-                <span className="leading-snug font-medium">{errorMessage}</span>
-              </div>
-            ) : null}
+              <span className="text-xs font-semibold text-slate-800">
+                Manter-me conectado
+              </span>
+            </label>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Username / Email field with inner icon */}
-              <div>
-                <label 
-                  htmlFor="login-username"
-                  className="block text-xs font-bold text-slate-200 mb-1.5"
-                >
-                  Email ou Usuário
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <User size={17} />
-                  </div>
-                  <input
-                    id="login-username"
-                    type="text"
-                    required
-                    disabled={lockStatus.isLocked}
-                    autoComplete="username"
-                    placeholder="voce@agencia.com"
-                    value={username}
-                    onChange={(e) => {
-                      setUsername(e.target.value);
-                      if (errorMessage) setErrorMessage('');
-                    }}
-                    className="w-full bg-[#0a1224] hover:bg-[#0d172e] focus:bg-[#0a1224] text-sm text-white pl-10 pr-4 py-3.5 rounded-xl border border-[#1d2e56] focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/20 focus:outline-none transition-all placeholder:text-slate-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-              </div>
-
-              {/* Password field with inner icon & toggle visibility */}
-              <div>
-                <label 
-                  htmlFor="login-password"
-                  className="block text-xs font-bold text-slate-200 mb-1.5"
-                >
-                  Senha
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <Lock size={17} />
-                  </div>
-                  <input
-                    id="login-password"
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    disabled={lockStatus.isLocked}
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (errorMessage) setErrorMessage('');
-                    }}
-                    className="w-full bg-[#0a1224] hover:bg-[#0d172e] focus:bg-[#0a1224] text-sm text-white pl-10 pr-11 py-3.5 rounded-xl border border-[#1d2e56] focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/20 focus:outline-none transition-all placeholder:text-slate-500 font-medium tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 transition-colors cursor-pointer"
-                    title={showPassword ? 'Ocultar senha' : 'Ver senha'}
-                    aria-label={showPassword ? 'Ocultar senha' : 'Ver senha'}
-                  >
-                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Remember me & Forgot password row */}
-              <div className="flex items-center justify-between text-xs pt-1">
-                <label className="flex items-center gap-2 cursor-pointer select-none text-slate-300 hover:text-white transition-colors">
-                  <input
-                    id="login-remember-checkbox"
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="sr-only"
-                  />
-                  <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
-                    rememberMe 
-                      ? 'bg-[#fab518] border-[#fab518] text-[#142142]' 
-                      : 'border-slate-600 bg-[#0a1224]'
-                  }`}>
-                    {rememberMe && <Check size={12} className="stroke-[3.5]" />}
-                  </div>
-                  <span className="font-semibold text-[11px] sm:text-xs">Manter-me conectado</span>
-                </label>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotSent(false);
-                    setShowForgotPasswordModal(true);
-                  }}
-                  className="text-[11px] sm:text-xs font-bold text-slate-300 hover:text-[#fab518] transition-colors cursor-pointer"
-                >
-                  Esqueci minha senha
-                </button>
-              </div>
-
-              {/* Submit Button with Internal Brand Gold Gradient */}
-              <button
-                id="btn-login-submit"
-                type="submit"
-                disabled={isLoading || lockStatus.isLocked}
-                className="w-full mt-3 py-3.5 px-5 rounded-xl bg-gradient-to-r from-[#fab518] via-[#e29f11] to-[#fab518] hover:brightness-105 active:scale-[0.99] text-[#142142] font-black text-sm tracking-wide shadow-lg shadow-[#fab518]/20 hover:shadow-[#fab518]/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <div className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-[#142142] border-t-transparent rounded-full animate-spin" />
-                    <span>Autenticando...</span>
-                  </div>
-                ) : lockStatus.isLocked ? (
-                  <div className="flex items-center gap-2">
-                    <Lock size={16} />
-                    <span>Acesso Temporariamente Suspenso</span>
-                  </div>
-                ) : (
-                  <>
-                    <span>Entrar no Sistema</span>
-                    <ArrowRight size={17} className="stroke-[3]" />
-                  </>
-                )}
-              </button>
-
-              {/* Brand Copyright Footer */}
-              <div className="pt-3 text-center text-xs text-slate-400 font-medium border-t border-slate-800/80">
-                Help Ideias Digitais • 2026
-              </div>
-            </form>
+            <button
+              type="button"
+              onClick={() => {
+                setForgotSent(false);
+                setShowForgotPasswordModal(true);
+              }}
+              className="text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+            >
+              Esqueci minha senha
+            </button>
           </div>
-        </div>
+
+          {/* Primary Submit Button */}
+          <button
+            id="btn-login-submit"
+            type="submit"
+            disabled={isLoading || lockStatus.isLocked}
+            className="w-full mt-6 py-3.5 px-4 rounded-2xl bg-[#f99616] hover:bg-[#e88708] active:scale-[0.99] text-black font-bold text-sm shadow-[0_4px_14px_rgba(249,150,22,0.25)] hover:shadow-[0_6px_20px_rgba(249,150,22,0.35)] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                <span>Entrando...</span>
+              </div>
+            ) : lockStatus.isLocked ? (
+              <span>Acesso Suspenso</span>
+            ) : (
+              <>
+                <LogIn size={17} className="stroke-[2.5]" />
+                <span>Entrar</span>
+              </>
+            )}
+          </button>
+        </form>
+      </div>
 
       {/* Forgot Password Modal */}
       {showForgotPasswordModal && (
-        <div className="fixed inset-0 z-50 bg-[#0a1224]/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#142142] border border-[#1d2e56] rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4">
-            <h3 className="text-base font-bold text-white">
-              Recuperar Senha
-            </h3>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[28px] p-7 w-full max-w-sm shadow-2xl space-y-4 border border-slate-100 relative">
+            <button
+              type="button"
+              onClick={() => setShowForgotPasswordModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div>
+              <h3 className="text-lg font-semibold text-slate-800">
+                Recuperar Senha
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Digite o e-mail cadastrado da sua conta
+              </p>
+            </div>
+
             {forgotSent ? (
-              <div className="space-y-3">
-                <div className="p-3 bg-emerald-950/50 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs leading-relaxed">
-                  As instruções para redefinição foram enviadas para <b>{forgotEmail || 'seu e-mail'}</b>.
+              <div className="space-y-4 pt-2">
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-start gap-2.5">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">
+                    Instruções de redefinição foram enviadas para <b>{forgotEmail || 'seu e-mail'}</b>.
+                  </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowForgotPasswordModal(false)}
-                  className="w-full py-2.5 bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs rounded-xl transition-colors cursor-pointer"
+                  className="w-full py-3 bg-[#f99616] hover:bg-[#e88708] text-black font-bold text-xs rounded-2xl transition-colors cursor-pointer"
                 >
                   Voltar ao Login
                 </button>
@@ -372,30 +387,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   e.preventDefault();
                   setForgotSent(true);
                 }} 
-                className="space-y-3"
+                className="space-y-4 pt-1"
               >
-                <p className="text-xs text-slate-300">
-                  Informe o seu e-mail ou nome de usuário cadastrado para receber o link de recuperação.
-                </p>
                 <input
-                  type="text"
+                  type="email"
                   required
                   placeholder="voce@agencia.com"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
-                  className="w-full bg-[#0a1224] text-sm text-white px-3.5 py-2.5 rounded-xl border border-[#1d2e56] focus:border-[#fab518] focus:ring-1 focus:ring-[#fab518] focus:outline-none placeholder:text-slate-500"
+                  className="w-full bg-[#f1f3f7] focus:bg-white text-sm text-slate-800 px-4 py-3 rounded-2xl border border-transparent focus:border-[#f99616] focus:ring-2 focus:ring-[#f99616]/20 outline-none transition-all placeholder:text-slate-400 font-normal"
                 />
-                <div className="flex items-center justify-end gap-2 pt-2">
+                <div className="flex items-center justify-end gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => setShowForgotPasswordModal(false)}
-                    className="px-3.5 py-2 text-xs font-semibold text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                    className="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                    className="px-5 py-2.5 bg-[#f99616] hover:bg-[#e88708] text-black font-bold text-xs rounded-2xl shadow-sm transition-colors cursor-pointer"
                   >
                     Enviar Link
                   </button>
