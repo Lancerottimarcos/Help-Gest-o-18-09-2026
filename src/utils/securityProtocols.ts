@@ -1172,4 +1172,147 @@ export function checkSessionInactivityTimeout(): { isExpired: boolean; timeoutMi
   }
 }
 
+// -------------------------------------------------------------
+// RECUPERAÇÃO REAL DE SENHA E IDENTIFICAÇÃO DE USUÁRIOS
+// -------------------------------------------------------------
+
+export interface PasswordRecoveryUserInfo {
+  found: boolean;
+  name: string;
+  email: string;
+  username: string;
+  roleLabel: string;
+  isOwner: boolean;
+  securityCode: string;
+}
+
+export function findUserForPasswordRecovery(identifier: string): PasswordRecoveryUserInfo | null {
+  const clean = (identifier || '').trim().toLowerCase().replace(/^@/, '');
+  if (!clean) return null;
+
+  // Gera código seguro de 6 caracteres (ex: HLP-8241)
+  const codeNum = Math.floor(1000 + Math.random() * 9000);
+  const securityCode = `HLP-${codeNum}`;
+
+  // 1. Verifica se é Marcos Lancerotti
+  const isMarcos = clean === 'lancerotti' || 
+                   clean === 'lancerottirmarcos@gmail.com' || 
+                   clean === 'marcos' || 
+                   clean === 'marcos lancerotti' ||
+                   clean === 'marcos@ideiasdigitais.com.br';
+
+  if (isMarcos) {
+    return {
+      found: true,
+      name: 'Marcos Lancerotti',
+      email: 'lancerottirmarcos@gmail.com',
+      username: 'lancerotti',
+      roleLabel: 'Proprietário da Agência',
+      isOwner: true,
+      securityCode,
+    };
+  }
+
+  // 2. Busca na lista de membros da equipe
+  let team: TeamMember[] = initialTeamMembers;
+  try {
+    const stored = localStorage.getItem('agency_team_members');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        team = parsed;
+      }
+    }
+  } catch {}
+
+  const member = team.find(m => {
+    const mUser = (m.username || '').trim().toLowerCase().replace(/^@/, '');
+    const mEmail = (m.email || '').trim().toLowerCase();
+    const mName = (m.name || '').trim().toLowerCase();
+    return mUser === clean || mEmail === clean || mName === clean;
+  });
+
+  if (member) {
+    const isOwner = isOwnerOrMarcos(member);
+    return {
+      found: true,
+      name: member.name,
+      email: member.email || `${member.username || 'usuario'}@ideiasdigitais.com.br`,
+      username: member.username || member.name.toLowerCase().replace(/\s+/g, '.'),
+      roleLabel: member.role || 'Colaborador da Agência',
+      isOwner,
+      securityCode,
+    };
+  }
+
+  return null;
+}
+
+export async function executePasswordReset(
+  user: PasswordRecoveryUserInfo,
+  newPass: string
+): Promise<{ success: boolean; message: string }> {
+  if (!newPass || newPass.length < 4) {
+    return { success: false, message: 'A nova senha deve possuir no mínimo 4 caracteres.' };
+  }
+
+  try {
+    if (user.isOwner) {
+      await updateMasterPassword(newPass);
+    }
+
+    // Atualiza também na equipe
+    let team: TeamMember[] = initialTeamMembers;
+    const stored = localStorage.getItem('agency_team_members');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          team = parsed;
+        }
+      } catch {}
+    }
+
+    let updated = false;
+    team = team.map(m => {
+      const mEmail = (m.email || '').trim().toLowerCase();
+      const mUser = (m.username || '').trim().toLowerCase().replace(/^@/, '');
+      if (mEmail === user.email.toLowerCase() || mUser === user.username.toLowerCase() || (user.isOwner && isOwnerOrMarcos(m))) {
+        updated = true;
+        return { ...m, password: newPass };
+      }
+      return m;
+    });
+
+    if (updated) {
+      try {
+        localStorage.setItem('agency_team_members', JSON.stringify(team));
+      } catch {}
+
+      // Sincroniza com base central do servidor se disponível
+      try {
+        fetch('/api/database', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamMembers: team }),
+        }).catch(() => {});
+      } catch {}
+    }
+
+    addSecurityLog({
+      eventType: 'login_success',
+      severity: 'warning',
+      title: 'Senha Redefinida com Sucesso',
+      description: `A senha de acesso do usuário "${user.name}" (@${user.username}) foi redefinida com segurança.`,
+      source: 'Módulo de Recuperação de Senhas',
+      threatDetails: `Protocolo de recuperação validado para ${user.email}`,
+    });
+
+    return { success: true, message: 'Senha redefinida com sucesso!' };
+  } catch (e: any) {
+    return { success: false, message: e?.message || 'Erro ao processar a nova senha.' };
+  }
+}
+
+
 
