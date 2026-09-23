@@ -22,6 +22,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { DemandItem, Client, DemandAttachment } from '../types';
+import { detectAndSanitizeInput } from '../utils/securityProtocols';
 
 interface PublicClientApprovalViewProps {
   demandId: string;
@@ -106,16 +107,20 @@ export const PublicClientApprovalView: React.FC<PublicClientApprovalViewProps> =
   };
 
   const handleRejectClick = () => {
-    onReject(demand.id, rejectReason.trim() || undefined);
+    const rawReason = rejectReason.trim();
+    const sanitizedReason = rawReason ? detectAndSanitizeInput(rawReason, 'Portal do Cliente: Motivo Reprovação').sanitized : undefined;
+    onReject(demand.id, sanitizedReason);
     setActionSuccessMessage('Demanda marcada como Reprovada. A equipe criativa foi notificada para elaborar uma nova proposta.');
     setIsRejectConfirmOpen(false);
   };
 
   const handleSubmitChange = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!changeText.trim()) return;
+    const rawText = changeText.trim();
+    if (!rawText) return;
 
-    onRequestChange(demand.id, changeText.trim());
+    const sanitizedFeedback = detectAndSanitizeInput(rawText, 'Portal do Cliente: Solicitação de Ajuste').sanitized;
+    onRequestChange(demand.id, sanitizedFeedback);
     setActionSuccessMessage('Sua solicitação de alteração foi registrada! O material retornou para os designers com seus apontamentos.');
     setIsChangeFormOpen(false);
   };

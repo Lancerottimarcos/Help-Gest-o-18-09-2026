@@ -23,8 +23,27 @@ async function startServer() {
   app.use(express.json({ limit: "25mb" }));
 
   // ==================================================================
+  // MIDDLEWARE DE CABEÇALHOS DE SEGURANÇA (OWASP Compliant)
+  // ==================================================================
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    next();
+  });
+
+  // ==================================================================
   // ROTAS DE API (Executadas antes de qualquer middleware de frontend)
   // ==================================================================
+
+  // Headers de controle de cache para rotas de API
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    next();
+  });
 
   // Health check
   app.get("/api/health", (_req, res) => {
@@ -52,17 +71,44 @@ async function startServer() {
 
   app.post("/api/supabase-config", (req, res) => {
     try {
-      const { url, anonKey } = req.body;
+      const { url, anonKey } = req.body || {};
+
+      // Validação estrita de segurança da URL
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ success: false, error: "A URL do Supabase é obrigatória." });
+      }
+
+      const cleanUrl = url.trim();
+      if (!cleanUrl.startsWith("https://") && !cleanUrl.startsWith("http://localhost")) {
+        return res.status(400).json({ success: false, error: "A URL deve iniciar obrigatoriamente com https:// ou http://localhost" });
+      }
+
+      if (cleanUrl.length > 500) {
+        return res.status(400).json({ success: false, error: "URL excede o limite máximo permitido." });
+      }
+
+      // Validação da Chave Anônima
+      if (!anonKey || typeof anonKey !== "string") {
+        return res.status(400).json({ success: false, error: "A chave anônima do Supabase é obrigatória." });
+      }
+
+      const cleanKey = anonKey.trim();
+      if (cleanKey.length < 20 || cleanKey.length > 2500) {
+        return res.status(400).json({ success: false, error: "Tamanho de chave de autenticação inválido." });
+      }
+
       const data = {
-        url: (url || "").trim(),
-        anonKey: (anonKey || "").trim(),
+        url: cleanUrl,
+        anonKey: cleanKey,
         updatedAt: new Date().toISOString(),
       };
+
+      // Gravação segura no arquivo de configuração
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(data, null, 2), "utf-8");
       res.json({ success: true });
     } catch (e: any) {
       console.error("Erro ao salvar supabase-config.json:", e);
-      res.status(500).json({ success: false, error: e.message });
+      res.status(500).json({ success: false, error: "Falha interna ao persistir configuração." });
     }
   });
 
@@ -92,9 +138,22 @@ async function startServer() {
   app.post("/api/database", (req, res) => {
     try {
       const body = req.body;
-      if (!body || typeof body !== "object") {
-        return res.status(400).json({ success: false, error: "Payload inválido" });
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return res.status(400).json({ success: false, error: "Payload inválido. Objeto esperado." });
       }
+
+      // Whitelist de campos permitidos na base central para evitar injeção de lixo ou dados espúrios
+      const ALLOWED_COLLECTIONS = [
+        "clients",
+        "demands",
+        "services",
+        "proposals",
+        "invoices",
+        "activities",
+        "teamMembers",
+        "kanbanColumns",
+        "updatedAt",
+      ];
 
       // Mescla com os dados existentes se houver
       let currentData: any = {};
@@ -104,9 +163,16 @@ async function startServer() {
         } catch {}
       }
 
+      const sanitizedUpdate: Record<string, any> = {};
+      for (const key of Object.keys(body)) {
+        if (ALLOWED_COLLECTIONS.includes(key)) {
+          sanitizedUpdate[key] = body[key];
+        }
+      }
+
       const merged = {
         ...currentData,
-        ...body,
+        ...sanitizedUpdate,
         updatedAt: Date.now(),
       };
 
@@ -114,7 +180,7 @@ async function startServer() {
       res.json({ success: true, timestamp: Date.now() });
     } catch (e: any) {
       console.error("Erro ao salvar data/database.json:", e);
-      res.status(500).json({ success: false, error: e.message });
+      res.status(500).json({ success: false, error: "Erro ao persistir dados no banco central." });
     }
   });
 

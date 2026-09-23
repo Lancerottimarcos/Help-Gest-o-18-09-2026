@@ -378,7 +378,7 @@ export const PortalClienteView: React.FC<PortalClienteViewProps> = ({
                           <span className="text-slate-300 dark:text-slate-700 text-xs">•</span>
                           <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
                             <User size={12} />
-                            {demand.assigneeName}
+                            {demand.assignee?.name || demand.assigneeName || 'Equipe Help'}
                           </span>
                         </div>
 

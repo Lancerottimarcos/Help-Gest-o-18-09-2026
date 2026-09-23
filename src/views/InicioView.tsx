@@ -40,6 +40,7 @@ import { ClientLocationMap } from '../components/ClientLocationMap';
 import { ClientBirthdaysSection } from '../components/ClientBirthdaysSection';
 import { DashboardCustomizerModal, DASHBOARD_PRESETS, DashboardCustomizerPreset } from '../components/DashboardCustomizerModal';
 import { DemandsStoriesSection } from '../components/DemandsStoriesSection';
+import { DemandsProgressChart } from '../components/DemandsProgressChart';
 import { initialRecentActivities, currentUser } from '../data/mockData';
 
 const DEFAULT_SECTIONS: InicioSectionId[] = [
@@ -537,6 +538,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
   // Estados para filtro e ordenação da seção de prazos e entregas
   const [timelineFilter, setTimelineFilter] = useState<'todas' | 'atrasadas' | 'hoje' | 'proximas' | 'criticas'>('todas');
   const [timelineSort, setTimelineSort] = useState<'prazo' | 'prioridade'>('prazo');
+  const [timelineStageFilter, setTimelineStageFilter] = useState<string | null>(null);
 
   const timelineMetrics = useMemo(() => {
     const total = timelineDemandsList.length;
@@ -610,8 +612,12 @@ export const InicioView: React.FC<InicioViewProps> = ({
       result.sort((a, b) => a.daysDiff - b.daysDiff);
     }
 
+    if (timelineStageFilter) {
+      result = result.filter((item) => item.demand.columnId === timelineStageFilter);
+    }
+
     return result;
-  }, [timelineDemandsList, timelineFilter, timelineSort]);
+  }, [timelineDemandsList, timelineFilter, timelineSort, timelineStageFilter]);
   
   const activeClients = clients.filter((c) => c.status === 'Ativo');
   
@@ -698,7 +704,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
         );
 
       case 'demandas_atrasadas': {
-        if (timelineDemandsList.length === 0) {
+        if (demands.length === 0) {
           if (isReorderMode) {
             return (
               <div className="bg-white dark:bg-[#0f172a] rounded-[24px] p-5 sm:p-6 border border-dashed border-emerald-300 dark:border-emerald-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
@@ -731,9 +737,9 @@ export const InicioView: React.FC<InicioViewProps> = ({
 
         return (
           <section aria-label="Seção de Prazos e Próximas Demandas" className="space-y-3">
-            <div className="bg-white dark:bg-[#0f172a] rounded-2xl sm:rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs transition-all">
+            <div className="bg-white dark:bg-[#0f172a] rounded-2xl sm:rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs transition-all space-y-5">
               {/* Header da Seção */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800/80">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/80">
                 <div className="flex items-center gap-3.5">
                   <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
                     timelineMetrics.overdueCount > 0
@@ -752,16 +758,37 @@ export const InicioView: React.FC<InicioViewProps> = ({
                 </div>
 
                 {/* Controles e Botão Principal */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onOpenNewDemandModal}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer"
+                  >
+                    <Plus size={14} className="stroke-[3]" />
+                    <span>Nova Demanda</span>
+                  </button>
+                </div>
               </div>
+
+              {/* GRÁFICO VISUAL DE ANDAMENTO DAS DEMANDAS */}
+              <DemandsProgressChart
+                demands={demands}
+                onNavigate={onNavigate}
+                onFilterStage={setTimelineStageFilter}
+                selectedStage={timelineStageFilter}
+              />
 
               {/* Filtros de Triagem (Pills Clean) */}
               <div className="flex items-center justify-between gap-3 pt-1 pb-3 flex-wrap">
                 <div className="flex items-center gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-xl border border-slate-200/50 dark:border-slate-700/50 flex-wrap">
                   <button
                     type="button"
-                    onClick={() => setTimelineFilter('todas')}
+                    onClick={() => {
+                      setTimelineFilter('todas');
+                      setTimelineStageFilter(null);
+                    }}
                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                      timelineFilter === 'todas'
+                      timelineFilter === 'todas' && !timelineStageFilter
                         ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-semibold'
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                     }`}
@@ -807,6 +834,19 @@ export const InicioView: React.FC<InicioViewProps> = ({
                     Próximas ({timelineMetrics.upcomingCount})
                   </button>
 
+                  {timelineStageFilter && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100/90 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 text-xs font-bold border border-amber-300 dark:border-amber-800/80">
+                      <span>Etapa: {getColumnDisplayLabel(timelineStageFilter)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setTimelineStageFilter(null)}
+                        className="hover:text-amber-700 dark:hover:text-white cursor-pointer ml-1 font-black"
+                        title="Limpar filtro de etapa"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -1391,7 +1431,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
         ) : (
           visibleSections.map((sectionId, index) => {
             // Se for a seção de prazos e demandas e não houver nenhuma demanda monitorada, não renderiza nada no modo normal
-            if (sectionId === 'demandas_atrasadas' && timelineDemandsList.length === 0 && !isReorderMode) {
+            if (sectionId === 'demandas_atrasadas' && demands.length === 0 && !isReorderMode) {
               return null;
             }
 

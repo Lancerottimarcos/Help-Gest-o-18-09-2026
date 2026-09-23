@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Menu, 
-  Search, 
   Bell, 
   LogOut, 
   CheckCheck, 
@@ -21,7 +20,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PageId, AgencyNotification } from '../types';
-import { ThemeToggle } from './ThemeToggle';
 import { 
   getNotificationPermission, 
   requestNotificationPermission,
@@ -32,8 +30,8 @@ interface HeaderProps {
   currentPage: PageId;
   onOpenMobileSidebar: () => void;
   onOpenNewDemandModal?: () => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
   isSidebarCollapsed?: boolean;
   onToggleSidebarCollapse?: () => void;
   onLogout?: () => void;
@@ -170,7 +168,6 @@ export const Header: React.FC<HeaderProps> = ({
   const pageInfo = PAGE_TITLES[currentPage] || PAGE_TITLES.inicio;
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'security'>('all');
   const [notifications, setNotifications] = useState<AgencyNotification[]>(() => {
     try {
@@ -561,45 +558,8 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Search + Theme Toggle + Notifications + Logout */}
+      {/* Right: Notifications */}
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-        {/* Mobile Search Toggle Button */}
-        <button
-          type="button"
-          onClick={() => {
-            setIsNotificationsOpen(false);
-            setIsMobileSearchOpen((prev) => !prev);
-          }}
-          className={`sm:hidden p-2 rounded-xl transition-colors cursor-pointer touch-manipulation ${
-            isMobileSearchOpen
-              ? 'bg-[#fab518] text-[#142142]'
-              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-          title="Buscar no sistema"
-          aria-label="Abrir busca"
-        >
-          <Search size={18} />
-        </button>
-
-        {/* Universal Search (Desktop / Tablet) */}
-        <div className="relative hidden sm:block w-40 md:w-56 lg:w-64">
-          <Search
-            size={15}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
-          />
-          <input
-            id="global-search-input"
-            type="text"
-            placeholder="Buscar no sistema..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-[#F2F2F2] dark:bg-slate-800/80 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 focus:bg-white dark:focus:bg-slate-900 text-xs sm:text-sm font-medium text-[#142142] dark:text-slate-100 pl-8 sm:pl-9 pr-3 py-1.5 sm:py-2 rounded-xl border border-transparent dark:border-slate-700 focus:border-[#fab518] focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
-          />
-        </div>
-
-        {/* Theme Toggle Button (Light/Dark Mode) */}
-        <ThemeToggle variant="icon" />
-
         {/* Notifications Button & Popover */}
         <div className="relative" ref={notificationsRef}>
           <button
@@ -607,7 +567,6 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setIsMobileSearchOpen(false);
               setIsNotificationsOpen((prev) => !prev);
             }}
             className={`relative min-w-[44px] min-h-[44px] w-11 h-11 sm:w-10 sm:h-10 sm:min-w-[40px] sm:min-h-[40px] rounded-xl transition-all duration-150 cursor-pointer flex items-center justify-center touch-manipulation select-none active:scale-95 ${
@@ -680,41 +639,6 @@ export const Header: React.FC<HeaderProps> = ({
         </AnimatePresence>,
         document.body
       )}
-
-      {/* Mobile Search Overlay Bar */}
-      <AnimatePresence>
-        {isMobileSearchOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            className="absolute inset-x-2 top-full mt-2 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200/90 dark:border-slate-800 p-2.5 shadow-xl sm:hidden z-50 flex items-center gap-2"
-          >
-            <div className="relative flex-1">
-              <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-              <input
-                type="text"
-                autoFocus
-                placeholder="Buscar clientes, demandas, propostas..."
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-xs font-medium text-[#142142] dark:text-white pl-9 pr-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#fab518]"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsMobileSearchOpen(false)}
-              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-              aria-label="Fechar busca"
-            >
-              <X size={18} />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </header>
   );
 };

@@ -465,7 +465,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
   const handleToggleInvoiceStatus = (id: string) => {
     setInvoices((prev) => {
       const updated = prev.map((inv) =>
-        inv.id === id ? { ...inv, status: inv.status === 'Pago' ? 'Pendente' : 'Pago' } : inv
+        inv.id === id ? { ...inv, status: (inv.status === 'Pago' ? 'Pendente' : 'Pago') as 'Pago' | 'Pendente' } : inv
       );
       const target = updated.find(i => i.id === id);
       if (target && supabaseService.isConfigured()) {
@@ -1062,10 +1062,10 @@ export function Layout({ children, onLogout }: LayoutProps) {
     setInvoices((prevInvoices) => {
       let changed = false;
       const updated = prevInvoices.map((inv) => {
-        const invClientTrimmed = (inv.clientName || '').trim().toLowerCase();
+        const invClientTrimmed = (inv.client || '').trim().toLowerCase();
         if ((oldName && invClientTrimmed === oldName.toLowerCase()) || (oldCompanyName && invClientTrimmed === oldCompanyName.toLowerCase())) {
           changed = true;
-          return { ...inv, clientName: newDisplayName };
+          return { ...inv, client: newDisplayName };
         }
         return inv;
       });

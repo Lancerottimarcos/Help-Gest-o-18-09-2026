@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   FileSpreadsheet, 
   Plus, 
@@ -7,7 +7,6 @@ import {
   XCircle, 
   ExternalLink, 
   Download, 
-  Sparkles, 
   TrendingUp, 
   Calendar,
   X,
@@ -15,7 +14,8 @@ import {
   Building,
   Check,
   ArrowRight,
-  Filter
+  Filter,
+  Search
 } from 'lucide-react';
 import { initialProposals } from '../data/mockData';
 import { BudgetProposal } from '../types';
@@ -94,10 +94,23 @@ export const OrcamentosView: React.FC<OrcamentosViewProps> = ({
     setTimeout(() => setDownloadSuccessToast(null), 3000);
   };
 
-  const filteredProposals = proposals.filter(p => {
-    if (statusFilter === 'Todos') return true;
-    return p.status === statusFilter;
-  });
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredProposals = useMemo(() => {
+    return proposals.filter(p => {
+      const q = searchQuery.trim().toLowerCase();
+      const matchesSearch =
+        q === '' ||
+        (p.projectName && p.projectName.toLowerCase().includes(q)) ||
+        (p.code && p.code.toLowerCase().includes(q)) ||
+        (p.title && p.title.toLowerCase().includes(q)) ||
+        (p.clientName && p.clientName.toLowerCase().includes(q)) ||
+        (p.services && p.services.some(s => s.toLowerCase().includes(q)));
+
+      const matchesStatus = statusFilter === 'Todos' || p.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [proposals, searchQuery, statusFilter]);
 
   return (
     <div className="space-y-6 pb-8">
@@ -111,27 +124,80 @@ export const OrcamentosView: React.FC<OrcamentosViewProps> = ({
         </div>
       )}
 
-      {/* Commercial Header */}
-      <div className="bg-white dark:bg-[#0f172a] p-6 sm:p-7 rounded-[28px] border border-slate-200/90 dark:border-slate-800 card-elevation-subtle flex flex-wrap items-center justify-between gap-5">
-        <div>
-          <span className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#fab518] flex items-center gap-1.5">
-            <Sparkles size={14} />
-            <span>Área Comercial & Propostas</span>
-          </span>
-          <h3 className="text-2xl font-black text-[#142142] dark:text-white tracking-tight mt-1">
-            Orçamentos & Contratos
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xl leading-relaxed">
-            Estruture propostas de alto valor percebido, precifique pacotes de tráfego e design, e converta leads em contas recorrentes.
-          </p>
+      {/* Commercial Header & Filter Toolbar */}
+      <div className="bg-white dark:bg-[#0f172a] p-3.5 sm:p-4 rounded-2xl sm:rounded-[24px] border border-slate-200/90 dark:border-slate-800 card-elevation-subtle flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-4">
+        {/* Left: Search Bar & Status Filters */}
+        <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 flex-wrap">
+          {/* Search Input */}
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search
+              size={15}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+            />
+            <input
+              id="search-proposals-input"
+              type="text"
+              placeholder="Buscar por cliente, título ou serviço..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-800/80 pl-9 pr-8 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80 text-xs sm:text-sm font-medium text-[#142142] dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-[#fab518] transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded-full cursor-pointer"
+                title="Limpar busca"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {/* Status Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-full">
+            {(
+              [
+                { id: 'Todos', label: 'Todos', count: proposals.length, dotColor: 'bg-slate-400' },
+                { id: 'Enviado', label: 'Enviados', count: proposals.filter(p => p.status === 'Enviado').length, dotColor: 'bg-blue-500' },
+                { id: 'Aprovado', label: 'Aprovados', count: proposals.filter(p => p.status === 'Aprovado').length, dotColor: 'bg-emerald-500' },
+                { id: 'Recusado', label: 'Recusados', count: proposals.filter(p => p.status === 'Recusado').length, dotColor: 'bg-rose-500' },
+              ] as const
+            ).map((item) => {
+              const isActive = statusFilter === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setStatusFilter(item.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? 'bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] shadow-2xs'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/60'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${item.dotColor} ${isActive ? 'ring-2 ring-white/30 dark:ring-black/20' : ''}`} />
+                  <span>{item.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                    isActive
+                      ? 'bg-white/20 dark:bg-black/15 text-white dark:text-[#142142]'
+                      : 'bg-slate-200/80 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                  }`}>
+                    {item.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Right: New Budget Button */}
+        <div className="flex items-center gap-2 shrink-0 justify-end">
           <button
             type="button"
             id="btn-create-proposal-open"
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs sm:text-sm shadow-xs hover:shadow transition-all cursor-pointer"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs sm:text-sm shadow-xs hover:shadow-md transition-all cursor-pointer active:scale-95 whitespace-nowrap"
           >
             <Plus size={16} className="stroke-[3]" />
             <span>Novo orçamento</span>
@@ -184,24 +250,6 @@ export const OrcamentosView: React.FC<OrcamentosViewProps> = ({
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2">
-        {(['Todos', 'Enviado', 'Aprovado', 'Recusado'] as const).map((filter) => (
-          <button
-            key={filter}
-            type="button"
-            onClick={() => setStatusFilter(filter)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              statusFilter === filter
-                ? 'bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] shadow-xs'
-                : 'bg-white dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white border border-slate-200/80 dark:border-slate-700/80'
-            }`}
-          >
-            {filter === 'Todos' ? `Todos (${proposals.length})` : `${filter} (${proposals.filter(p => p.status === filter).length})`}
-          </button>
-        ))}
-      </div>
-
       {/* Proposal Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
         {filteredProposals.length === 0 ? (
@@ -211,15 +259,29 @@ export const OrcamentosView: React.FC<OrcamentosViewProps> = ({
             </div>
             <div className="max-w-md mx-auto space-y-1">
               <h3 className="text-base font-bold text-[#142142] dark:text-white">
-                {statusFilter === 'Todos' ? 'Nenhum orçamento cadastrado ainda' : `Nenhum orçamento com status "${statusFilter}"`}
+                {searchQuery.trim() !== ''
+                  ? 'Nenhum orçamento encontrado'
+                  : statusFilter === 'Todos'
+                  ? 'Nenhum orçamento cadastrado ainda'
+                  : `Nenhum orçamento com status "${statusFilter}"`}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {statusFilter === 'Todos'
+                {searchQuery.trim() !== ''
+                  ? `Nenhum orçamento corresponde à pesquisa "${searchQuery}".`
+                  : statusFilter === 'Todos'
                   ? 'Crie propostas comerciais e orçamentos para enviar aos seus clientes e acompanhar conversões e faturamento.'
                   : `Não há propostas cadastradas com o status "${statusFilter}".`}
               </p>
             </div>
-            {statusFilter === 'Todos' ? (
+            {searchQuery.trim() !== '' ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <span>Limpar busca</span>
+              </button>
+            ) : statusFilter === 'Todos' ? (
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}

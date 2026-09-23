@@ -16,6 +16,7 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
+  username?: string;
   role: UserRole;
   roleLabel: string;
   avatarUrl: string;
@@ -77,6 +78,13 @@ export interface DemandItem {
   approvalAnsweredAt?: string;
   clientPortalToken?: string;
   whatsappNotified?: boolean;
+  history?: {
+    id: string;
+    text: string;
+    timestamp: string;
+    author: string;
+  }[];
+  assigneeName?: string;
 }
 
 export interface ClientHistoryEvent {
@@ -165,10 +173,12 @@ export interface BudgetProposal {
   code: string;
   clientName: string;
   projectName: string;
+  title?: string;
   totalValue: number;
   date: string;
   status: 'Rascunho' | 'Enviado' | 'Aprovado' | 'Recusado';
   servicesCount: number;
+  services?: string[];
 }
 
 export type TeamMemberRole = 

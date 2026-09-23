@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Briefcase, Check, Plus, X, Tag, DollarSign, FileText, Sparkles, Layers, Pencil, Trash2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Briefcase, Check, Plus, X, Tag, DollarSign, FileText, Layers, Pencil, Trash2, Search } from 'lucide-react';
 import { initialServices } from '../data/mockData';
 import { Service } from '../types';
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
@@ -28,6 +28,26 @@ export const ServicosView: React.FC<ServicosViewProps> = ({
     'Alinhamento estratégico inicial',
     'Entrega de relatórios de desempenho'
   ]);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('todos');
+
+  const filteredServices = useMemo(() => {
+    return services.filter((srv) => {
+      const q = searchQuery.trim().toLowerCase();
+      const matchesSearch =
+        q === '' ||
+        srv.title.toLowerCase().includes(q) ||
+        srv.description.toLowerCase().includes(q) ||
+        srv.category.toLowerCase().includes(q);
+
+      const matchesCat =
+        selectedCategory === 'todos' ||
+        srv.category.toLowerCase() === selectedCategory.toLowerCase();
+
+      return matchesSearch && matchesCat;
+    });
+  }, [services, searchQuery, selectedCategory]);
 
   // Edit Service states
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -133,32 +153,50 @@ export const ServicosView: React.FC<ServicosViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Services Intro & Header */}
-      <div className="bg-white dark:bg-[#0f172a] p-6 sm:p-7 rounded-[28px] border border-slate-200/90 dark:border-slate-800 card-elevation-subtle flex flex-wrap items-center justify-between gap-5">
-        <div>
-          <span className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#fab518] flex items-center gap-1.5">
-            <Sparkles size={14} />
-            <span>Catálogo de Soluções & Precificação</span>
-          </span>
-          <h3 className="text-2xl font-black text-[#142142] dark:text-white tracking-tight mt-1">
-            Serviços & Pacotes
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xl leading-relaxed">
-            Estrutura padronizada de entregáveis para acelerar propostas comerciais e alinhar o escopo com o time de criação e tráfego.
-          </p>
+    <div className="space-y-5 pb-8">
+      {/* Toolbar Section: Search, Category Filters & Novo Serviço */}
+      <div className="bg-white dark:bg-[#0f172a] p-3.5 sm:p-4 rounded-2xl sm:rounded-[24px] border border-slate-200/90 dark:border-slate-800 card-elevation-subtle flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        {/* Left side: Search & Categories */}
+        <div className="flex flex-1 items-center gap-2.5 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search
+              size={15}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+            />
+            <input
+              type="text"
+              placeholder="Buscar serviço por nome ou categoria..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-800/80 pl-9 pr-3.5 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80 text-xs sm:text-sm font-medium text-[#142142] dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-[#fab518] transition-all"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-full">
+            {['todos', 'Social Media', 'Tráfego Pago', 'Criação de Sites', 'Consultoria'].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  selectedCategory === cat
+                    ? 'bg-[#142142] text-white dark:bg-[#fab518] dark:text-[#142142] shadow-2xs'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/60'
+                }`}
+              >
+                {cat === 'todos' ? 'Todos' : cat}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono font-bold text-xs text-[#142142] dark:text-slate-200 border border-slate-200/60 dark:border-slate-700">
-            {services.length} Serviços Ativos
-          </span>
-
+        {/* Right side: Novo serviço action button */}
+        <div className="flex items-center gap-2 shrink-0 justify-end">
           <button
             type="button"
             id="btn-add-service-open"
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs sm:text-sm shadow-xs hover:shadow transition-all cursor-pointer"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs sm:text-sm shadow-xs hover:shadow-md transition-all cursor-pointer active:scale-95 whitespace-nowrap"
           >
             <Plus size={16} className="stroke-[3]" />
             <span>Novo serviço</span>
@@ -189,8 +227,20 @@ export const ServicosView: React.FC<ServicosViewProps> = ({
               <span>Cadastrar Primeiro Serviço</span>
             </button>
           </div>
+        ) : filteredServices.length === 0 ? (
+          <div className="col-span-full py-10 px-6 text-center bg-white dark:bg-[#0f172a] rounded-[24px] border border-dashed border-slate-300 dark:border-slate-800 space-y-2">
+            <p className="text-sm font-bold text-[#142142] dark:text-white">Nenhum serviço encontrado</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Tente ajustar a busca ou o filtro de categoria selecionado.</p>
+            <button
+              type="button"
+              onClick={() => { setSearchQuery(''); setSelectedCategory('todos'); }}
+              className="mt-1 text-xs font-bold text-[#fab518] hover:underline cursor-pointer inline-block"
+            >
+              Limpar filtros
+            </button>
+          </div>
         ) : (
-          services.map((srv) => (
+          filteredServices.map((srv) => (
           <div
             key={srv.id}
             id={`service-card-${srv.id}`}
