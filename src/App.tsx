@@ -247,11 +247,29 @@ export function Layout({ children, onLogout }: LayoutProps) {
 
       // Se o Supabase tiver demandas gravadas
       if (remoteDemands && Array.isArray(remoteDemands) && remoteDemands.length > 0) {
-        setDemands(remoteDemands);
-        try {
-          localStorage.setItem('agency_demands', JSON.stringify(remoteDemands));
-        } catch {}
-        serverDbService.saveDatabase({ demands: remoteDemands });
+        setDemands((prevLocal) => {
+          const remoteMap = new Map(remoteDemands.map((d) => [d.id, d]));
+          const merged = prevLocal.map((loc) => {
+            const rem = remoteMap.get(loc.id);
+            if (!rem) return loc;
+            return {
+              ...rem,
+              clientId: rem.clientId || loc.clientId,
+              client: rem.client || loc.client,
+              clientProject: rem.clientProject || loc.clientProject,
+            };
+          });
+          remoteDemands.forEach((rem) => {
+            if (!prevLocal.some((loc) => loc.id === rem.id)) {
+              merged.push(rem);
+            }
+          });
+          try {
+            localStorage.setItem('agency_demands', JSON.stringify(merged));
+          } catch {}
+          serverDbService.saveDatabase({ demands: merged });
+          return merged;
+        });
       }
 
       // Se o Supabase tiver serviços cadastrados
@@ -773,13 +791,18 @@ export function Layout({ children, onLogout }: LayoutProps) {
       (!existingDemand || existingDemand.columnId !== 'aprovacao');
 
     const matchedClient = clients.find(
-      (c) => c.name.trim().toLowerCase() === (updatedDemand.client || '').trim().toLowerCase()
+      (c) => (updatedDemand.clientId && c.id === updatedDemand.clientId) ||
+             c.name.trim().toLowerCase() === (updatedDemand.client || '').trim().toLowerCase() ||
+             (c.companyName && c.companyName.trim().toLowerCase() === (updatedDemand.client || '').trim().toLowerCase())
     );
+
+    const resolvedClientName = matchedClient ? matchedClient.name : updatedDemand.client;
 
     const finalDemand: DemandItem = {
       ...updatedDemand,
       clientId: matchedClient?.id || updatedDemand.clientId,
-      clientProject: updatedDemand.client,
+      client: resolvedClientName,
+      clientProject: resolvedClientName,
       ...(wasJustMovedToApproval
         ? {
             approvalStatus: 'pendente',
@@ -791,9 +814,31 @@ export function Layout({ children, onLogout }: LayoutProps) {
         : {}),
     };
 
-    setDemands((prev) =>
-      prev.map((item) => (item.id === finalDemand.id ? finalDemand : item))
-    );
+    setDemands((prev) => {
+      const updated = prev.map((item) => (item.id === finalDemand.id ? finalDemand : item));
+      try {
+        localStorage.setItem('agency_demands', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ demands: updated }, true);
+      return updated;
+    });
+
+    // Atualiza contagem de demandas ativas nos clientes
+    setClients((prevClients) => {
+      const updatedClients = prevClients.map((c) => {
+        const count = demands.filter(d => {
+          const isThisDemand = d.id === finalDemand.id;
+          const target = isThisDemand ? finalDemand : d;
+          return (target.clientId === c.id || target.client.toLowerCase() === c.name.toLowerCase()) && target.columnId !== 'concluidas';
+        }).length;
+        return { ...c, activeDemandsCount: count };
+      });
+      try {
+        localStorage.setItem('agency_clients', JSON.stringify(updatedClients));
+      } catch {}
+      serverDbService.saveDatabase({ clients: updatedClients });
+      return updatedClients;
+    });
 
     // Sincroniza em background com o Supabase PostgreSQL
     supabaseService.upsertDemand(finalDemand);

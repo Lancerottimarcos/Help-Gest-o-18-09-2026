@@ -266,7 +266,6 @@ export interface ApprovalNotificationConfig {
 export type InicioSectionId = 
   | 'welcome' 
   | 'demandas_stories'
-  | 'demandas_atrasadas'
   | 'indicadores' 
   | 'prioridades'
   | 'aniversariantes' 

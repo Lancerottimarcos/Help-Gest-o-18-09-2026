@@ -1,5 +1,4 @@
-import React from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import React, { useState } from 'react';
 import { DemandItem, KanbanColumnId, PageId } from '../types';
 import { PieChart as PieIcon, ArrowUpRight } from 'lucide-react';
 
@@ -20,33 +19,33 @@ interface StatusDistributionItem {
 const STATUS_CONFIG: Record<KanbanColumnId, { name: string; color: string; bgBadge: string; textBadge: string }> = {
   ideias: {
     name: 'Ideias / Briefing',
-    color: '#64748B', // slate
-    bgBadge: 'bg-slate-100',
-    textBadge: 'text-slate-700',
+    color: '#EF4444', // Red/Coral
+    bgBadge: 'bg-red-50 dark:bg-red-950/50',
+    textBadge: 'text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/60',
   },
   producao: {
     name: 'Em Produção',
-    color: '#8B5CF6', // purple
-    bgBadge: 'bg-purple-50',
-    textBadge: 'text-purple-700',
+    color: '#8B5CF6', // Purple
+    bgBadge: 'bg-purple-50 dark:bg-purple-950/50',
+    textBadge: 'text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-900/60',
   },
   aprovacao: {
     name: 'Aprovação',
-    color: '#F59E0B', // amber
-    bgBadge: 'bg-amber-50',
-    textBadge: 'text-amber-800',
+    color: '#FAB518', // Gold / Amber
+    bgBadge: 'bg-amber-50 dark:bg-amber-950/50',
+    textBadge: 'text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-900/60',
   },
   agendamento: {
     name: 'Agendamento',
-    color: '#10B981', // emerald
-    bgBadge: 'bg-emerald-50',
-    textBadge: 'text-emerald-700',
+    color: '#10B981', // Emerald
+    bgBadge: 'bg-emerald-50 dark:bg-emerald-950/50',
+    textBadge: 'text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/60',
   },
   concluidas: {
     name: 'Concluídas',
-    color: '#3B82F6', // blue
-    bgBadge: 'bg-blue-50',
-    textBadge: 'text-blue-700',
+    color: '#64748B', // Slate
+    bgBadge: 'bg-slate-50 dark:bg-slate-800',
+    textBadge: 'text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
   },
 };
 
@@ -54,6 +53,8 @@ export const DemandsStatusDoughnutChart: React.FC<DemandsStatusDoughnutChartProp
   demands,
   onNavigate,
 }) => {
+  const [hoveredId, setHoveredId] = useState<KanbanColumnId | null>(null);
+
   // Focus on active demands (non-concluded) for the primary distribution overview
   const activeDemands = demands.filter((d) => d.columnId !== 'concluidas');
   const totalActive = activeDemands.length;
@@ -76,33 +77,36 @@ export const DemandsStatusDoughnutChart: React.FC<DemandsStatusDoughnutChartProp
     })
     .filter((item) => item.value > 0);
 
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const item = payload[0].payload as StatusDistributionItem;
-      const percent = totalActive > 0 ? ((item.value / totalActive) * 100).toFixed(0) : '0';
-      return (
-        <div className="bg-[#142142] text-white text-xs px-3 py-2 rounded-xl shadow-xl border border-slate-700 z-30">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span
-              className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
-              style={{ backgroundColor: item.color }}
-            />
-            <span className="font-bold">{item.name}</span>
-          </div>
-          <p className="text-slate-300 text-[11px]">
-            <strong className="text-white">{item.value}</strong> {item.value === 1 ? 'demanda' : 'demandas'} ({percent}%)
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
+  // Pure SVG Donut Math
+  const radius = 62;
+  const strokeWidth = 20;
+  const circumference = 2 * Math.PI * radius; // ≈ 389.557
+
+  let accumulatedLength = 0;
+  const segments = chartData.map((item) => {
+    const fraction = totalActive > 0 ? item.value / totalActive : 0;
+    const segmentLength = fraction * circumference;
+    const gap = chartData.length > 1 ? 3.5 : 0;
+    const strokeDash = Math.max(0, segmentLength - gap);
+    const strokeDasharray = `${strokeDash} ${circumference - strokeDash}`;
+    const strokeDashoffset = -accumulatedLength;
+    accumulatedLength += segmentLength;
+
+    return {
+      ...item,
+      fraction,
+      percent: Math.round(fraction * 100),
+      strokeDasharray,
+      strokeDashoffset,
+    };
+  });
+
+  const activeHoveredItem = hoveredId ? segments.find((s) => s.id === hoveredId) : null;
 
   return (
     <div 
       id="demands-status-chart-card"
-      className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-sm flex flex-col justify-between space-y-4"
+      className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4"
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3.5">
@@ -115,7 +119,7 @@ export const DemandsStatusDoughnutChart: React.FC<DemandsStatusDoughnutChartProp
               Status das Demandas
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Distribuição atual das {totalActive} demandas ativas
+              Distribuição das {totalActive} demandas ativas
             </p>
           </div>
         </div>
@@ -132,37 +136,77 @@ export const DemandsStatusDoughnutChart: React.FC<DemandsStatusDoughnutChartProp
         )}
       </div>
 
-      {/* Doughnut Chart & Center Metric */}
+      {/* Pure SVG Doughnut Chart */}
       {totalActive > 0 ? (
         <div className="relative w-full h-44 flex items-center justify-center">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Tooltip content={<CustomTooltip />} />
-              <Pie
-                data={chartData}
-                cx="50%"
-                cy="50%"
-                innerRadius={52}
-                outerRadius={75}
-                paddingAngle={3}
-                dataKey="value"
-                stroke="none"
-              >
-                {chartData.map((entry) => (
-                  <Cell key={`cell-${entry.id}`} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+          <svg
+            viewBox="0 0 160 160"
+            className="w-40 h-40 transform -rotate-90 drop-shadow-xs"
+            aria-label="Gráfico de distribuição de status"
+          >
+            {/* Background Track Circle */}
+            <circle
+              cx="80"
+              cy="80"
+              r={radius}
+              fill="none"
+              stroke="currentColor"
+              className="text-slate-100 dark:text-slate-800"
+              strokeWidth={strokeWidth - 2}
+            />
+
+            {/* Slices */}
+            {segments.map((segment) => {
+              const isHovered = hoveredId === segment.id;
+              return (
+                <circle
+                  key={segment.id}
+                  cx="80"
+                  cy="80"
+                  r={radius}
+                  fill="none"
+                  stroke={segment.color}
+                  strokeWidth={isHovered ? strokeWidth + 3 : strokeWidth}
+                  strokeDasharray={segment.strokeDasharray}
+                  strokeDashoffset={segment.strokeDashoffset}
+                  strokeLinecap="round"
+                  className="transition-all duration-200 cursor-pointer"
+                  style={{
+                    filter: isHovered ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))' : 'none',
+                    opacity: hoveredId && !isHovered ? 0.45 : 1,
+                  }}
+                  onMouseEnter={() => setHoveredId(segment.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  onClick={() => onNavigate && onNavigate('demandas')}
+                />
+              );
+            })}
+          </svg>
 
           {/* Central Label inside the doughnut */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-2xl sm:text-3xl font-black text-[#142142] dark:text-white leading-none">
-              {totalActive}
-            </span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mt-0.5">
-              Ativas
-            </span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-4">
+            {activeHoveredItem ? (
+              <div className="animate-fade-in">
+                <span className="text-xl sm:text-2xl font-black text-[#142142] dark:text-white leading-none block">
+                  {activeHoveredItem.value}
+                </span>
+                <span 
+                  className="text-[10px] font-bold truncate max-w-[80px] block mt-0.5"
+                  style={{ color: activeHoveredItem.color }}
+                >
+                  {activeHoveredItem.name.split(' ')[0]}
+                </span>
+              </div>
+            ) : (
+              <>
+                <span className="text-2xl sm:text-3xl font-black text-[#142142] dark:text-white leading-none">
+                  {totalActive}
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mt-0.5">
+                  Ativas
+                </span>
+              </>
+            )}
           </div>
         </div>
       ) : (
@@ -172,32 +216,41 @@ export const DemandsStatusDoughnutChart: React.FC<DemandsStatusDoughnutChartProp
       )}
 
       {/* Legend & Breakdown */}
-      {chartData.length > 0 && (
-        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-          {chartData.map((item) => {
-            const percent = totalActive > 0 ? Math.round((item.value / totalActive) * 100) : 0;
+      {segments.length > 0 && (
+        <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+          {segments.map((item) => {
+            const isHovered = hoveredId === item.id;
             return (
               <div
                 key={item.id}
+                onMouseEnter={() => setHoveredId(item.id)}
+                onMouseLeave={() => setHoveredId(null)}
                 onClick={() => onNavigate && onNavigate('demandas')}
-                className="flex items-center justify-between text-xs p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                className={`flex items-center justify-between text-xs p-1.5 rounded-xl transition-all cursor-pointer ${
+                  isHovered 
+                    ? 'bg-slate-100/80 dark:bg-slate-800 scale-[1.01]' 
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: item.color }}
+                    className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs transition-transform"
+                    style={{ 
+                      backgroundColor: item.color,
+                      transform: isHovered ? 'scale(1.25)' : 'scale(1)'
+                    }}
                   />
-                  <span className="font-semibold text-slate-700 truncate text-xs">
+                  <span className={`truncate text-xs ${isHovered ? 'font-black text-[#142142] dark:text-white' : 'font-semibold text-slate-700 dark:text-slate-300'}`}>
                     {item.name}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="font-black text-[#142142] text-xs">
+                  <span className="font-black text-[#142142] dark:text-white text-xs">
                     {item.value}
                   </span>
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${item.bgBadge} ${item.textBadge}`}>
-                    {percent}%
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${item.bgBadge} ${item.textBadge}`}>
+                    {item.percent}%
                   </span>
                 </div>
               </div>

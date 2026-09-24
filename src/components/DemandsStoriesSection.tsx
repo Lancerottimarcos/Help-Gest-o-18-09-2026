@@ -287,6 +287,11 @@ export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
       let matchedClient: Client | undefined = undefined;
       if (demand.clientId) {
         matchedClient = allKnownClients.find((c) => c.id === demand.clientId);
+        // If clientId points to a client whose name differs significantly from rawClient, verify by name
+        if (matchedClient && rawClient && !rawClient.toLowerCase().includes(matchedClient.name.toLowerCase().slice(0, 4)) && !matchedClient.name.toLowerCase().includes(rawClient.toLowerCase().slice(0, 4))) {
+          const byName = findRegisteredClient(rawClient, allKnownClients);
+          if (byName) matchedClient = byName;
+        }
       }
       // 2. Match by registered client search
       if (!matchedClient && rawClient) {

@@ -127,7 +127,26 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
   }, [clients]);
 
   const [title, setTitle] = useState(demand?.title || '');
-  const [client, setClient] = useState(demand?.client || '');
+  const [selectedClientId, setSelectedClientId] = useState(() => {
+    if (demand?.clientId) return demand.clientId;
+    const match = (clients || []).find((c) =>
+      demand?.client && (
+        c.name.trim().toLowerCase() === demand.client.trim().toLowerCase() ||
+        (c.companyName && c.companyName.trim().toLowerCase() === demand.client.trim().toLowerCase())
+      )
+    );
+    return match?.id || '';
+  });
+  const [client, setClient] = useState(() => {
+    const match = (clients || []).find((c) =>
+      (demand?.clientId && c.id === demand.clientId) ||
+      (demand?.client && (
+        c.name.trim().toLowerCase() === demand.client.trim().toLowerCase() ||
+        (c.companyName && c.companyName.trim().toLowerCase() === demand.client.trim().toLowerCase())
+      ))
+    );
+    return match ? match.name : (demand?.client || '');
+  });
   const [description, setDescription] = useState(demand?.description || '');
   const [type, setType] = useState(normalizePieceType(demand?.type));
   const [serviceCategory, setServiceCategory] = useState(demand?.serviceCategory || 'Social Media');
@@ -216,7 +235,20 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
     if (demand && demand.id !== currentDemandIdRef.current) {
       currentDemandIdRef.current = demand.id;
       setTitle(demand.title);
-      setClient(demand.client);
+      const match = (clients || []).find((c) =>
+        (demand.clientId && c.id === demand.clientId) ||
+        (demand.client && (
+          c.name.trim().toLowerCase() === demand.client.trim().toLowerCase() ||
+          (c.companyName && c.companyName.trim().toLowerCase() === demand.client.trim().toLowerCase())
+        ))
+      );
+      if (match) {
+        setSelectedClientId(match.id);
+        setClient(match.name);
+      } else {
+        setSelectedClientId(demand.clientId || '');
+        setClient(demand.client || '');
+      }
       setDescription(demand.description || '');
       setType(normalizePieceType(demand.type));
       setServiceCategory(demand.serviceCategory);
@@ -369,16 +401,21 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
     });
     const effectiveThumbnail = firstImageAttachment ? (firstImageAttachment.thumbnailUrl || firstImageAttachment.url) : undefined;
 
-    const matchingClient = clients.find(
-      (c) => c.name.trim().toLowerCase() === client.trim().toLowerCase()
+    const chosenClient = (clients || []).find((c) =>
+      (selectedClientId && c.id === selectedClientId) ||
+      c.name.trim().toLowerCase() === client.trim().toLowerCase() ||
+      (c.companyName && c.companyName.trim().toLowerCase() === client.trim().toLowerCase())
     );
+
+    const resolvedClientName = chosenClient ? chosenClient.name : client.trim();
+    const resolvedClientId = chosenClient ? chosenClient.id : (selectedClientId || demand.clientId);
 
     const updatedDemand: DemandItem = {
       ...demand,
       title: title.trim() || demand.title,
-      client: client.trim(),
-      clientId: matchingClient?.id || demand.clientId,
-      clientProject: client.trim(),
+      client: resolvedClientName,
+      clientId: resolvedClientId || undefined,
+      clientProject: resolvedClientName,
       description: description.trim() || undefined,
       type,
       serviceCategory,
@@ -485,14 +522,30 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
                     </label>
                     <select
                       id="demand-client-select"
-                      value={client}
-                      onChange={(e) => setClient(e.target.value)}
+                      value={selectedClientId || client}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const found = (clients || []).find((c) => c.id === val || c.name === val);
+                        if (found) {
+                          setSelectedClientId(found.id);
+                          setClient(found.name);
+                        } else {
+                          setSelectedClientId('');
+                          setClient(val);
+                        }
+                      }}
                       className="w-full bg-slate-50/70 dark:bg-slate-800/80 hover:bg-slate-100/60 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/25 focus:outline-none transition-all cursor-pointer shadow-2xs"
                     >
+                      {/* Se o cliente da demanda não estiver cadastrado com o mesmo ID ou nome, preserva como opção atual */}
+                      {client && !(clients || []).some((c) => c.id === selectedClientId || c.name.trim().toLowerCase() === client.trim().toLowerCase()) && (
+                        <option value={client}>
+                          {client} (Atual)
+                        </option>
+                      )}
                       {sortedClients.length > 0 ? (
                         sortedClients.map((c) => (
-                          <option key={c.id} value={c.name}>
-                            {c.name}
+                          <option key={c.id} value={c.id}>
+                            {c.name}{c.companyName && c.companyName !== c.name ? ` (${c.companyName})` : ''}
                           </option>
                         ))
                       ) : (

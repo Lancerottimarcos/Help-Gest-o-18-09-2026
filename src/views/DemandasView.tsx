@@ -547,7 +547,13 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     return Array.from(
       new Set([
         ...(clients ? clients.map((c) => c.name) : []),
-        ...demands.map((d) => d.client),
+        ...demands.map((d) => {
+          const matched = (clients || []).find((c) =>
+            (d.clientId && c.id === d.clientId) ||
+            (d.client && (c.name.toLowerCase() === d.client.toLowerCase() || (c.companyName && c.companyName.toLowerCase() === d.client.toLowerCase())))
+          );
+          return matched ? matched.name : d.client;
+        }),
       ])
     )
       .filter(Boolean)
@@ -567,13 +573,27 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
   // Demand counts per client
   const countByClient: Record<string, number> = {};
   demands.forEach((d) => {
-    countByClient[d.client] = (countByClient[d.client] || 0) + 1;
+    const matched = (clients || []).find((c) =>
+      (d.clientId && c.id === d.clientId) ||
+      (d.client && (c.name.toLowerCase() === d.client.toLowerCase() || (c.companyName && c.companyName.toLowerCase() === d.client.toLowerCase())))
+    );
+    const resolved = matched ? matched.name : d.client;
+    if (resolved) {
+      countByClient[resolved] = (countByClient[resolved] || 0) + 1;
+    }
   });
 
   // Filtering
   const filteredDemands = demands.filter((item) => {
+    const itemMatchedClient = (clients || []).find((c) =>
+      (item.clientId && c.id === item.clientId) ||
+      (item.client && (c.name.toLowerCase() === item.client.toLowerCase() || (c.companyName && c.companyName.toLowerCase() === item.client.toLowerCase())))
+    );
+    const resolvedItemClient = itemMatchedClient ? (itemMatchedClient.name || itemMatchedClient.companyName) : item.client;
+
     const matchesSearch = 
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      resolvedItemClient.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.clientProject && item.clientProject.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -581,8 +601,10 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
 
     const matchesClient = 
       selectedClientFilter === 'todos' || 
+      resolvedItemClient.toLowerCase() === selectedClientFilter.toLowerCase() ||
       item.client.toLowerCase() === selectedClientFilter.toLowerCase() ||
-      (item.clientProject && item.clientProject.toLowerCase() === selectedClientFilter.toLowerCase());
+      (item.clientProject && item.clientProject.toLowerCase() === selectedClientFilter.toLowerCase()) ||
+      (itemMatchedClient?.companyName && itemMatchedClient.companyName.toLowerCase() === selectedClientFilter.toLowerCase());
 
     const matchesPriority = 
       priorityFilter === 'todas' || item.priority === priorityFilter;
@@ -1317,11 +1339,22 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                             <h4 className="text-xs sm:text-sm font-bold text-[#142142] dark:text-white leading-tight group-hover:underline line-clamp-2">
                               {demand.title}
                             </h4>
-                            {(demand.client || demand.clientProject) && (
-                              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                                {demand.client || demand.clientProject}
-                              </p>
-                            )}
+                            {(() => {
+                              const matchedClient = (clients || []).find((c) =>
+                                (demand.clientId && c.id === demand.clientId) ||
+                                (demand.client && (
+                                  c.name.trim().toLowerCase() === demand.client.trim().toLowerCase() ||
+                                  (c.companyName && c.companyName.trim().toLowerCase() === demand.client.trim().toLowerCase())
+                                ))
+                              );
+                              const displayClient = matchedClient ? (matchedClient.name || matchedClient.companyName) : (demand.client || demand.clientProject || '');
+                              if (!displayClient) return null;
+                              return (
+                                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 truncate" title={displayClient}>
+                                  {displayClient}
+                                </p>
+                              );
+                            })()}
                           </div>
                         </div>
 
@@ -1591,7 +1624,18 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                       </div>
                     </div>
                   </td>
-                  <td className="p-4 font-semibold text-slate-700 dark:text-slate-300">{demand.client}</td>
+                  <td className="p-4 font-semibold text-slate-700 dark:text-slate-300">
+                    {(() => {
+                      const matchedClient = (clients || []).find((c) =>
+                        (demand.clientId && c.id === demand.clientId) ||
+                        (demand.client && (
+                          c.name.trim().toLowerCase() === demand.client.trim().toLowerCase() ||
+                          (c.companyName && c.companyName.trim().toLowerCase() === demand.client.trim().toLowerCase())
+                        ))
+                      );
+                      return matchedClient ? (matchedClient.name || matchedClient.companyName) : demand.client;
+                    })()}
+                  </td>
                   <td className="p-4">
                     <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-bold text-slate-700 dark:text-slate-300 text-xs">
                       {demand.type}
