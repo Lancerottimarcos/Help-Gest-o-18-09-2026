@@ -43,7 +43,7 @@ import { ClientLocationMap } from '../components/ClientLocationMap';
 import { ClientBirthdaysSection } from '../components/ClientBirthdaysSection';
 import { DemandsStoriesSection } from '../components/DemandsStoriesSection';
 import { DemandsStatusDoughnutChart } from '../components/DemandsStatusDoughnutChart';
-import { initialRecentActivities, currentUser } from '../data/mockData';
+import { initialRecentActivities, currentUser, kanbanColumnsData } from '../data/mockData';
 
 const parseDemandDate = (dateStr?: string): Date | null => {
   if (!dateStr || typeof dateStr !== 'string') return null;
@@ -180,7 +180,7 @@ const getDemandDueStatus = (demand: DemandItem): DemandDueStatus => {
 };
 
 const COLUMN_CONFIG: Record<string, { label: string; color: string; badge: string }> = {
-  ideias: { label: 'Ideias / Briefing', color: '#EF4444', badge: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-900/60' },
+  ideias: { label: 'Ideias', color: '#EF4444', badge: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-900/60' },
   producao: { label: 'Em Produção', color: '#8B5CF6', badge: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-900/60' },
   aprovacao: { label: 'Aprovação', color: '#FAB518', badge: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900/60' },
   agendamento: { label: 'Agendamento', color: '#10B981', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900/60' },
@@ -325,6 +325,61 @@ export const InicioView: React.FC<InicioViewProps> = ({
       avatar: matched?.avatar || rawAvatar,
     };
   };
+
+  // Obter avatar e informações do cliente para a demanda
+  const getClientInfo = (demand: DemandItem) => {
+    const rawClientName = demand.client || '';
+    const matched = clients.find(
+      (c) =>
+        (demand.clientId && c.id === demand.clientId) ||
+        (c.name && rawClientName && c.name.toLowerCase().trim() === rawClientName.toLowerCase().trim()) ||
+        (c.companyName && rawClientName && c.companyName.toLowerCase().trim() === rawClientName.toLowerCase().trim()) ||
+        (c.id && rawClientName && c.id.toLowerCase().trim() === rawClientName.toLowerCase().trim())
+    );
+
+    const displayName = matched?.name || matched?.companyName || rawClientName || 'Cliente';
+    const avatar = matched?.avatar || '';
+    const initial = (displayName.charAt(0) || 'C').toUpperCase();
+
+    return {
+      client: matched,
+      displayName,
+      avatar,
+      initial,
+    };
+  };
+
+  // Obter colunas ativas sincronizadas (prop ou persistência no localStorage)
+  const activeColumns = useMemo(() => {
+    if (columns && columns.length > 0) return columns;
+    try {
+      const saved = localStorage.getItem('agency_kanban_columns');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return kanbanColumnsData;
+  }, [columns]);
+
+  // Sincronização dinâmica do nome e estilo da coluna com o Quadro Kanban
+  const getColumnConfig = (columnId: string) => {
+    const colObj = activeColumns.find((c) => c.id === columnId);
+    const baseConfig = COLUMN_CONFIG[columnId];
+    
+    // O nome da coluna reflete fielmente o título real no Quadro Kanban
+    const label = colObj?.title || baseConfig?.label || columnId;
+    const color = colObj?.color || baseConfig?.color || '#64748B';
+    const badge = baseConfig?.badge || 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+
+    return {
+      label,
+      color,
+      badge,
+      isCustom: !!colObj?.isCustom,
+    };
+  };
+
   // Seções exibidas no Painel de Início
   const visibleSections = DEFAULT_SECTIONS;
 
@@ -833,12 +888,9 @@ export const InicioView: React.FC<InicioViewProps> = ({
                     {filteredDemandsList.length > 0 ? (
                       filteredDemandsList.map((demand) => {
                         const dueStatus = demandDueStatusMap.get(demand.id) || getDemandDueStatus(demand);
-                        const colConfig = COLUMN_CONFIG[demand.columnId] || {
-                          label: demand.columnId,
-                          color: '#64748B',
-                          badge: 'bg-slate-100 text-slate-700 border-slate-200'
-                        };
+                        const colConfig = getColumnConfig(demand.columnId);
                         const assignee = getAssigneeInfo(demand.assignee);
+                        const clientInfo = getClientInfo(demand);
 
                         return (
                           <div
@@ -853,7 +905,10 @@ export const InicioView: React.FC<InicioViewProps> = ({
                             {/* Lado Esquerdo: Info da Demanda */}
                             <div className="space-y-1.5 min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${colConfig.badge}`}>
+                                <span 
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${colConfig.badge}`}
+                                  style={colConfig.isCustom && colConfig.color ? { borderColor: `${colConfig.color}50`, color: colConfig.color } : undefined}
+                                >
                                   {colConfig.label}
                                 </span>
                                 {demand.type && (
@@ -885,11 +940,6 @@ export const InicioView: React.FC<InicioViewProps> = ({
                                   <Building2 size={13} className="text-slate-400 shrink-0" />
                                   <span>{demand.client}</span>
                                 </span>
-                                {demand.clientProject && (
-                                  <span className="text-slate-400 truncate">
-                                    • {demand.clientProject}
-                                  </span>
-                                )}
                               </div>
                             </div>
 
@@ -922,17 +972,17 @@ export const InicioView: React.FC<InicioViewProps> = ({
                                 )}
                               </div>
 
-                              {/* Responsável */}
-                              <div className="flex items-center gap-2" title={`Responsável: ${assignee.name}`}>
-                                {assignee.avatar ? (
+                              {/* Avatar do Cliente */}
+                              <div className="flex items-center gap-2 shrink-0" title={`Cliente: ${clientInfo.displayName}`}>
+                                {clientInfo.avatar ? (
                                   <img
-                                    src={assignee.avatar}
-                                    alt={assignee.name}
+                                    src={clientInfo.avatar}
+                                    alt={clientInfo.displayName}
                                     className="w-7 h-7 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-2xs"
                                   />
                                 ) : (
-                                  <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold">
-                                    {assignee.name.charAt(0)}
+                                  <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold shadow-2xs">
+                                    {clientInfo.initial}
                                   </div>
                                 )}
                               </div>
@@ -995,7 +1045,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
               {/* Coluna 3: Gráfico de Rosca de Status & Acesso Rápido */}
               <div className="space-y-5">
                 {/* Gráfico de Status */}
-                <DemandsStatusDoughnutChart demands={demands} onNavigate={onNavigate} />
+                <DemandsStatusDoughnutChart demands={demands} columns={activeColumns} onNavigate={onNavigate} />
 
                 {/* Acesso Rápido */}
                 <div className="bg-white dark:bg-[#0f172a] rounded-[26px] border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs space-y-3">

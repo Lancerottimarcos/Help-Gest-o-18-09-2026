@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { DemandItem, KanbanColumnId, PageId } from '../types';
+import React, { useState, useMemo } from 'react';
+import { DemandItem, KanbanColumn, KanbanColumnId, PageId } from '../types';
 import { PieChart as PieIcon, ArrowUpRight } from 'lucide-react';
 
 interface DemandsStatusDoughnutChartProps {
   demands: DemandItem[];
+  columns?: KanbanColumn[];
   onNavigate?: (page: PageId) => void;
 }
 
@@ -18,7 +19,7 @@ interface StatusDistributionItem {
 
 const STATUS_CONFIG: Record<KanbanColumnId, { name: string; color: string; bgBadge: string; textBadge: string }> = {
   ideias: {
-    name: 'Ideias / Briefing',
+    name: 'Ideias',
     color: '#EF4444', // Red/Coral
     bgBadge: 'bg-red-50 dark:bg-red-950/50',
     textBadge: 'text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/60',
@@ -51,6 +52,7 @@ const STATUS_CONFIG: Record<KanbanColumnId, { name: string; color: string; bgBad
 
 export const DemandsStatusDoughnutChart: React.FC<DemandsStatusDoughnutChartProps> = ({
   demands,
+  columns = [],
   onNavigate,
 }) => {
   const [hoveredId, setHoveredId] = useState<KanbanColumnId | null>(null);
@@ -59,23 +61,42 @@ export const DemandsStatusDoughnutChart: React.FC<DemandsStatusDoughnutChartProp
   const activeDemands = demands.filter((d) => d.columnId !== 'concluidas');
   const totalActive = activeDemands.length;
 
-  // Calculate distribution by active status
-  const statuses: KanbanColumnId[] = ['ideias', 'producao', 'aprovacao', 'agendamento'];
-  
-  const chartData: StatusDistributionItem[] = statuses
-    .map((statusKey) => {
-      const count = activeDemands.filter((d) => d.columnId === statusKey).length;
-      const config = STATUS_CONFIG[statusKey];
-      return {
-        id: statusKey,
-        name: config.name,
-        value: count,
-        color: config.color,
-        bgBadge: config.bgBadge,
-        textBadge: config.textBadge,
-      };
-    })
-    .filter((item) => item.value > 0);
+  // Sincronização dinâmica com os nomes reais das colunas configuradas no Kanban
+  const chartData: StatusDistributionItem[] = useMemo(() => {
+    if (columns && columns.length > 0) {
+      return columns
+        .filter((col) => col.id !== 'concluidas')
+        .map((col) => {
+          const count = activeDemands.filter((d) => d.columnId === col.id).length;
+          const defaultConfig = STATUS_CONFIG[col.id];
+          return {
+            id: col.id,
+            name: col.title || defaultConfig?.name || col.id,
+            value: count,
+            color: col.color || defaultConfig?.color || '#64748B',
+            bgBadge: defaultConfig?.bgBadge || 'bg-slate-50 dark:bg-slate-800',
+            textBadge: defaultConfig?.textBadge || 'text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+          };
+        })
+        .filter((item) => item.value > 0);
+    }
+
+    const defaultStatuses: KanbanColumnId[] = ['ideias', 'producao', 'aprovacao', 'agendamento'];
+    return defaultStatuses
+      .map((statusKey) => {
+        const count = activeDemands.filter((d) => d.columnId === statusKey).length;
+        const config = STATUS_CONFIG[statusKey];
+        return {
+          id: statusKey,
+          name: config.name,
+          value: count,
+          color: config.color,
+          bgBadge: config.bgBadge,
+          textBadge: config.textBadge,
+        };
+      })
+      .filter((item) => item.value > 0);
+  }, [columns, activeDemands]);
 
   // Pure SVG Donut Math
   const radius = 62;

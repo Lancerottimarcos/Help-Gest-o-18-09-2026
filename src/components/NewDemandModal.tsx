@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Calendar, User, Tag, Sparkles, UploadCloud } from 'lucide-react';
+import { X, Plus, UploadCloud } from 'lucide-react';
 import { Client, DemandItem, KanbanColumnId, Priority, DemandAttachment, TeamMember, KanbanColumn } from '../types';
 import { initialTeamMembers } from '../data/mockData';
 import { FileUploadDropzone } from './FileUploadDropzone';
 import { CustomDatePicker } from './CustomDatePicker';
 import { CustomPrioritySelect } from './CustomPrioritySelect';
+import { CustomClientSelect } from './CustomClientSelect';
 import { detectAndSanitizeInput } from '../utils/securityProtocols';
 
 interface NewDemandModalProps {
@@ -39,17 +40,28 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
     );
   }, [clients]);
 
+  const getTodayDateString = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [title, setTitle] = useState(initialData?.title || '');
   const [selectedClient, setSelectedClient] = useState(initialData?.client || sortedClients[0]?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
 
-  // Sync selected client if clients list updates or initialData changes
+  // Sync selected client and fields if clients list updates or initialData changes
   React.useEffect(() => {
     if (initialData) {
       if (initialData.title) setTitle(initialData.title);
       if (initialData.client) setSelectedClient(initialData.client);
       if (initialData.description) setDescription(initialData.description);
       if (initialData.dueDate) setDueDate(initialData.dueDate);
+      else setDueDate(getTodayDateString());
+    } else {
+      setDueDate(getTodayDateString());
     }
   }, [initialData]);
 
@@ -58,11 +70,12 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
       setSelectedClient(sortedClients[0].name);
     }
   }, [sortedClients, selectedClient, initialData]);
+
   const [type, setType] = useState('Post');
   const [category, setCategory] = useState<'Social Media' | 'Tráfego Pago' | 'Criação de Sites' | 'Design Geral'>('Social Media');
   const [priority, setPriority] = useState<Priority>('media');
   const [columnId, setColumnId] = useState<KanbanColumnId>(columns?.[0]?.id || 'ideias');
-  const [dueDate, setDueDate] = useState(initialData?.dueDate || '2026-09-20');
+  const [dueDate, setDueDate] = useState(() => initialData?.dueDate || getTodayDateString());
   const [assigneeName, setAssigneeName] = useState(activeMembersList[0]?.name || 'Beatriz Lima');
   const [attachments, setAttachments] = useState<DemandAttachment[]>([]);
 
@@ -130,8 +143,14 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-[#142142]/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white dark:bg-[#0f172a] w-full max-w-lg rounded-[28px] p-6 sm:p-7 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 max-h-[90vh] overflow-y-auto animate-in zoom-in-95">
+    <div 
+      className="fixed inset-0 bg-[#142142]/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white dark:bg-[#0f172a] w-full max-w-lg rounded-[28px] p-6 sm:p-7 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 max-h-[90vh] overflow-y-auto animate-in zoom-in-95"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-full bg-[#fab518] text-[#142142] flex items-center justify-center font-bold shadow-xs">
@@ -167,24 +186,42 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-[#142142] dark:text-white mb-1">
-              Cliente *
-            </label>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="new-demand-client-native-select" className="block text-xs font-bold text-[#142142] dark:text-white">
+                Cliente <span className="text-[#fab518] font-black">*</span>
+              </label>
+              {sortedClients.length > 0 && (
+                <span className="text-[10px] font-semibold text-slate-400">
+                  {sortedClients.length} {sortedClients.length === 1 ? 'cadastrado' : 'cadastrados'}
+                </span>
+              )}
+            </div>
+
+            {/* Sincronizado para preservar validação nativa de formulário e compatibilidade de seletor */}
+            <select
+              id="new-demand-client-native-select"
+              required
+              value={selectedClient}
+              onChange={(e) => setSelectedClient(e.target.value)}
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+            >
+              <option value="" disabled>Selecione um cliente...</option>
+              {sortedClients.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}{c.companyName && c.companyName !== c.name ? ` (${c.companyName})` : ''}
+                </option>
+              ))}
+            </select>
+
             {sortedClients && sortedClients.length > 0 ? (
-              <select
-                required
+              <CustomClientSelect
+                clients={sortedClients}
                 value={selectedClient}
-                onChange={(e) => setSelectedClient(e.target.value)}
-                className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-xs sm:text-sm font-semibold text-[#142142] dark:text-slate-100 p-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:outline-none transition-colors"
-              >
-                <option value="" disabled>Selecione um cliente...</option>
-                {sortedClients.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedClient}
+              />
             ) : (
               <input
                 type="text"
@@ -319,13 +356,13 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-full text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-full bg-[#fab518] text-[#142142] font-black text-xs hover:bg-[#fab518]/90 cursor-pointer shadow-xs transition-transform active:scale-95"
+              className="px-5 py-2.5 bg-[#fab518] hover:bg-[#e29f11] text-[#142142] text-xs font-black rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               Criar Demanda
             </button>
