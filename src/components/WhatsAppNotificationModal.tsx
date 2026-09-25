@@ -28,6 +28,7 @@ import {
   NOTIFICATION_TEMPLATES 
 } from '../utils/notificationSettings';
 import { ApprovalNotificationConfigModal } from './ApprovalNotificationConfigModal';
+import { getPublicDemandUrl } from '../utils/urlHelpers';
 
 interface WhatsAppNotificationModalProps {
   isOpen: boolean;
@@ -73,8 +74,7 @@ export const WhatsAppNotificationModal: React.FC<WhatsAppNotificationModalProps>
       const resolvedContact = client?.contactName || client?.name || demand.client;
       setCustomContactName(resolvedContact);
 
-      const origin = window.location.origin;
-      const portalUrl = `${origin}/?portal=aprovacao&demandId=${demand.id}`;
+      const portalUrl = getPublicDemandUrl(demand.id);
 
       const generated = buildNotificationMessage({
         templateId: currentConfig.defaultTemplateId,
@@ -95,8 +95,7 @@ export const WhatsAppNotificationModal: React.FC<WhatsAppNotificationModalProps>
 
   if (!isOpen || !demand) return null;
 
-  const origin = window.location.origin;
-  const portalUrl = `${origin}/?portal=aprovacao&demandId=${demand.id}`;
+  const portalUrl = getPublicDemandUrl(demand.id);
   const clientName = client?.companyName || demand.client;
   const clientEmail = client?.email;
 

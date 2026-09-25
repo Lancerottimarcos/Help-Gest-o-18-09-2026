@@ -25,6 +25,7 @@ import { getNotificationConfig } from './utils/notificationSettings';
 import { BackupEnvelope } from './utils/backupManager';
 import { BrowserNotificationToast } from './components/BrowserNotificationToast';
 import { PublicClientApprovalView } from './components/PublicClientApprovalView';
+import { PublicBudgetProposalView } from './components/PublicBudgetProposalView';
 import { 
   recordSessionActivity, 
   checkSessionInactivityTimeout, 
@@ -41,6 +42,7 @@ import { supabaseService } from './services/supabaseService';
 import { syncSupabaseCredentialsWithServer } from './lib/supabaseClient';
 import { serverDbService } from './services/serverDbService';
 import { findRegisteredClient } from './components/DemandsStoriesSection';
+import { extractPublicProposalId, extractPublicDemandId } from './utils/urlHelpers';
 
 export interface LayoutProps {
   children?: React.ReactNode;
@@ -375,6 +377,24 @@ export function Layout({ children, onLogout }: LayoutProps) {
               localStorage.setItem('agency_kanban_columns', JSON.stringify(remoteData.kanbanColumns));
             } catch {}
           }
+          if (remoteData.proposals && Array.isArray(remoteData.proposals) && remoteData.proposals.length > 0) {
+            setProposals(remoteData.proposals);
+            try {
+              localStorage.setItem('agency_proposals', JSON.stringify(remoteData.proposals));
+            } catch {}
+          }
+          if (remoteData.services && Array.isArray(remoteData.services) && remoteData.services.length > 0) {
+            setServices(remoteData.services);
+            try {
+              localStorage.setItem('agency_services', JSON.stringify(remoteData.services));
+            } catch {}
+          }
+          if (remoteData.invoices && Array.isArray(remoteData.invoices) && remoteData.invoices.length > 0) {
+            setInvoices(remoteData.invoices);
+            try {
+              localStorage.setItem('agency_invoices', JSON.stringify(remoteData.invoices));
+            } catch {}
+          }
         }
       } catch {}
 
@@ -456,7 +476,14 @@ export function Layout({ children, onLogout }: LayoutProps) {
   }, [invoices]);
 
   const handleAddProposal = (newProposal: BudgetProposal) => {
-    setProposals((prev) => [newProposal, ...prev]);
+    setProposals((prev) => {
+      const updated = [newProposal, ...prev.filter(p => p.id !== newProposal.id)];
+      try {
+        localStorage.setItem('agency_proposals', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ proposals: updated }, true);
+      return updated;
+    });
     if (supabaseService.isConfigured()) {
       supabaseService.upsertProposal(newProposal);
     }
@@ -466,8 +493,26 @@ export function Layout({ children, onLogout }: LayoutProps) {
     setProposals((prev) => {
       const updated = prev.map((p) => (p.id === id ? { ...p, status: newStatus } : p));
       const target = updated.find(p => p.id === id);
+      try {
+        localStorage.setItem('agency_proposals', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ proposals: updated }, true);
       if (target && supabaseService.isConfigured()) {
         supabaseService.upsertProposal(target);
+      }
+      return updated;
+    });
+  };
+
+  const handleDeleteProposal = (id: string) => {
+    setProposals((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      try {
+        localStorage.setItem('agency_proposals', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ proposals: updated }, true);
+      if (supabaseService.isConfigured()) {
+        supabaseService.deleteProposal(id);
       }
       return updated;
     });
@@ -1381,8 +1426,22 @@ export function Layout({ children, onLogout }: LayoutProps) {
         return (
           <OrcamentosView
             proposals={proposals}
+            clients={clients}
             onAddProposal={handleAddProposal}
             onUpdateStatus={handleUpdateProposalStatus}
+            onDeleteProposal={handleDeleteProposal}
+            onUpdateProposal={(updated) => {
+              setProposals((prev) => {
+                const list = prev.map((p) => (p.id === updated.id ? updated : p));
+                try {
+                  localStorage.setItem('agency_proposals', JSON.stringify(list));
+                } catch {}
+                if (supabaseService.isConfigured()) {
+                  supabaseService.upsertProposal(updated);
+                }
+                return list;
+              });
+            }}
           />
         );
       case 'equipe':
@@ -1602,14 +1661,20 @@ export default function App() {
   });
 
   // Client public approval portal direct access via URL (e.g. ?portal=aprovacao&demandId=DEM-105)
-  const [publicPortalDemandId, setPublicPortalDemandId] = useState<string | null>(() => {
+  const [publicPortalDemandId, setPublicPortalDemandId] = useState<string | null>(extractPublicDemandId);
+
+  // Client public budget proposal direct access via URL (e.g. ?portal=orcamento&proposalId=prop-2 or ?orcamentoId=prop-2)
+  const [publicPortalProposalId, setPublicPortalProposalId] = useState<string | null>(extractPublicProposalId);
+
+  const [portalProposals, setPortalProposals] = useState<BudgetProposal[]>(() => {
     try {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('portal') === 'aprovacao' && params.get('demandId')) {
-        return params.get('demandId');
+      const saved = localStorage.getItem('agency_proposals');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return null;
+    return initialProposals;
   });
 
   const [portalDemands, setPortalDemands] = useState<DemandItem[]>(() => {
@@ -1623,7 +1688,7 @@ export default function App() {
     return initialDemands;
   });
 
-  const [portalClients] = useState<Client[]>(() => {
+  const [portalClients, setPortalClients] = useState<Client[]>(() => {
     try {
       const saved = localStorage.getItem('agency_clients');
       if (saved) {
@@ -1633,6 +1698,61 @@ export default function App() {
     } catch {}
     return initialClients;
   });
+
+  // Listener para sincronização automática quando a URL mudar no navegador
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const pId = extractProposalIdFromLocation();
+      setPublicPortalProposalId(pId);
+
+      const dId = extractDemandIdFromLocation();
+      setPublicPortalDemandId(dId);
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, []);
+
+  // Busca e sincroniza dados do banco central do servidor para o portal público do cliente
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPortalData = async () => {
+      try {
+        const remoteData = await serverDbService.fetchDatabase();
+        if (!isMounted || !remoteData) return;
+
+        if (remoteData.proposals && Array.isArray(remoteData.proposals) && remoteData.proposals.length > 0) {
+          setPortalProposals(remoteData.proposals);
+          try {
+            localStorage.setItem('agency_proposals', JSON.stringify(remoteData.proposals));
+          } catch {}
+        }
+        if (remoteData.clients && Array.isArray(remoteData.clients) && remoteData.clients.length > 0) {
+          setPortalClients(remoteData.clients);
+          try {
+            localStorage.setItem('agency_clients', JSON.stringify(remoteData.clients));
+          } catch {}
+        }
+        if (remoteData.demands && Array.isArray(remoteData.demands) && remoteData.demands.length > 0) {
+          setPortalDemands(remoteData.demands);
+          try {
+            localStorage.setItem('agency_demands', JSON.stringify(remoteData.demands));
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('Falha na sincronização do portal com o banco central:', err);
+      }
+    };
+
+    fetchPortalData();
+    return () => {
+      isMounted = false;
+    };
+  }, [publicPortalProposalId, publicPortalDemandId]);
 
   // Session Inactivity Monitoring (OWASP / Zero-Trust Defense)
   useEffect(() => {
@@ -1680,6 +1800,7 @@ export default function App() {
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
     setPublicPortalDemandId(null);
+    setPublicPortalProposalId(null);
   };
 
   const handleLogout = () => {
@@ -1690,6 +1811,83 @@ export default function App() {
       // ignore
     }
     setIsAuthenticated(false);
+  };
+
+  const handlePublicProposalAction = (
+    proposalId: string,
+    action: 'Aprovado' | 'Recusado' | 'Ajuste',
+    data?: {
+      signerName?: string;
+      signerRole?: string;
+      signerEmail?: string;
+      signerPhone?: string;
+      notes?: string;
+      reason?: string;
+      feedback?: string;
+    }
+  ) => {
+    const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateNow = new Date().toLocaleDateString('pt-BR');
+    const dateTime = `${dateNow} ${timeNow}`;
+
+    const updated = portalProposals.map((p) => {
+      if (
+        p.id.toLowerCase() === proposalId.toLowerCase() ||
+        p.code.toLowerCase() === proposalId.toLowerCase() ||
+        (p.shareToken && p.shareToken.toLowerCase() === proposalId.toLowerCase())
+      ) {
+        if (action === 'Aprovado') {
+          return {
+            ...p,
+            status: 'Aprovado' as const,
+            approvedAt: dateTime,
+            clientSignerName: data?.signerName || p.contactName || 'Cliente',
+            clientSignerRole: data?.signerRole || 'Responsável',
+            clientSignerEmail: data?.signerEmail || p.clientEmail,
+            clientSignerPhone: data?.signerPhone || p.clientPhone,
+            clientDecisionNote: data?.notes,
+          };
+        } else if (action === 'Recusado') {
+          return {
+            ...p,
+            status: 'Recusado' as const,
+            rejectedAt: dateTime,
+            clientDecisionNote: data?.reason || 'Proposta recusada pelo cliente.',
+          };
+        } else {
+          return {
+            ...p,
+            clientDecisionNote: data?.feedback || 'Cliente solicitou readequação de escopo.',
+          };
+        }
+      }
+      return p;
+    });
+
+    setPortalProposals(updated);
+    try {
+      localStorage.setItem('agency_proposals', JSON.stringify(updated));
+    } catch {}
+
+    // Salva imediatamente no banco central do servidor
+    serverDbService.saveDatabase({ proposals: updated }, true);
+
+    // Registra via endpoint dedicado de decisão
+    serverDbService.submitPublicProposalDecision(proposalId, {
+      action,
+      ...data,
+    });
+
+    const target = updated.find(
+      (p) =>
+        p.id.toLowerCase() === proposalId.toLowerCase() ||
+        p.code.toLowerCase() === proposalId.toLowerCase() ||
+        (p.shareToken && p.shareToken.toLowerCase() === proposalId.toLowerCase())
+    );
+
+    if (target && supabaseService.isConfigured()) {
+      supabaseService.upsertProposal(target);
+    }
   };
 
   const handlePublicApprovalAction = (
@@ -1789,7 +1987,7 @@ export default function App() {
     }
   };
 
-  // 1. If public client portal URL is being accessed, show isolated client view
+  // 1. If public client demand portal URL is being accessed, show isolated demand approval view
   if (publicPortalDemandId) {
     return (
       <ThemeProvider>
@@ -1812,7 +2010,29 @@ export default function App() {
     );
   }
 
-  // 2. Standard authenticated workspace vs login
+  // 2. If public client budget proposal URL is being accessed, show isolated budget approval view
+  if (publicPortalProposalId) {
+    return (
+      <ThemeProvider>
+        <PublicBudgetProposalView
+          proposalId={publicPortalProposalId}
+          proposals={portalProposals}
+          clients={portalClients}
+          onApprove={(pId, data) => handlePublicProposalAction(pId, 'Aprovado', data)}
+          onReject={(pId, reason) => handlePublicProposalAction(pId, 'Recusado', { reason })}
+          onRequestChange={(pId, feedback) => handlePublicProposalAction(pId, 'Ajuste', { feedback })}
+          onGoToAdminLogin={() => {
+            try {
+              window.history.replaceState({}, '', window.location.pathname);
+            } catch {}
+            setPublicPortalProposalId(null);
+          }}
+        />
+      </ThemeProvider>
+    );
+  }
+
+  // 3. Standard authenticated workspace vs login
   return (
     <ThemeProvider>
       <TwoFactorProvider>

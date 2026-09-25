@@ -997,11 +997,11 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                   </g>
                 </svg>
               ) : (
-                /* OFFICIAL DETAILED BRAZIL STATES VECTOR MAP SVG (REFERÊNCIA mapa-brasil.png) */
+                /* OFFICIAL DETAILED BRAZIL STATES VECTOR MAP SVG */
                 <svg
-                  viewBox="0 0 353.845 367.766"
-                  className="w-full h-auto max-h-[460px] drop-shadow-2xl mx-auto select-none"
-                  aria-label="Mapa do Brasil com Divisão de Todos os Estados"
+                  viewBox="0 0 613 639"
+                  className="w-full h-auto max-h-[490px] drop-shadow-2xl mx-auto select-none"
+                  aria-label="Mapa do Brasil com Divisão Oficial de Todos os Estados"
                 >
                   <defs>
                     {/* Brand Gold/Amber Gradient for Client States */}
@@ -1022,16 +1022,18 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                     </filter>
                   </defs>
 
-                  {/* 1. Coastal Islands Layer matching official geography */}
-                  <g id="brazil-islands" className="pointer-events-none opacity-80">
-                    {BRAZIL_ISLANDS.map((points, idx) => (
-                      <polygon
-                        key={`island-${idx}`}
-                        points={points}
-                        className="fill-slate-800 stroke-slate-700/80 stroke-[0.6]"
-                      />
-                    ))}
-                  </g>
+                  {/* 1. Coastal Islands Layer if defined */}
+                  {BRAZIL_ISLANDS.length > 0 && (
+                    <g id="brazil-islands" className="pointer-events-none opacity-80">
+                      {BRAZIL_ISLANDS.map((points, idx) => (
+                        <polygon
+                          key={`island-${idx}`}
+                          points={points}
+                          className="fill-slate-800 stroke-slate-700/80 stroke-[0.6]"
+                        />
+                      ))}
+                    </g>
+                  )}
 
                   {/* 2. All 27 Brazilian States Layer with Brand Color Highlighting */}
                   <g id="brazil-states-layer">
@@ -1042,7 +1044,7 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                       const isStateHovered = hoveredState?.id === state.id;
 
                       // Fill color logic: Brand Gold (#fab518) for states with registered clients
-                      // Neutral slate for states without clients (matching black/white outline reference)
+                      // Neutral slate for states without clients
                       let fillColor = '#1e293b'; // neutral dark slate
                       if (hasClients) {
                         fillColor = isStateHovered || isStateSelected ? '#fde047' : '#fab518';
@@ -1058,8 +1060,8 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                           : '#475569';
 
                       const strokeWidth = hasClients 
-                        ? (isStateSelected || isStateHovered ? 1.6 : 1.1) 
-                        : 0.65;
+                        ? (isStateSelected || isStateHovered ? 2.0 : 1.4) 
+                        : 0.8;
 
                       const commonProps = {
                         id: state.id,
@@ -1126,20 +1128,20 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                         >
                           {/* Mini Navy Badge with Gold Border */}
                           <rect
-                            x="-9.5"
-                            y="-7"
-                            width="19"
-                            height="14"
-                            rx="4"
+                            x="-12"
+                            y="-9"
+                            width="24"
+                            height="18"
+                            rx="5"
                             fill="#142142"
                             stroke="#ffffff"
-                            strokeWidth="0.9"
-                            className="drop-shadow-sm"
+                            strokeWidth="1.1"
+                            className="drop-shadow-md"
                           />
                           <text
                             textAnchor="middle"
-                            y="3.5"
-                            className="fill-white text-[8px] font-black tracking-tight"
+                            y="4.5"
+                            className="fill-white text-[9.5px] font-black tracking-tight"
                           >
                             {state.id}
                           </text>
@@ -1170,7 +1172,7 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                           <circle
                             cx={cluster.brazilX}
                             cy={cluster.brazilY}
-                            r={isActive ? 16 : 9}
+                            r={isActive ? 22 : 13}
                             className="fill-[#fab518]/30 stroke-[#fab518] stroke-[1] animate-ping"
                             style={{ transformOrigin: `${cluster.brazilX}px ${cluster.brazilY}px`, animationDuration: '2.5s' }}
                           />
@@ -1179,15 +1181,15 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                           <circle
                             cx={cluster.brazilX}
                             cy={cluster.brazilY}
-                            r={isActive ? 7 : 5}
-                            className="fill-[#142142] stroke-white stroke-[1]"
+                            r={isActive ? 9 : 6.5}
+                            className="fill-[#142142] stroke-white stroke-[1.2]"
                           />
 
                           {/* Center Core Gold Pin */}
                           <circle
                             cx={cluster.brazilX}
                             cy={cluster.brazilY}
-                            r={isActive ? 4.5 : 3}
+                            r={isActive ? 5.5 : 4}
                             fill="#fab518"
                             filter={isActive ? 'url(#city-pin-glow)' : undefined}
                             className="stroke-[#142142] stroke-[0.8] group-hover:scale-125 transition-transform"
@@ -1195,18 +1197,18 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
 
                           {/* Multi-client Counter Badge */}
                           {cluster.clients.length > 1 && (
-                            <g transform={`translate(${cluster.brazilX + 3.5}, ${cluster.brazilY - 9})`}>
+                            <g transform={`translate(${cluster.brazilX + 4}, ${cluster.brazilY - 11})`}>
                               <rect
-                                width="12"
-                                height="10"
+                                width="14"
+                                height="12"
                                 rx="5"
                                 className="fill-[#142142] stroke-[#fab518] stroke-[1]"
                               />
                               <text
-                                x="6"
-                                y="7.5"
+                                x="7"
+                                y="8.5"
                                 textAnchor="middle"
-                                className="fill-[#fab518] text-[7px] font-black pointer-events-none"
+                                className="fill-[#fab518] text-[8px] font-black pointer-events-none"
                               >
                                 {cluster.clients.length}
                               </text>
@@ -1216,11 +1218,11 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                           {/* City Name Label */}
                           <text
                             x={cluster.brazilX}
-                            y={cluster.brazilY + 12}
+                            y={cluster.brazilY + 15}
                             textAnchor="middle"
-                            className={`text-[8px] font-bold tracking-tight pointer-events-none drop-shadow-md transition-all ${
+                            className={`text-[9.5px] font-bold tracking-tight pointer-events-none drop-shadow-md transition-all ${
                               isActive
-                                ? 'fill-[#fab518] font-black text-[9px]'
+                                ? 'fill-[#fab518] font-black text-[10.5px]'
                                 : 'fill-white group-hover:fill-[#fab518]'
                             }`}
                           >

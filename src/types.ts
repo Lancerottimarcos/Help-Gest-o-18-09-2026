@@ -168,6 +168,16 @@ export interface FinancialMetric {
   pendingInvoicesValue: number;
 }
 
+export interface ProposalItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  category?: string;
+  periodicity?: 'mensal' | 'unico' | 'pontual';
+}
+
 export interface BudgetProposal {
   id: string;
   code: string;
@@ -179,6 +189,32 @@ export interface BudgetProposal {
   status: 'Rascunho' | 'Enviado' | 'Aprovado' | 'Recusado';
   servicesCount: number;
   services?: string[];
+
+  // Commercial & Client Approval Portal Fields
+  clientId?: string;
+  contactName?: string;
+  contactRole?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientCpfCnpj?: string;
+  validUntil?: string;
+  scopeDescription?: string;
+  items?: ProposalItem[];
+  paymentTerms?: string;
+  deliveryTime?: string;
+  notes?: string;
+  shareToken?: string;
+  sentAt?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+  clientDecisionNote?: string;
+  clientSignerName?: string;
+  clientSignerRole?: string;
+  clientSignerDocument?: string;
+  clientSignerEmail?: string;
+  clientSignerPhone?: string;
+  viewsCount?: number;
+  lastViewedAt?: string;
 }
 
 export type TeamMemberRole = 

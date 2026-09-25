@@ -86,4 +86,85 @@ export const serverDbService = {
       }
     });
   },
+
+  /**
+   * Busca um orçamento público específico para o cliente visualizar (com suporte a fallback para base central)
+   */
+  async fetchPublicProposal(proposalId: string): Promise<{ proposal: BudgetProposal; client?: Client } | null> {
+    if (!proposalId) return null;
+    const cleanId = encodeURIComponent(proposalId.trim());
+
+    // 1. Tenta endpoint direto dedicado
+    try {
+      const res = await fetch(`/api/public/proposal/${cleanId}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.proposal) {
+          return { proposal: json.proposal, client: json.client };
+        }
+      }
+    } catch {}
+
+    // 2. Fallback: busca da base geral
+    try {
+      const db = await this.fetchDatabase();
+      if (db && Array.isArray(db.proposals)) {
+        const targetId = proposalId.trim().toLowerCase();
+        const found = db.proposals.find(
+          (p) =>
+            p.id.toLowerCase() === targetId ||
+            p.code.toLowerCase() === targetId ||
+            (p.shareToken && p.shareToken.toLowerCase() === targetId)
+        );
+
+        if (found) {
+          const client = db.clients?.find(
+            (c) =>
+              (found.clientId && c.id === found.clientId) ||
+              c.companyName.toLowerCase() === found.clientName.toLowerCase() ||
+              c.name.toLowerCase() === found.clientName.toLowerCase()
+          );
+          return { proposal: found, client };
+        }
+      }
+    } catch {}
+
+    return null;
+  },
+
+  /**
+   * Registra a decisão do cliente em um orçamento público
+   */
+  async submitPublicProposalDecision(
+    proposalId: string,
+    decisionData: {
+      action: 'Aprovado' | 'Recusado' | 'Ajuste';
+      signerName?: string;
+      signerRole?: string;
+      signerEmail?: string;
+      signerPhone?: string;
+      notes?: string;
+      reason?: string;
+      feedback?: string;
+    }
+  ): Promise<BudgetProposal | null> {
+    try {
+      const cleanId = encodeURIComponent(proposalId.trim());
+      const res = await fetch(`/api/public/proposal/${cleanId}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(decisionData),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.proposal) {
+          return json.proposal;
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao enviar decisão para o servidor:', err);
+    }
+    return null;
+  },
 };

@@ -109,7 +109,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'orcamentos',
       label: 'Orçamentos',
       icon: FileSpreadsheet,
-      badge: totalProposals > 0 ? totalProposals : undefined,
     },
     {
       id: 'equipe',

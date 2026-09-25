@@ -123,6 +123,112 @@ function databaseApiPlugin(): Plugin {
         return;
       }
     }
+
+    if (url.startsWith('/api/public/proposal/')) {
+      const parts = url.split('?')[0].split('/');
+      const targetId = decodeURIComponent(parts[4] || '').trim().toLowerCase();
+      const isDecision = parts[5] === 'decision';
+
+      if (req.method === 'GET' && targetId) {
+        res.setHeader('Content-Type', 'application/json');
+        try {
+          if (fs.existsSync(dbFilePath)) {
+            const raw = fs.readFileSync(dbFilePath, 'utf-8');
+            const data = JSON.parse(raw);
+            const proposals = Array.isArray(data?.proposals) ? data.proposals : [];
+            const clients = Array.isArray(data?.clients) ? data.clients : [];
+            const found = proposals.find(
+              (p: any) =>
+                p.id?.toLowerCase() === targetId ||
+                p.code?.toLowerCase() === targetId ||
+                (p.shareToken && p.shareToken?.toLowerCase() === targetId)
+            );
+            if (found) {
+              const client = clients.find(
+                (c: any) =>
+                  (found.clientId && c.id === found.clientId) ||
+                  c.companyName?.toLowerCase() === found.clientName?.toLowerCase() ||
+                  c.name?.toLowerCase() === found.clientName?.toLowerCase()
+              );
+              res.writeHead(200);
+              res.end(JSON.stringify({ success: true, proposal: found, client }));
+              return;
+            }
+          }
+        } catch {}
+        res.writeHead(404);
+        res.end(JSON.stringify({ success: false, error: 'Orçamento não localizado' }));
+        return;
+      }
+
+      if (req.method === 'POST' && isDecision && targetId) {
+        let body = '';
+        req.on('data', (chunk: any) => {
+          body += chunk;
+        });
+        req.on('end', () => {
+          try {
+            const { action, signerName, signerRole, signerEmail, signerPhone, notes, reason, feedback } = JSON.parse(body || '{}');
+            if (fs.existsSync(dbFilePath)) {
+              const raw = fs.readFileSync(dbFilePath, 'utf-8');
+              const data = JSON.parse(raw);
+              const proposals = Array.isArray(data?.proposals) ? data.proposals : [];
+              let updatedProp: any = null;
+              const now = new Date();
+              const dateTime = `${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+              data.proposals = proposals.map((p: any) => {
+                if (
+                  p.id?.toLowerCase() === targetId ||
+                  p.code?.toLowerCase() === targetId ||
+                  (p.shareToken && p.shareToken?.toLowerCase() === targetId)
+                ) {
+                  if (action === 'Aprovado') {
+                    updatedProp = {
+                      ...p,
+                      status: 'Aprovado',
+                      approvedAt: dateTime,
+                      clientSignerName: signerName || p.contactName || 'Cliente',
+                      clientSignerRole: signerRole || 'Responsável',
+                      clientSignerEmail: signerEmail || p.clientEmail,
+                      clientSignerPhone: signerPhone || p.clientPhone,
+                      clientDecisionNote: notes,
+                    };
+                  } else if (action === 'Recusado') {
+                    updatedProp = {
+                      ...p,
+                      status: 'Recusado',
+                      rejectedAt: dateTime,
+                      clientDecisionNote: reason || 'Proposta recusada pelo cliente.',
+                    };
+                  } else {
+                    updatedProp = {
+                      ...p,
+                      clientDecisionNote: feedback || 'Cliente solicitou readequação de escopo.',
+                    };
+                  }
+                  return updatedProp;
+                }
+                return p;
+              });
+
+              if (updatedProp) {
+                data.updatedAt = Date.now();
+                fs.writeFileSync(dbFilePath, JSON.stringify(data, null, 2), 'utf-8');
+                res.setHeader('Content-Type', 'application/json');
+                res.writeHead(200);
+                res.end(JSON.stringify({ success: true, proposal: updatedProp }));
+                return;
+              }
+            }
+          } catch {}
+          res.setHeader('Content-Type', 'application/json');
+          res.writeHead(404);
+          res.end(JSON.stringify({ success: false, error: 'Erro ao processar decisão' }));
+        });
+        return;
+      }
+    }
     next();
   };
 

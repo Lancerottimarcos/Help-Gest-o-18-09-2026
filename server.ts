@@ -185,6 +185,124 @@ async function startServer() {
   });
 
   // ==================================================================
+  // ROTAS PÚBLICAS DE ORÇAMENTOS (Acesso direto pelo cliente via link)
+  // ==================================================================
+
+  // Endpoint de busca direta de orçamento público para o cliente
+  app.get("/api/public/proposal/:id", (req, res) => {
+    try {
+      const targetId = (req.params.id || "").trim().toLowerCase();
+      if (!targetId) {
+        return res.status(400).json({ success: false, error: "Identificador de orçamento inválido." });
+      }
+
+      if (fs.existsSync(DB_FILE)) {
+        const raw = fs.readFileSync(DB_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        const proposals = Array.isArray(parsed?.proposals) ? parsed.proposals : [];
+        const clients = Array.isArray(parsed?.clients) ? parsed.clients : [];
+
+        const found = proposals.find(
+          (p: any) =>
+            p.id?.toLowerCase() === targetId ||
+            p.code?.toLowerCase() === targetId ||
+            (p.shareToken && p.shareToken?.toLowerCase() === targetId)
+        );
+
+        if (found) {
+          let client = null;
+          if (clients.length > 0) {
+            client = clients.find(
+              (c: any) =>
+                (found.clientId && c.id === found.clientId) ||
+                c.companyName?.toLowerCase() === found.clientName?.toLowerCase() ||
+                c.name?.toLowerCase() === found.clientName?.toLowerCase()
+            );
+          }
+          return res.json({ success: true, proposal: found, client });
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao buscar proposta pública:", e);
+    }
+
+    res.status(404).json({ success: false, error: "Orçamento não localizado ou expirado." });
+  });
+
+  // Decisão do cliente no orçamento público (Aprovar / Recusar / Ajuste)
+  app.post("/api/public/proposal/:id/decision", (req, res) => {
+    try {
+      const targetId = (req.params.id || "").trim().toLowerCase();
+      const { action, signerName, signerRole, signerEmail, signerPhone, notes, reason, feedback } = req.body || {};
+
+      if (!targetId || !action) {
+        return res.status(400).json({ success: false, error: "Dados incompletos para processar decisão." });
+      }
+
+      if (fs.existsSync(DB_FILE)) {
+        const raw = fs.readFileSync(DB_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        const proposals = Array.isArray(parsed?.proposals) ? parsed.proposals : [];
+
+        const now = new Date();
+        const dateNow = now.toLocaleDateString("pt-BR");
+        const timeNow = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const dateTime = `${dateNow} ${timeNow}`;
+
+        let targetFound = false;
+        let updatedProposal: any = null;
+
+        const updatedProposals = proposals.map((p: any) => {
+          if (
+            p.id?.toLowerCase() === targetId ||
+            p.code?.toLowerCase() === targetId ||
+            (p.shareToken && p.shareToken?.toLowerCase() === targetId)
+          ) {
+            targetFound = true;
+            if (action === "Aprovado") {
+              updatedProposal = {
+                ...p,
+                status: "Aprovado",
+                approvedAt: dateTime,
+                clientSignerName: signerName || p.contactName || "Cliente",
+                clientSignerRole: signerRole || "Responsável",
+                clientSignerEmail: signerEmail || p.clientEmail,
+                clientSignerPhone: signerPhone || p.clientPhone,
+                clientDecisionNote: notes,
+              };
+            } else if (action === "Recusado") {
+              updatedProposal = {
+                ...p,
+                status: "Recusado",
+                rejectedAt: dateTime,
+                clientDecisionNote: reason || "Proposta recusada pelo cliente.",
+              };
+            } else {
+              updatedProposal = {
+                ...p,
+                clientDecisionNote: feedback || "Cliente solicitou readequação de escopo.",
+              };
+            }
+            return updatedProposal;
+          }
+          return p;
+        });
+
+        if (targetFound && updatedProposal) {
+          parsed.proposals = updatedProposals;
+          parsed.updatedAt = Date.now();
+          fs.writeFileSync(DB_FILE, JSON.stringify(parsed, null, 2), "utf-8");
+          return res.json({ success: true, proposal: updatedProposal });
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao registrar decisão do orçamento:", e);
+    }
+
+    res.status(404).json({ success: false, error: "Orçamento não localizado para atualização." });
+  });
+
+  // ==================================================================
   // VITE MIDDLEWARE (Development & Production)
   // ==================================================================
   if (process.env.NODE_ENV !== "production") {
