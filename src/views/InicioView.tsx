@@ -530,161 +530,55 @@ export const InicioView: React.FC<InicioViewProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-              {/* 1. Monthly Recurring Revenue (MRR) */}
-              <div 
-                id="summary-card-mrr"
-                onClick={() => onNavigate('financeiro')}
-                className="bg-white dark:bg-[#0f172a] p-5 sm:p-6 rounded-[26px] border border-slate-200/90 dark:border-slate-800 shadow-xs hover:border-emerald-500 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between group"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-2xs group-hover:scale-105 transition-transform border border-emerald-100 dark:border-emerald-900/50">
-                      <TrendingUp size={22} />
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/50">
-                      <ArrowUpRight size={12} />
-                      <span>{invoices.length > 0 ? `${invoices.length} fatura(s)` : 'R$ 0,00 base'}</span>
-                    </span>
-                  </div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                    Faturamento Gerado
-                  </span>
-                  <div className="text-3xl sm:text-4xl font-black text-[#142142] dark:text-white mt-1.5 tracking-tight">
-                    R$ {totalInvoiced.toLocaleString('pt-BR')}
-                    <span className="text-sm font-normal text-slate-400 dark:text-slate-400 ml-1">
-                      {totalMRR > 0 ? `(R$ ${totalMRR.toLocaleString('pt-BR')} rec.)` : 'emitido'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800/80">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Faturas</p>
-                      <p className="font-semibold text-slate-700 dark:text-slate-200">
-                        {invoices.length} {invoices.length === 1 ? 'emitida' : 'emitidas'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Liquidado</p>
-                      <p className="font-semibold text-emerald-600 dark:text-emerald-400">
-                        R$ {totalPaidInvoices.toLocaleString('pt-BR')}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center text-xs font-bold text-[#142142] dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                    <span>Ver fluxo financeiro</span>
-                    <ChevronRight size={14} className="ml-1 group-hover:translate-x-1 transition-transform text-emerald-500" />
-                  </div>
-                </div>
-              </div>
-
-              {/* 2. Demandas Ativas & Status de Prazos */}
-              <div 
-                id="summary-card-demands"
-                onClick={() => onNavigate('demandas')}
-                className="bg-white dark:bg-[#0f172a] p-5 sm:p-6 rounded-[26px] border border-slate-200/90 dark:border-slate-800 shadow-xs hover:border-[#fab518] hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between group"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-2xs group-hover:scale-105 transition-transform border border-amber-100 dark:border-amber-900/50">
-                      <Kanban size={22} />
-                    </div>
-                    {overdueDemands.length > 0 ? (
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50 animate-pulse">
-                        <AlertTriangle size={12} />
-                        <span>{overdueDemands.length} {overdueDemands.length === 1 ? 'atrasada' : 'atrasadas'}</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/50">
-                        <CheckCircle2 size={12} />
-                        <span>100% no prazo</span>
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                    Demandas em Andamento
-                  </span>
-                  <div className="text-3xl sm:text-4xl font-black text-[#142142] dark:text-white mt-1.5 tracking-tight flex items-baseline gap-2">
-                    {activeDemands.length}
-                    <span className="text-sm font-normal text-slate-400 dark:text-slate-400">
-                      ativas ({demands.length} {demands.length === 1 ? 'total' : 'totais'})
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800/80">
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Produção</p>
-                      <p className="font-semibold text-purple-600 dark:text-purple-400">
-                        {inProduction.length}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Aprovação</p>
-                      <p className="font-semibold text-amber-600 dark:text-amber-400">
-                        {pendingApprovals.length}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Atraso</p>
-                      <p className={`font-semibold ${overdueDemands.length > 0 ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                        {overdueDemands.length}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center text-xs font-bold text-[#142142] dark:text-slate-200 group-hover:text-[#fab518] transition-colors">
-                    <span>Ver quadro Kanban</span>
-                    <ChevronRight size={14} className="ml-1 group-hover:translate-x-1 transition-transform text-[#fab518]" />
-                  </div>
-                </div>
-              </div>
-
-              {/* 3. Number of New Clients Added This Month */}
+            <div className="w-full">
+              {/* Number of New Clients Added This Month */}
               <div 
                 id="summary-card-new-clients"
                 onClick={() => onNavigate('clientes')}
-                className="bg-white dark:bg-[#0f172a] p-5 sm:p-6 rounded-[26px] border border-slate-200/90 dark:border-slate-800 shadow-xs hover:border-[#142142] hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between group"
+                className="bg-white dark:bg-[#0f172a] p-5 sm:p-6 rounded-[26px] border border-slate-200/90 dark:border-slate-800 shadow-xs hover:border-[#fab518] hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col lg:flex-row lg:items-center justify-between gap-5 group"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-2xs group-hover:scale-105 transition-transform border border-blue-100 dark:border-blue-900/50">
-                      <UserPlus size={22} />
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/50">
-                      <Sparkles size={12} />
-                      <span>Meta: 3 clientes</span>
-                    </span>
+                {/* Lado Esquerdo: Ícone, Título e Métrica Principal */}
+                <div className="flex items-center gap-4">
+                  <div className="w-13 h-13 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-2xs group-hover:scale-105 transition-transform border border-blue-100 dark:border-blue-900/50 shrink-0">
+                    <UserPlus size={24} />
                   </div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                    Novos Clientes Este Mês
-                  </span>
-                  <div className="text-3xl sm:text-4xl font-black text-[#142142] dark:text-white mt-1.5 tracking-tight">
-                    +{newClientsThisMonth}
-                    <span className="text-sm font-normal text-slate-400 dark:text-slate-400 ml-1">adicionados</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
+                        Novos Clientes no Mês
+                      </span>
+                    </div>
+                    <div className="text-2xl sm:text-3xl font-black text-[#142142] dark:text-white mt-1 tracking-tight flex items-baseline gap-2">
+                      +{newClientsThisMonth}
+                      <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                        {newClientsThisMonth === 1 ? 'cliente adicionado' : 'clientes adicionados'} em Setembro
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800/80">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Carteira</p>
-                      <p className="font-semibold text-slate-700 dark:text-slate-200">
-                        {clients.length} contas totais
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Último</p>
-                      <p className="font-semibold text-blue-600 dark:text-blue-400 truncate">
-                        {lastClient ? lastClient.name.split(' ')[0] : 'Nenhum'}
-                      </p>
-                    </div>
+                {/* Centro: Indicadores Rápidos da Carteira */}
+                <div className="flex flex-wrap items-center gap-6 pt-3 lg:pt-0 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-800/80 lg:pl-6 text-xs">
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Carteira Ativa</p>
+                    <p className="text-sm font-bold text-[#142142] dark:text-slate-200 mt-0.5">
+                      {clients.length} {clients.length === 1 ? 'conta total' : 'contas totais'}
+                    </p>
                   </div>
-                  <div className="mt-3 flex items-center text-xs font-bold text-[#142142] dark:text-slate-200 group-hover:text-[#fab518] transition-colors">
+
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Último Cadastrado</p>
+                    <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-0.5 truncate max-w-[180px]">
+                      {lastClient ? lastClient.name : 'Nenhum'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Lado Direito: Botão de Ação */}
+                <div className="pt-2 lg:pt-0 shrink-0">
+                  <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 text-xs font-bold text-[#142142] dark:text-white border border-slate-200/80 dark:border-slate-700 group-hover:bg-[#fab518] group-hover:text-[#142142] group-hover:border-[#fab518] transition-all shadow-2xs">
                     <span>Gerenciar carteira</span>
-                    <ChevronRight size={14} className="ml-1 group-hover:translate-x-1 transition-transform text-[#fab518]" />
+                    <ChevronRight size={15} className="group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 </div>
               </div>

@@ -130,15 +130,6 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Upload Zone */}
-      <div className="flex items-center justify-between text-xs px-1">
-        <span className="font-bold text-[#142142]">Anexar Mídias e Arquivos</span>
-        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-          <ShieldCheck size={13} className="text-emerald-600" />
-          <span>Antivírus & Heurística Ativos</span>
-        </span>
-      </div>
-
       <div
         id="demand-file-dropzone"
         onDragEnter={handleDragEnter}
@@ -179,12 +170,6 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
             <p className="text-sm font-bold text-[#142142]">
               {isScanning ? 'Escaneando arquivo com Antivírus...' : 'Clique para selecionar ou arraste arquivos aqui'}
             </p>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {isScanning 
-                ? `Inspecionando assinaturas binárias e scripts de "${scanningName}"` 
-                : 'Imagens (PNG, JPG), vídeos (MP4), PDFs e criativos até 200MB protegidos contra malware'
-              }
-            </p>
           </div>
 
           <div className="flex items-center justify-center gap-2 pt-1">
@@ -196,10 +181,6 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
             </span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600">
               PDFs & Documentos
-            </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center gap-1">
-              <ShieldCheck size={11} />
-              Varredura Ativa
             </span>
           </div>
         </div>

@@ -18,6 +18,7 @@ interface CustomDatePickerProps {
   disabled?: boolean;
   className?: string;
   id?: string;
+  align?: 'left' | 'right';
 }
 
 const MONTH_NAMES = [
@@ -36,6 +37,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   disabled = false,
   className = '',
   id = 'custom-date-picker',
+  align = 'right',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -273,7 +275,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
       {/* Popover Calendar */}
       {isOpen && (
         <div 
-          className="absolute z-50 left-0 sm:right-auto mt-2 w-[290px] sm:w-[310px] bg-white dark:bg-[#0f172a] rounded-2xl shadow-2xl border border-slate-200/90 dark:border-slate-800 p-3.5 animate-in fade-in zoom-in-95 duration-150 ring-1 ring-black/5"
+          className={`absolute z-50 ${align === 'left' ? 'left-0 right-auto' : 'right-0 left-auto'} mt-2 w-[290px] sm:w-[310px] bg-white dark:bg-[#0f172a] rounded-2xl shadow-2xl border border-slate-200/90 dark:border-slate-800 p-3.5 animate-in fade-in zoom-in-95 duration-150 ring-1 ring-black/5`}
           style={{ maxWidth: 'calc(100vw - 2rem)' }}
           onClick={(e) => e.stopPropagation()}
         >

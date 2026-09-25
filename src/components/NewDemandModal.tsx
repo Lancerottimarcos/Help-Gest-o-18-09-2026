@@ -6,6 +6,7 @@ import { FileUploadDropzone } from './FileUploadDropzone';
 import { CustomDatePicker } from './CustomDatePicker';
 import { CustomPrioritySelect } from './CustomPrioritySelect';
 import { CustomClientSelect } from './CustomClientSelect';
+import { CustomPieceTypeSelect } from './CustomPieceTypeSelect';
 import { detectAndSanitizeInput } from '../utils/securityProtocols';
 
 interface NewDemandModalProps {
@@ -249,32 +250,17 @@ export const NewDemandModal: React.FC<NewDemandModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-bold text-[#142142] dark:text-white mb-1">Tipo de Peça</label>
-              <select
+              <CustomPieceTypeSelect
+                id="new-demand-type-select"
+                label="Tipo de Peça"
                 value={type}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setType(val);
-                  if (val === 'Meta Ads') {
-                    setCategory('Tráfego Pago');
-                  } else if (val === 'Des. de Site') {
-                    setCategory('Criação de Sites');
-                  } else if (val === 'Logotipo') {
-                    setCategory('Design Geral');
-                  } else if (val === 'Post') {
-                    setCategory('Social Media');
-                  } else {
-                    setCategory('Social Media');
+                onChange={(newType, newCat) => {
+                  setType(newType);
+                  if (newCat) {
+                    setCategory(newCat);
                   }
                 }}
-                className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-xs font-semibold text-[#142142] dark:text-slate-100 p-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:outline-none transition-colors cursor-pointer"
-              >
-                <option value="Post">Post</option>
-                <option value="Meta Ads">Meta Ads</option>
-                <option value="Des. de Site">Des. de Site</option>
-                <option value="Logotipo">Logotipo</option>
-                <option value="Outros">Outros</option>
-              </select>
+              />
             </div>
 
             <div>

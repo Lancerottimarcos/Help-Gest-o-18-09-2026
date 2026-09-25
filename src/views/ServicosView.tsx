@@ -241,72 +241,77 @@ export const ServicosView: React.FC<ServicosViewProps> = ({
           </div>
         ) : (
           filteredServices.map((srv) => (
-          <div
-            key={srv.id}
-            id={`service-card-${srv.id}`}
-            className="bg-white dark:bg-[#0f172a] rounded-[24px] border border-slate-200/90 dark:border-slate-800 p-6 card-elevation-subtle hover:border-[#fab518]/80 dark:hover:border-[#fab518]/80 hover:shadow-md transition-all duration-200 flex flex-col justify-between space-y-4 group"
-          >
-            {/* Top Row: Icon Badge & Quick Actions */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-[#fab518] flex items-center justify-center border border-amber-200/50 dark:border-amber-500/20 shrink-0 group-hover:scale-105 transition-transform">
-                <Briefcase size={18} className="stroke-[2.2]" />
+            <div
+              key={srv.id}
+              id={`service-card-${srv.id}`}
+              className="bg-white dark:bg-[#0f172a] rounded-[24px] border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs hover:border-[#fab518] dark:hover:border-[#fab518] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between group relative overflow-hidden space-y-4"
+            >
+              {/* Subtle top accent highlight */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#fab518]/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+              <div className="space-y-3.5">
+                {/* Top Bar: Icon on the left & Quick Actions on the right */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-[#fab518] flex items-center justify-center border border-amber-200/50 dark:border-amber-500/20 shrink-0 group-hover:scale-105 transition-transform">
+                    <Briefcase size={18} className="stroke-[2.2]" />
+                  </div>
+
+                  <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      id={`btn-footer-edit-${srv.id}`}
+                      onClick={() => handleOpenEditModal(srv)}
+                      className="p-1.5 rounded-xl text-slate-400 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                      title={`Editar serviço ${srv.title}`}
+                      aria-label={`Editar serviço ${srv.title}`}
+                    >
+                      <Pencil size={14} className="stroke-[2.2]" />
+                    </button>
+
+                    {onDeleteService && (
+                      <button
+                        type="button"
+                        id={`btn-card-delete-service-${srv.id}`}
+                        onClick={() => setServiceToDelete(srv)}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
+                        title={`Excluir serviço ${srv.title}`}
+                        aria-label={`Excluir serviço ${srv.title}`}
+                      >
+                        <Trash2 size={14} className="stroke-[2.2]" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Title & Description */}
+                <div className="space-y-1.5">
+                  <h4 className="text-lg font-black text-[#142142] dark:text-white group-hover:text-[#fab518] transition-colors leading-snug tracking-tight">
+                    {srv.title}
+                  </h4>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium line-clamp-3">
+                    {srv.description || 'Solução estruturada sob medida para atender as demandas da agência.'}
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  id={`btn-footer-edit-${srv.id}`}
-                  onClick={() => handleOpenEditModal(srv)}
-                  className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                  title={`Editar serviço ${srv.title}`}
-                  aria-label={`Editar serviço ${srv.title}`}
-                >
-                  <Pencil size={14} className="stroke-[2.2]" />
-                </button>
+              {/* Footer: Price Box */}
+              <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10px] uppercase font-extrabold text-slate-400 dark:text-slate-500 tracking-wider block">
+                    Valor
+                  </span>
+                  <p className="text-xl sm:text-2xl font-black text-[#142142] dark:text-white font-mono tracking-tight mt-0.5">
+                    R$ {srv.basePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
 
-                {onDeleteService && (
-                  <button
-                    type="button"
-                    id={`btn-card-delete-service-${srv.id}`}
-                    onClick={() => setServiceToDelete(srv)}
-                    className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                    title={`Excluir serviço ${srv.title}`}
-                    aria-label={`Excluir serviço ${srv.title}`}
-                  >
-                    <Trash2 size={14} className="stroke-[2.2]" />
-                  </button>
-                )}
+                <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-[#fab518] flex items-center justify-center border border-amber-200/50 dark:border-amber-500/20 shadow-2xs">
+                  <DollarSign size={14} className="stroke-[2.5]" />
+                </div>
               </div>
             </div>
-
-            {/* Content: Title & Description */}
-            <div className="space-y-1.5 flex-1">
-              <h4 className="text-lg font-black text-[#142142] dark:text-white group-hover:text-[#fab518] dark:group-hover:text-[#fab518] transition-colors leading-snug">
-                {srv.title}
-              </h4>
-
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium line-clamp-3">
-                {srv.description || 'Solução estruturada sob medida para atender as demandas da agência.'}
-              </p>
-            </div>
-
-            {/* Value Highlight Block */}
-            <div className="bg-[#F8F9FA] dark:bg-slate-800/60 rounded-2xl p-3.5 border border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] uppercase font-extrabold text-slate-400 dark:text-slate-500 tracking-wider block">
-                  Valor
-                </span>
-                <p className="text-xl font-black text-[#142142] dark:text-white font-mono tabular-nums tracking-tight">
-                  R$ {srv.basePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-
-              <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-700/60 text-[#fab518] flex items-center justify-center border border-slate-200/60 dark:border-slate-700 shadow-2xs">
-                <DollarSign size={14} className="stroke-[2.5]" />
-              </div>
-            </div>
-          </div>
-        ))
+          ))
       )}
       </div>
 

@@ -5,8 +5,6 @@ import {
   Save, 
   UploadCloud, 
   ClipboardList, 
-  CheckSquare, 
-  MessageSquare,
   CheckCircle2
 } from 'lucide-react';
 import { DemandItem, KanbanColumnId, Priority, Client, DemandAttachment, KanbanColumn, TeamMember } from '../types';
@@ -16,6 +14,7 @@ import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { CustomDatePicker } from './CustomDatePicker';
 import { CustomPrioritySelect } from './CustomPrioritySelect';
 import { CustomClientSelect } from './CustomClientSelect';
+import { CustomPieceTypeSelect } from './CustomPieceTypeSelect';
 
 interface DemandDetailModalProps {
   demand: DemandItem;
@@ -28,20 +27,6 @@ interface DemandDetailModalProps {
   onDelete?: (demandId: string) => void;
   onOpenWhatsAppNotification?: (demand: DemandItem) => void;
   onOpenClientApprovalPortal?: (demand: DemandItem) => void;
-}
-
-interface ChecklistItem {
-  id: string;
-  text: string;
-  completed: boolean;
-}
-
-interface DemandComment {
-  id: string;
-  authorName: string;
-  authorAvatar?: string;
-  text: string;
-  createdAt: string;
 }
 
 export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
@@ -133,28 +118,6 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
     ] : [])
   );
 
-  const [activeTab, setActiveTab] = useState<'details' | 'checklist' | 'comments'>('details');
-
-  // Interactive Checklist
-  const [checklist, setChecklist] = useState<ChecklistItem[]>([
-    { id: 'chk-1', text: 'Receber briefing e direcionamento criativo', completed: true },
-    { id: 'chk-2', text: 'Desenvolvimento e revisão da arte / copywriting', completed: ((demand?.checklistCompleted) || 0) >= 2 },
-    { id: 'chk-3', text: 'Aprovação interna com a equipe da agência', completed: ((demand?.checklistCompleted) || 0) >= 3 },
-    { id: 'chk-4', text: 'Validação final com o cliente', completed: ((demand?.checklistCompleted) || 0) >= 4 },
-  ]);
-  const [newChecklistText, setNewChecklistText] = useState('');
-
-  // Interactive Comments/Notes
-  const [comments, setComments] = useState<DemandComment[]>([
-    {
-      id: 'comm-1',
-      authorName: demand?.assignee?.name || 'Equipe',
-      authorAvatar: demand?.assignee?.avatar || '',
-      text: `Demanda vinculada ao projeto ${demand?.clientProject || demand?.client || 'Geral'}. Prazo estipulado para ${demand?.dueDate || 'a definir'}.`,
-      createdAt: 'Hoje às 09:30',
-    },
-  ]);
-  const [newCommentText, setNewCommentText] = useState('');
   const [isSavedToast, setIsSavedToast] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
@@ -203,42 +166,6 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
     }
   }, [demand, clients, activeTeamMembers]);
 
-  const toggleChecklist = (id: string) => {
-    setChecklist((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item))
-    );
-  };
-
-  const handleAddChecklistItem = () => {
-    if (!newChecklistText.trim()) return;
-    const newItem: ChecklistItem = {
-      id: `chk-${Date.now()}`,
-      text: newChecklistText.trim(),
-      completed: false,
-    };
-    setChecklist((prev) => [...prev, newItem]);
-    setNewChecklistText('');
-  };
-
-  const handleRemoveChecklistItem = (id: string) => {
-    setChecklist((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const handleAddComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCommentText.trim()) return;
-
-    const newComment: DemandComment = {
-      id: `comm-${Date.now()}`,
-      authorName: 'Você (Gestor)',
-      text: newCommentText.trim(),
-      createdAt: 'Agora mesmo',
-    };
-
-    setComments((prev) => [newComment, ...prev]);
-    setNewCommentText('');
-  };
-
   // Save handler
   const handleSave = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -249,8 +176,6 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
       alta: 3,
       urgente: 3,
     };
-
-    const completedCount = checklist.filter((i) => i.completed).length;
 
     const firstImageAttachment = attachments.find((a) => {
       if (a.type === 'image') return true;
@@ -288,9 +213,9 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
         name: assigneeName,
         avatar: resolvedAssigneeAvatar || assigneeAvatar,
       },
-      checklistTotal: checklist.length,
-      checklistCompleted: completedCount,
-      commentsCount: comments.length,
+      checklistTotal: demand.checklistTotal || 0,
+      checklistCompleted: demand.checklistCompleted || 0,
+      commentsCount: demand.commentsCount || 0,
       attachmentsCount: attachments.length,
       attachments: attachments,
     };
@@ -302,8 +227,6 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
       onClose();
     }, 400);
   };
-
-  const completedChecklistCount = checklist.filter((i) => i.completed).length;
 
   if (!isOpen || !demand) return null;
 
@@ -435,27 +358,17 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
           {/* Row: Tipo de Peça | Prioridade | Etapa Kanban */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label htmlFor="demand-type-select" className="block text-xs font-bold text-[#142142] dark:text-white mb-1">Tipo de Peça</label>
-              <select
+              <CustomPieceTypeSelect
                 id="demand-type-select"
+                label="Tipo de Peça"
                 value={type}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setType(val);
-                  if (val === 'Meta Ads') setServiceCategory('Tráfego Pago');
-                  else if (val === 'Des. de Site') setServiceCategory('Criação de Sites');
-                  else if (val === 'Logotipo') setServiceCategory('Design Geral');
-                  else if (val === 'Post') setServiceCategory('Social Media');
-                  else setServiceCategory('Social Media');
+                onChange={(newType, newCat) => {
+                  setType(newType);
+                  if (newCat) {
+                    setServiceCategory(newCat);
+                  }
                 }}
-                className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-xs font-semibold text-[#142142] dark:text-slate-100 p-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:outline-none transition-colors cursor-pointer"
-              >
-                <option value="Post">Post</option>
-                <option value="Meta Ads">Meta Ads</option>
-                <option value="Des. de Site">Des. de Site</option>
-                <option value="Logotipo">Logotipo</option>
-                <option value="Outros">Outros</option>
-              </select>
+              />
             </div>
 
             <div>
@@ -544,128 +457,6 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
               onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
               maxSizeBytes={200 * 1024 * 1024}
             />
-          </div>
-
-          {/* Collapsible Sections for Checklist & Notes */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2 mb-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab(activeTab === 'checklist' ? 'details' : 'checklist')}
-                className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === 'checklist'
-                    ? 'bg-[#fab518] text-[#142142] shadow-xs'
-                    : 'bg-[#F2F2F2] dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                <CheckSquare size={13} />
-                <span>Checklist ({completedChecklistCount}/{checklist.length})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab(activeTab === 'comments' ? 'details' : 'comments')}
-                className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === 'comments'
-                    ? 'bg-[#fab518] text-[#142142] shadow-xs'
-                    : 'bg-[#F2F2F2] dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                <MessageSquare size={13} />
-                <span>Notas ({comments.length})</span>
-              </button>
-            </div>
-
-            {/* Checklist Tab Content */}
-            {activeTab === 'checklist' && (
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-2 animate-in fade-in">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newChecklistText}
-                    onChange={(e) => setNewChecklistText(e.target.value)}
-                    placeholder="Adicionar tarefa ao checklist..."
-                    className="flex-1 bg-white dark:bg-slate-800 text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-none"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddChecklistItem();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddChecklistItem}
-                    className="px-3 py-1.5 bg-[#fab518] text-[#142142] text-xs font-bold rounded-lg cursor-pointer hover:bg-[#e29f11]"
-                  >
-                    Adicionar
-                  </button>
-                </div>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {checklist.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded-lg text-xs">
-                      <label className="flex items-center gap-2 cursor-pointer flex-1">
-                        <input
-                          type="checkbox"
-                          checked={item.completed}
-                          onChange={() => toggleChecklist(item.id)}
-                          className="w-3.5 h-3.5 text-[#fab518] rounded cursor-pointer"
-                        />
-                        <span className={item.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200 font-medium'}>
-                          {item.text}
-                        </span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveChecklistItem(item.id)}
-                        className="text-slate-400 hover:text-rose-500 p-1 cursor-pointer"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Comments Tab Content */}
-            {activeTab === 'comments' && (
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-2 animate-in fade-in">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newCommentText}
-                    onChange={(e) => setNewCommentText(e.target.value)}
-                    placeholder="Escreva uma observação interna..."
-                    className="flex-1 bg-white dark:bg-slate-800 text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-none"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddComment(e);
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={(e) => handleAddComment(e)}
-                    className="px-3 py-1.5 bg-[#fab518] text-[#142142] text-xs font-bold rounded-lg cursor-pointer hover:bg-[#e29f11]"
-                  >
-                    Publicar
-                  </button>
-                </div>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {comments.map((comm) => (
-                    <div key={comm.id} className="p-2 bg-white dark:bg-slate-800 rounded-lg text-xs space-y-1">
-                      <div className="flex justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                        <span>{comm.authorName}</span>
-                        <span className="text-[10px] text-slate-400 font-normal">{comm.createdAt}</span>
-                      </div>
-                      <p className="text-slate-600 dark:text-slate-300 text-xs font-medium">{comm.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Footer matching NewDemandModal */}
