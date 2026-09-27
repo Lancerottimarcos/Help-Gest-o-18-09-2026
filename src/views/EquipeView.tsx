@@ -26,13 +26,15 @@ import {
   Info,
   Sparkles,
   ArrowUpDown,
-  Crown
+  Crown,
+  ShieldAlert
 } from 'lucide-react';
 import { TeamMember, UserProfile, TeamFunctionOption } from '../types';
 import { initialTeamMembers } from '../data/mockData';
 import { ColaboradorModal, PREDEFINED_ROLES } from '../components/ColaboradorModal';
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
 import { isOwnerOrMarcos } from '../utils/securityProtocols';
+import { getAccessLevelLabel, countBlockedPages } from '../utils/permissionUtils';
 
 interface EquipeViewProps {
   teamMembers?: TeamMember[];
@@ -40,6 +42,8 @@ interface EquipeViewProps {
   onUpdateTeamMember?: (member: TeamMember) => void;
   onDeleteTeamMember?: (memberId: string) => void;
   currentUser?: UserProfile;
+  onSimulateMember?: (member: TeamMember) => void;
+  simulatedMemberId?: string;
 }
 
 export const EquipeView: React.FC<EquipeViewProps> = ({
@@ -48,6 +52,8 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
   onUpdateTeamMember,
   onDeleteTeamMember,
   currentUser,
+  onSimulateMember,
+  simulatedMemberId,
 }) => {
   // Local fallback if props are not provided
   const [localTeamMembers, setLocalTeamMembers] = useState<TeamMember[]>(initialTeamMembers);
@@ -530,6 +536,41 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
         </div>
       </div>
 
+      {/* Security & Access Rule Banner */}
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-slate-50 dark:to-slate-900/40 border border-amber-300/70 dark:border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#fab518] text-[#142142] flex items-center justify-center font-black shrink-0 shadow-xs ring-2 ring-[#fab518]/20">
+            <ShieldCheck size={20} className="stroke-[2.2]" />
+          </div>
+          <div className="text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-black text-[#142142] dark:text-white sm:text-sm">
+                Regra de Acesso de Novos Colaboradores Ativa
+              </span>
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
+                6 Páginas Bloqueadas por Padrão
+              </span>
+            </div>
+            <p className="text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+              Por segurança, novos membros adicionados não têm acesso a <strong>Clientes, Serviços, Financeiro, Orçamento, Equipe e Configurações</strong> até liberação explícita pelo administrador.
+            </p>
+          </div>
+        </div>
+
+        {isMarcosLancerotti && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-[#142142] dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+            >
+              <Plus size={13} className="text-[#fab518]" />
+              <span>Novo com Regra Padrão</span>
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Main Content Area */}
       {filteredMembers.length === 0 ? (
         /* Empty State */
@@ -585,35 +626,35 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
             return (
               <div
                 key={member.id}
-                className={`rounded-2xl p-5 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group ${
+                className={`relative overflow-hidden rounded-[24px] p-5 sm:p-5.5 flex flex-col justify-between group transition-all duration-300 ${
                   isOwner
-                    ? 'bg-white dark:bg-[#0f172a] border-2 border-amber-300 dark:border-amber-500/50 ring-2 ring-amber-400/15'
-                    : 'bg-white dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
+                    ? 'bg-gradient-to-b from-amber-50/50 via-white to-white dark:from-amber-950/20 dark:via-[#0f172a] dark:to-[#0f172a] border-t-4 border-t-[#fab518] border-x border-b border-amber-300/80 dark:border-amber-500/40 shadow-[0_4px_20px_-4px_rgba(250,181,24,0.15)] hover:shadow-[0_14px_34px_-6px_rgba(250,181,24,0.22)]'
+                    : 'bg-white dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800/90 shadow-[0_2px_12px_-4px_rgba(20,33,66,0.06)] hover:shadow-[0_14px_30px_-6px_rgba(20,33,66,0.12),0_4px_10px_-2px_rgba(0,0,0,0.03)] dark:hover:shadow-[0_14px_30px_-6px_rgba(0,0,0,0.5)] hover:border-slate-300 dark:hover:border-slate-700'
+                } hover:-translate-y-1`}
               >
-                <div className="space-y-4">
-                  {/* Top Bar: Avatar, Online Dot, Name and Status Badge */}
+                {/* Tier 1: Header & Identity Section (Avatar, Name, Role, Status & Department) */}
+                <div className="space-y-3 pb-3.5 border-b border-slate-100 dark:border-slate-800/80 relative">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3.5 min-w-0">
                       <div className="relative shrink-0">
                         {member.avatar?.trim() ? (
                           <img
                             src={member.avatar}
                             alt={member.name}
-                            className="w-12 h-12 rounded-xl object-cover ring-2 ring-slate-100 dark:ring-slate-800"
+                            className="w-13 h-13 rounded-2xl object-cover ring-2 ring-slate-100 dark:ring-slate-800 shadow-xs group-hover:ring-[#fab518]/50 transition-all"
                             onError={(e) => {
                               (e.currentTarget as HTMLImageElement).src =
                                 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
                             }}
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#142142] to-[#1e3060] text-[#fab518] font-black text-sm flex items-center justify-center ring-2 ring-slate-100 dark:ring-slate-800">
+                          <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#142142] to-[#1e3060] text-[#fab518] font-black text-base flex items-center justify-center ring-2 ring-slate-100 dark:ring-slate-800 shadow-xs">
                             {member.name.charAt(0).toUpperCase()}
                           </div>
                         )}
                         {/* Status dot */}
                         <span
-                          className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-[#0f172a] ${
+                          className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-[#0f172a] shadow-2xs ${
                             member.status === 'Disponível'
                               ? 'bg-emerald-500'
                               : member.status === 'Ocupado'
@@ -626,17 +667,17 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="text-sm font-extrabold text-[#142142] dark:text-white truncate group-hover:text-[#fab518] transition-colors">
+                          <h3 className="text-[15px] font-black text-[#142142] dark:text-white tracking-tight truncate group-hover:text-[#fab518] transition-colors">
                             {member.name}
                           </h3>
                           {isOwner && (
-                            <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-sm bg-amber-100 dark:bg-amber-950/90 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/90 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700 shadow-2xs">
                               <Crown size={10} className="text-amber-600 dark:text-amber-400" />
                               Dono
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
                           {member.role || memberFunc}
                         </p>
                       </div>
@@ -644,7 +685,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
 
                     {/* Status badge */}
                     <span
-                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-full border shrink-0 flex items-center gap-1.5 ${
                         member.status === 'Disponível'
                           ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
                           : member.status === 'Ocupado'
@@ -652,28 +693,56 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                           : 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
                       }`}
                     >
-                      {member.status}
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          member.status === 'Disponível'
+                            ? 'bg-emerald-500'
+                            : member.status === 'Ocupado'
+                            ? 'bg-amber-500'
+                            : 'bg-blue-500'
+                        }`}
+                      />
+                      <span>{member.status}</span>
                     </span>
                   </div>
 
-                  {/* Function & Role Pill */}
-                  <div>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${badgeInfo.tagClass}`}>
+                  {/* Function & Role Pill and Permissions Badge */}
+                  <div className="flex items-center gap-2 pt-0.5 flex-wrap">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border shadow-2xs ${badgeInfo.tagClass}`}>
                       <FuncIcon size={13} />
                       <span>{memberFunc}</span>
                     </span>
-                  </div>
 
-                  {/* Login Credentials Strip (High-value agency feature) */}
-                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-2">
+                    {/* Permissions Status Badge */}
+                    {(() => {
+                      const accessInfo = getAccessLevelLabel(member.permissions, isOwner);
+                      return (
+                        <span
+                          className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-xl border shadow-2xs ${accessInfo.badgeClass}`}
+                          title={isOwner ? 'Acesso Total Irrestrito' : `${6 - accessInfo.blockedCount} páginas liberadas, ${accessInfo.blockedCount} bloqueadas`}
+                        >
+                          <Lock size={10} className={isOwner ? 'text-amber-500' : accessInfo.blockedCount > 0 ? 'text-rose-500' : 'text-emerald-500'} />
+                          <span>{accessInfo.label}</span>
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* Tier 2: Operational Capacity & Agency Access Panel (Workload, Credentials, Specialties) */}
+                <div className="space-y-3.5 py-3.5 flex-1 flex flex-col justify-between">
+                  {/* Login Credentials Strip (High-value agency access feature) */}
+                  <div className="p-2.5 sm:p-3 rounded-2xl bg-slate-50/90 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between gap-2 shadow-2xs">
                     <div className="flex items-center gap-2 min-w-0">
-                      <KeyRound size={13} className="text-[#fab518] shrink-0" />
-                      <span className="font-mono text-xs font-bold text-[#142142] dark:text-white truncate">
+                      <div className="w-6 h-6 rounded-lg bg-[#fab518]/15 text-[#142142] dark:text-[#fab518] flex items-center justify-center shrink-0">
+                        <KeyRound size={12} className="stroke-[2.5]" />
+                      </div>
+                      <span className="font-mono text-xs font-bold text-[#142142] dark:text-slate-100 truncate">
                         @{username}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {isMarcosLancerotti && (
                         <button
                           type="button"
@@ -681,16 +750,17 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                             setCredentialPeekMember(member);
                             setShowPeekPassword(false);
                           }}
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-[#fab518] hover:text-[#142142] dark:hover:bg-[#fab518] dark:hover:text-[#142142] border border-slate-200 dark:border-slate-600 shadow-2xs transition-all active:scale-95 cursor-pointer"
                           title="Ver senha e credenciais completas"
                         >
-                          Ver Senha
+                          <Eye size={11} />
+                          <span>Ver Senha</span>
                         </button>
                       )}
                       <button
                         type="button"
                         onClick={() => handleCopyCredentials(member)}
-                        className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                        className="p-1.5 text-slate-400 hover:text-[#142142] dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 rounded-lg border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-all cursor-pointer"
                         title="Copiar credenciais de acesso para enviar"
                       >
                         <Copy size={13} />
@@ -699,27 +769,29 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                   </div>
 
                   {/* Workload & Tasks Capacity Bar */}
-                  <div className="space-y-1">
+                  <div className="space-y-1.5 bg-slate-50/50 dark:bg-slate-800/30 p-2.5 rounded-xl border border-slate-200/40 dark:border-slate-800">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-slate-500 dark:text-slate-400 font-medium">Carga Operacional</span>
                       <span className="font-bold text-slate-700 dark:text-slate-300">
-                        {tasksCount} demandas • <span className="font-normal text-slate-500">{loadLevel}</span>
+                        {tasksCount} demandas • <span className={`font-semibold ${
+                          tasksCount <= 2 ? 'text-emerald-600 dark:text-emerald-400' : tasksCount <= 5 ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'
+                        }`}>{loadLevel}</span>
                       </span>
                     </div>
-                    <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className="w-full h-2 bg-slate-200/70 dark:bg-slate-800 rounded-full overflow-hidden p-0.5">
                       <div
-                        className={`h-full rounded-full transition-all duration-300 ${loadColor}`}
+                        className={`h-full rounded-full transition-all duration-500 ${loadColor}`}
                         style={{ width: `${Math.min(100, Math.max(10, tasksCount * 18))}%` }}
                       />
                     </div>
                   </div>
 
                   {/* Specialties Chips */}
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {member.specialties.slice(0, 3).map((spec, i) => (
                       <span
                         key={i}
-                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/90 text-slate-600 dark:text-slate-400 border border-slate-200/50 dark:border-slate-700/50"
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100/90 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border border-slate-200/50 dark:border-slate-700/50"
                       >
                         {spec}
                       </span>
@@ -732,22 +804,50 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                   </div>
                 </div>
 
-                {/* Card Action Footer */}
-                <div className="pt-3 mt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 text-xs">
+                {/* Tier 3: Communication & Actions Footer */}
+                <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800/90 flex items-center justify-between gap-2 text-xs">
                   {/* Email contact link */}
                   <a
                     href={`mailto:${member.email}`}
-                    className="inline-flex items-center gap-1.5 text-slate-500 hover:text-[#142142] dark:text-slate-400 dark:hover:text-white transition-colors truncate max-w-[140px]"
+                    className="inline-flex items-center gap-1.5 text-slate-500 hover:text-[#142142] dark:text-slate-400 dark:hover:text-[#fab518] transition-colors truncate max-w-[140px]"
                     title={member.email}
                   >
-                    <Mail size={12} className="shrink-0" />
-                    <span className="truncate text-[11px]">{member.email}</span>
+                    <Mail size={12} className="shrink-0 text-slate-400" />
+                    <span className="truncate text-[11px] font-medium">{member.email}</span>
                   </a>
 
                   {/* Action buttons (Restricted to Marcos) */}
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                     {isMarcosLancerotti ? (
                       <>
+                        {/* Permissões Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(member)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-slate-700 dark:text-slate-200 hover:text-[#142142] dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 rounded-lg transition-colors cursor-pointer"
+                          title={`Gerenciar regras de acesso e permissões de ${member.name}`}
+                        >
+                          <ShieldCheck size={12} className="text-[#fab518]" />
+                          <span className="hidden sm:inline">Permissões</span>
+                        </button>
+
+                        {/* Testar Visão Button */}
+                        {!isOwner && onSimulateMember && (
+                          <button
+                            type="button"
+                            onClick={() => onSimulateMember(member)}
+                            className={`inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded-lg transition-colors cursor-pointer border ${
+                              simulatedMemberId === member.id
+                                ? 'bg-amber-500 text-[#142142] border-amber-600 font-black'
+                                : 'bg-amber-50 hover:bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                            }`}
+                            title={`Testar o sistema com as permissões de ${member.name}`}
+                          >
+                            <Eye size={11} className="text-[#fab518]" />
+                            <span>{simulatedMemberId === member.id ? 'Simulando' : 'Testar'}</span>
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => handleOpenEditModal(member)}
@@ -758,7 +858,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                         </button>
                         {isOwner ? (
                           <span
-                            className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 select-none cursor-default"
+                            className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/80 shadow-2xs select-none cursor-default"
                             title="Marcos Lancerotti é o Dono da Agência e não pode ser excluído."
                           >
                             <Crown size={11} className="text-amber-600 dark:text-amber-400" />
@@ -776,7 +876,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                         )}
                       </>
                     ) : (
-                      <span className="text-[10px] text-slate-400">Ativo</span>
+                      <span className="text-[10px] font-bold text-slate-400">Ativo</span>
                     )}
                   </div>
                 </div>
@@ -795,6 +895,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                   <th className="py-3 px-4">Função Oficial</th>
                   <th className="py-3 px-4">Usuário / Acesso</th>
                   <th className="py-3 px-4">Disponibilidade</th>
+                  <th className="py-3 px-4">Permissões</th>
                   <th className="py-3 px-4">Carga de Trabalho</th>
                   <th className="py-3 px-4">E-mail</th>
                   <th className="py-3 px-4 text-right">Ações</th>
@@ -882,6 +983,19 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                         </span>
                       </td>
 
+                      {/* Permissões */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {(() => {
+                          const accessInfo = getAccessLevelLabel(member.permissions, isOwnerOrMarcos(member));
+                          return (
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${accessInfo.badgeClass}`}>
+                              <Lock size={10} className={isOwnerOrMarcos(member) ? 'text-amber-500' : accessInfo.blockedCount > 0 ? 'text-rose-500' : 'text-emerald-500'} />
+                              <span>{accessInfo.label}</span>
+                            </span>
+                          );
+                        })()}
+                      </td>
+
                       {/* Active Tasks */}
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span className="font-mono font-bold text-[#142142] dark:text-[#fab518] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-[11px]">
@@ -897,7 +1011,35 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                       {/* Actions */}
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         {isMarcosLancerotti ? (
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            {/* Permissões */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(member)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-slate-700 dark:text-slate-200 hover:text-[#142142] dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 rounded-md transition-colors cursor-pointer"
+                              title="Gerenciar permissões"
+                            >
+                              <ShieldCheck size={11} className="text-[#fab518]" />
+                              <span>Permissões</span>
+                            </button>
+
+                            {/* Simular */}
+                            {!isOwnerOrMarcos(member) && onSimulateMember && (
+                              <button
+                                type="button"
+                                onClick={() => onSimulateMember(member)}
+                                className={`inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded-md transition-colors cursor-pointer border ${
+                                  simulatedMemberId === member.id
+                                    ? 'bg-amber-500 text-[#142142] border-amber-600 font-black'
+                                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                                }`}
+                                title={`Simular visão de ${member.name}`}
+                              >
+                                <Eye size={10} className="text-[#fab518]" />
+                                <span>{simulatedMemberId === member.id ? 'Simulando' : 'Testar'}</span>
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => {

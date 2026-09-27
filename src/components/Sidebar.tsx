@@ -16,12 +16,14 @@ import {
   CalendarDays,
   ShieldCheck,
   X,
-  LogOut
+  LogOut,
+  Lock
 } from 'lucide-react';
 import { PageId, UserProfile } from '../types';
 import { currentUser } from '../data/mockData';
 import { HelpLogo } from './HelpLogo';
 import { ThemeToggle } from './ThemeToggle';
+import { canAccessPage } from '../utils/permissionUtils';
 
 interface SidebarProps {
   currentPage: PageId;
@@ -230,6 +232,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const Icon = item.icon;
               const isActive = currentPage === item.id;
               const isDisabled = Boolean(item.disabled);
+              const isAccessBlocked = !canAccessPage(item.id, activeUser);
+
+              const badgeContent = isAccessBlocked ? 'Bloqueado' : item.badge;
+              const badgeClass = isAccessBlocked
+                ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 text-[10px]'
+                : item.badgeColor;
 
               return (
                 <button
@@ -246,6 +254,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   title={
                     isDisabled
                       ? `${item.label} (Funcionalidade desativada)`
+                      : isAccessBlocked
+                      ? `${item.label} (Acesso restrito pelo administrador)`
                       : isCollapsed
                       ? item.label
                       : undefined
@@ -257,6 +267,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     ${
                       isDisabled
                         ? 'opacity-40 cursor-not-allowed text-slate-400 dark:text-slate-500 bg-transparent select-none'
+                        : isAccessBlocked
+                        ? isActive
+                          ? 'bg-rose-900/20 text-rose-300 border border-rose-500/30 cursor-pointer'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 cursor-pointer'
                         : isActive
                         ? 'bg-[#142142] text-white shadow-md shadow-[#142142]/20 dark:bg-[#fab518] dark:text-[#142142] cursor-pointer'
                         : 'text-slate-600 dark:text-slate-300 hover:text-[#142142] dark:hover:text-white hover:bg-slate-100/90 dark:hover:bg-slate-800/80 cursor-pointer'
@@ -270,6 +284,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         ${
                           isDisabled
                             ? 'text-slate-400 dark:text-slate-600 bg-transparent'
+                            : isAccessBlocked
+                            ? 'text-rose-400 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40'
                             : isActive
                             ? 'bg-white/10 dark:bg-[#142142]/10 text-[#fab518] dark:text-[#142142]'
                             : 'text-slate-400 dark:text-slate-400 group-hover:text-[#142142] dark:group-hover:text-white group-hover:bg-white dark:group-hover:bg-slate-700'
@@ -278,44 +294,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <Icon size={18} />
                     </div>
-                    {!isCollapsed && <span className="tracking-wide text-left truncate">{item.label}</span>}
+                    {!isCollapsed && (
+                      <span className={`tracking-wide text-left truncate ${isAccessBlocked ? 'text-slate-500 dark:text-slate-400' : ''}`}>
+                        {item.label}
+                      </span>
+                    )}
                   </div>
 
                   {isCollapsed ? (
-                    item.badge && !isDisabled ? (
+                    isAccessBlocked ? (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-[#0f172a]" />
+                    ) : badgeContent && !isDisabled ? (
                       <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#fab518] ring-2 ring-white" />
                     ) : null
                   ) : (
                     <div className="flex items-center gap-1.5">
-                      {item.badge && (
+                      {badgeContent && (
                         <span
                           className={`
                             text-xs px-2 py-0.5 rounded-full font-bold
                             ${
-                              item.badgeColor
-                                ? item.badgeColor
+                              badgeClass
+                                ? badgeClass
                                 : isActive
                                 ? 'bg-white/20 text-white'
                                 : 'bg-slate-200 text-slate-700'
                             }
                           `}
                         >
-                          {item.badge}
+                          {badgeContent}
                         </span>
                       )}
 
                       {!isDisabled && (
-                        <ChevronRight
-                          size={14}
-                          className={`
-                            transition-transform duration-200
-                            ${
-                              isActive
-                                ? 'text-[#fab518] translate-x-0.5'
-                                : 'text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5'
-                            }
-                          `}
-                        />
+                        isAccessBlocked ? (
+                          <Lock size={13} className="text-rose-400 dark:text-rose-400 shrink-0" />
+                        ) : (
+                          <ChevronRight
+                            size={14}
+                            className={`
+                              transition-transform duration-200
+                              ${
+                                isActive
+                                  ? 'text-[#fab518] translate-x-0.5'
+                                  : 'text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5'
+                              }
+                            `}
+                          />
+                        )
                       )}
                     </div>
                   )}

@@ -80,14 +80,57 @@ interface DemandDueStatus {
   badgeClass: string;
 }
 
-const getDemandDueStatus = (demand: DemandItem): DemandDueStatus => {
-  if (demand.columnId === 'concluidas') {
+export const isConcludedColumn = (columnId?: string, columns?: KanbanColumn[]): boolean => {
+  if (!columnId) return false;
+  const colLower = columnId.toLowerCase().trim();
+  if (
+    colLower === 'concluidas' ||
+    colLower === 'concluidos' ||
+    colLower === 'concluida' ||
+    colLower === 'concluido' ||
+    colLower === 'done' ||
+    colLower === 'finalizado' ||
+    colLower === 'finalizados' ||
+    colLower === 'finalizada' ||
+    colLower === 'finalizadas' ||
+    colLower.includes('conclu')
+  ) {
+    return true;
+  }
+  if (columns && columns.length > 0) {
+    const matchedCol = columns.find(c => c.id.toLowerCase().trim() === colLower);
+    if (matchedCol) {
+      const titleLower = (matchedCol.title || '').toLowerCase().trim();
+      if (
+        titleLower.includes('conclu') ||
+        titleLower.includes('finaliz') ||
+        titleLower === 'done' ||
+        titleLower === 'pronto' ||
+        titleLower === 'entregue'
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+export const isConcludedDemand = (demand: DemandItem, columns?: KanbanColumn[]): boolean => {
+  if (isConcludedColumn(demand.columnId, columns)) return true;
+  const statusLower = (demand.statusLabel || '').toLowerCase().trim();
+  if (statusLower.includes('conclu') || statusLower.includes('finaliz') || statusLower === 'done') return true;
+  return false;
+};
+
+const getDemandDueStatus = (demand: DemandItem, columns?: KanbanColumn[]): DemandDueStatus => {
+  // Demandas na coluna Concluídos ou com status de conclusão NUNCA são consideradas em atraso
+  if (isConcludedDemand(demand, columns)) {
     return {
       status: 'concluida',
       label: 'Concluída',
       isOverdue: false,
       daysDiff: 0,
-      badgeClass: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+      badgeClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 font-bold'
     };
   }
 
@@ -184,7 +227,10 @@ const COLUMN_CONFIG: Record<string, { label: string; color: string; badge: strin
   producao: { label: 'Em Produção', color: '#8B5CF6', badge: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-900/60' },
   aprovacao: { label: 'Aprovação', color: '#FAB518', badge: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900/60' },
   agendamento: { label: 'Agendamento', color: '#10B981', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900/60' },
-  concluidas: { label: 'Concluídas', color: '#64748B', badge: 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' },
+  concluidas: { label: 'Concluídas', color: '#10B981', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900/60' },
+  concluidos: { label: 'Concluídos', color: '#10B981', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900/60' },
+  concluida: { label: 'Concluída', color: '#10B981', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900/60' },
+  concluido: { label: 'Concluído', color: '#10B981', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900/60' },
 };
 
 const DEFAULT_SECTIONS: InicioSectionId[] = [
@@ -364,13 +410,16 @@ export const InicioView: React.FC<InicioViewProps> = ({
 
   // Sincronização dinâmica do nome e estilo da coluna com o Quadro Kanban
   const getColumnConfig = (columnId: string) => {
-    const colObj = activeColumns.find((c) => c.id === columnId);
-    const baseConfig = COLUMN_CONFIG[columnId];
+    const colObj = activeColumns.find((c) => c.id === columnId || c.id.toLowerCase() === columnId.toLowerCase());
+    const baseConfig = COLUMN_CONFIG[columnId] || COLUMN_CONFIG[columnId.toLowerCase()];
+    const isConcluded = isConcludedColumn(columnId, activeColumns);
     
     // O nome da coluna reflete fielmente o título real no Quadro Kanban
-    const label = colObj?.title || baseConfig?.label || columnId;
-    const color = colObj?.color || baseConfig?.color || '#64748B';
-    const badge = baseConfig?.badge || 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+    const label = colObj?.title || baseConfig?.label || (isConcluded ? 'Concluídas' : columnId);
+    const color = colObj?.color || baseConfig?.color || (isConcluded ? '#10B981' : '#64748B');
+    const badge = isConcluded 
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900/60'
+      : (baseConfig?.badge || 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700');
 
     return {
       label,
@@ -383,45 +432,62 @@ export const InicioView: React.FC<InicioViewProps> = ({
   // Seções exibidas no Painel de Início
   const visibleSections = DEFAULT_SECTIONS;
 
-  const [demandTab, setDemandTab] = useState<'todas' | 'atrasadas' | 'semana' | 'producao' | 'aprovacao'>('todas');
+  const [demandTab, setDemandTab] = useState<'todas' | 'atrasadas' | 'hoje' | 'proximas' | 'producao' | 'aprovacao'>('todas');
   const [demandSearch, setDemandSearch] = useState('');
 
-  const activeDemands = useMemo(() => demands.filter((d) => d.columnId !== 'concluidas'), [demands]);
-  const pendingApprovals = useMemo(() => demands.filter((d) => d.columnId === 'aprovacao'), [demands]);
-  const inProduction = useMemo(() => demands.filter((d) => d.columnId === 'producao'), [demands]);
-  const scheduledDemands = useMemo(() => demands.filter((d) => d.columnId === 'agendamento'), [demands]);
+  // Demandas ativas: NUNCA inclui demandas concluídas
+  const activeDemands = useMemo(() => demands.filter((d) => !isConcludedDemand(d, activeColumns)), [demands, activeColumns]);
+  const pendingApprovals = useMemo(() => activeDemands.filter((d) => d.columnId === 'aprovacao'), [activeDemands]);
+  const inProduction = useMemo(() => activeDemands.filter((d) => d.columnId === 'producao'), [activeDemands]);
+  const scheduledDemands = useMemo(() => activeDemands.filter((d) => d.columnId === 'agendamento'), [activeDemands]);
 
   const demandDueStatusMap = useMemo(() => {
     const map = new Map<string, DemandDueStatus>();
     demands.forEach((d) => {
-      map.set(d.id, getDemandDueStatus(d));
+      map.set(d.id, getDemandDueStatus(d, activeColumns));
     });
     return map;
-  }, [demands]);
+  }, [demands, activeColumns]);
 
+  // 1. Demandas Atrasadas (prazo vencido e não concluídas)
   const overdueDemands = useMemo(() => {
     return activeDemands.filter((d) => demandDueStatusMap.get(d.id)?.isOverdue);
   }, [activeDemands, demandDueStatusMap]);
 
-  const dueThisWeekDemands = useMemo(() => {
+  // 2. Demandas do Dia (vencem hoje e não concluídas)
+  const dueTodayDemands = useMemo(() => {
     return activeDemands.filter((d) => {
       const st = demandDueStatusMap.get(d.id);
-      return st && !st.isOverdue && (st.status === 'hoje' || st.status === 'amanha' || st.status === 'semana');
+      return st && !st.isOverdue && st.status === 'hoje';
     });
   }, [activeDemands, demandDueStatusMap]);
 
-  // Lista de demandas filtradas pela aba e campo de busca
+  // 3. Próximas Demandas (vencem amanhã, nos próximos dias, semanas ou futuras)
+  const upcomingDemands = useMemo(() => {
+    return activeDemands.filter((d) => {
+      const st = demandDueStatusMap.get(d.id);
+      if (!st || st.isOverdue || st.status === 'hoje') return false;
+      return st.status === 'amanha' || st.status === 'semana' || st.status === 'futuro' || st.status === 'regular' || st.status === 'sem_prazo';
+    });
+  }, [activeDemands, demandDueStatusMap]);
+
+  // Lista de demandas filtradas pela aba e campo de busca - SEMPRE EXCLUI CONCLUÍDAS
   const filteredDemandsList = useMemo(() => {
     let list = activeDemands;
     if (demandTab === 'atrasadas') {
       list = overdueDemands;
-    } else if (demandTab === 'semana') {
-      list = dueThisWeekDemands;
+    } else if (demandTab === 'hoje') {
+      list = dueTodayDemands;
+    } else if (demandTab === 'proximas') {
+      list = upcomingDemands;
     } else if (demandTab === 'producao') {
       list = inProduction;
     } else if (demandTab === 'aprovacao') {
       list = pendingApprovals;
     }
+
+    // Filtro absoluto de segurança: nenhuma demanda concluída entra na lista
+    list = list.filter((d) => !isConcludedDemand(d, activeColumns));
 
     if (demandSearch.trim()) {
       const q = demandSearch.toLowerCase().trim();
@@ -433,18 +499,38 @@ export const InicioView: React.FC<InicioViewProps> = ({
       );
     }
 
-    // Ordenação: demandas atrasadas sempre primeiro, depois por proximidade de prazo
+    // Ordenação estrita por prioridade temporal:
+    // 1º Demandas Atrasadas (as mais atrasadas no topo)
+    // 2º Demandas do Dia (vencem hoje!)
+    // 3º Demandas de Amanhã
+    // 4º Próximas demandas ordenadas cronologicamente
     return [...list].sort((a, b) => {
       const stA = demandDueStatusMap.get(a.id);
       const stB = demandDueStatusMap.get(b.id);
+      
+      // Atrasadas sempre primeiro
       if (stA?.isOverdue && !stB?.isOverdue) return -1;
       if (!stA?.isOverdue && stB?.isOverdue) return 1;
       if (stA?.isOverdue && stB?.isOverdue) {
-        return (stA.daysDiff || 0) - (stB.daysDiff || 0); // mais atrasadas no topo
+        return (stA.daysDiff || 0) - (stB.daysDiff || 0);
       }
+
+      // Do Dia (Hoje) em segundo
+      if (stA?.status === 'hoje' && stB?.status !== 'hoje') return -1;
+      if (stA?.status !== 'hoje' && stB?.status === 'hoje') return 1;
+
+      // Amanhã em terceiro
+      if (stA?.status === 'amanha' && stB?.status !== 'amanha') return -1;
+      if (stA?.status !== 'amanha' && stB?.status === 'amanha') return 1;
+
+      // Demais próximas por dias restantes
+      const diffA = stA?.daysDiff ?? 999;
+      const diffB = stB?.daysDiff ?? 999;
+      if (diffA !== diffB) return diffA - diffB;
+
       return 0;
     });
-  }, [activeDemands, overdueDemands, dueThisWeekDemands, inProduction, pendingApprovals, demandTab, demandSearch, demandDueStatusMap]);
+  }, [activeDemands, overdueDemands, dueTodayDemands, upcomingDemands, inProduction, pendingApprovals, demandTab, demandSearch, demandDueStatusMap, activeColumns]);
   
   const activeClients = clients.filter((c) => c.status === 'Ativo');
   
@@ -507,15 +593,21 @@ export const InicioView: React.FC<InicioViewProps> = ({
           </div>
         );
 
-      case 'demandas_stories':
+      case 'demandas_stories': {
+        const hasActiveDemands = demands.some((d) => !isConcludedDemand(d, activeColumns));
+        if (!hasActiveDemands) {
+          return null;
+        }
         return (
           <DemandsStoriesSection
             clients={clients}
             demands={demands}
+            columns={activeColumns}
             onSelectDemand={onSelectDemand}
             onOpenNewDemandModal={onOpenNewDemandModal}
           />
         );
+      }
 
       case 'indicadores':
         return (
@@ -645,7 +737,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setDemandTab('todas')}
-                        title="Ver todas as demandas ativas"
+                        title="Ver todas as demandas em andamento (do dia, próximas e atrasadas)"
                         className={`px-3.5 py-1.5 rounded-xl text-xs transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-2 active:scale-95 ${
                           demandTab === 'todas'
                             ? 'bg-white dark:bg-[#142142] text-[#142142] dark:text-white shadow-xs ring-1 ring-slate-200/90 dark:ring-slate-700 font-black'
@@ -666,7 +758,7 @@ export const InicioView: React.FC<InicioViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setDemandTab('atrasadas')}
-                        title={`${overdueDemands.length} demandas atrasadas`}
+                        title={`${overdueDemands.length} demandas com prazo atrasado`}
                         className={`px-3.5 py-1.5 rounded-xl text-xs transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-2 active:scale-95 ${
                           demandTab === 'atrasadas'
                             ? 'bg-rose-600 text-white shadow-xs font-black'
@@ -693,22 +785,50 @@ export const InicioView: React.FC<InicioViewProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setDemandTab('semana')}
-                        title="Demandas que vencem nesta semana"
+                        onClick={() => setDemandTab('hoje')}
+                        title={`${dueTodayDemands.length} demandas com prazo para hoje`}
                         className={`px-3.5 py-1.5 rounded-xl text-xs transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-2 active:scale-95 ${
-                          demandTab === 'semana'
-                            ? 'bg-white dark:bg-[#142142] text-[#142142] dark:text-white shadow-xs ring-1 ring-slate-200/90 dark:ring-slate-700 font-black'
+                          demandTab === 'hoje'
+                            ? 'bg-[#fab518] text-[#142142] shadow-xs font-black'
+                            : dueTodayDemands.length > 0
+                            ? 'font-bold text-amber-900 dark:text-amber-200 bg-amber-100/90 dark:bg-amber-950/70 hover:bg-amber-200/80 dark:hover:bg-amber-900/70 border border-amber-300/80 dark:border-amber-800'
                             : 'font-semibold text-slate-600 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-700/50'
                         }`}
                       >
-                        <Clock size={14} className={demandTab === 'semana' ? 'text-blue-500' : 'text-slate-400'} />
-                        <span>Esta Semana</span>
+                        <Clock 
+                          size={14} 
+                          className={demandTab === 'hoje' ? 'text-[#142142]' : dueTodayDemands.length > 0 ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-400'} 
+                        />
+                        <span>Do Dia</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold transition-colors ${
+                          demandTab === 'hoje'
+                            ? 'bg-[#142142]/20 text-[#142142]'
+                            : dueTodayDemands.length > 0
+                            ? 'bg-[#fab518] text-[#142142] font-black'
+                            : 'bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300'
+                        }`}>
+                          {dueTodayDemands.length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setDemandTab('proximas')}
+                        title={`${upcomingDemands.length} próximas demandas`}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-2 active:scale-95 ${
+                          demandTab === 'proximas'
+                            ? 'bg-white dark:bg-[#142142] text-[#142142] dark:text-white shadow-xs ring-1 ring-slate-200/90 dark:ring-slate-700 font-black'
+                            : 'font-semibold text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white/60 dark:hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <Calendar size={14} className={demandTab === 'proximas' ? 'text-blue-500' : 'text-slate-400'} />
+                        <span>Próximas</span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold transition-colors ${
-                          demandTab === 'semana'
+                          demandTab === 'proximas'
                             ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
                             : 'bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300'
                         }`}>
-                          {dueThisWeekDemands.length}
+                          {upcomingDemands.length}
                         </span>
                       </button>
 
@@ -793,6 +913,8 @@ export const InicioView: React.FC<InicioViewProps> = ({
                             className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group ${
                               dueStatus.isOverdue
                                 ? 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200/90 dark:border-rose-900/60 hover:border-rose-400 hover:shadow-xs'
+                                : dueStatus.status === 'hoje'
+                                ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-300/80 dark:border-amber-800/80 hover:border-amber-400 hover:shadow-xs'
                                 : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/60 hover:bg-white dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-xs'
                             }`}
                           >
@@ -805,6 +927,25 @@ export const InicioView: React.FC<InicioViewProps> = ({
                                 >
                                   {colConfig.label}
                                 </span>
+
+                                {/* Badge de Horizonte de Prazo */}
+                                {dueStatus.isOverdue ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-rose-600 text-white shadow-2xs">
+                                    <AlertTriangle size={11} className="animate-pulse" />
+                                    <span>ATRASADA</span>
+                                  </span>
+                                ) : dueStatus.status === 'hoje' ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md bg-[#fab518] text-[#142142] shadow-2xs">
+                                    <Clock size={11} className="stroke-[2.5]" />
+                                    <span>DO DIA</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60">
+                                    <Calendar size={11} />
+                                    <span>PRÓXIMA</span>
+                                  </span>
+                                )}
+
                                 {demand.type && (
                                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700">
                                     {demand.type}
@@ -842,7 +983,12 @@ export const InicioView: React.FC<InicioViewProps> = ({
                               {/* Prazo */}
                               <div className="text-right">
                                 <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs border ${dueStatus.badgeClass}`}>
-                                  {dueStatus.isOverdue ? (
+                                  {dueStatus.status === 'concluida' ? (
+                                    <>
+                                      <CheckCircle2 size={13} className="text-emerald-600 dark:text-emerald-400" />
+                                      <span>Concluída</span>
+                                    </>
+                                  ) : dueStatus.isOverdue ? (
                                     <>
                                       <CalendarX2 size={13} className="text-rose-600 dark:text-rose-400 animate-pulse" />
                                       <span>{dueStatus.label}</span>
@@ -897,6 +1043,10 @@ export const InicioView: React.FC<InicioViewProps> = ({
                         <p className="text-sm font-bold text-[#142142] dark:text-white">
                           {demandTab === 'atrasadas'
                             ? 'Nenhuma demanda atrasada!'
+                            : demandTab === 'hoje'
+                            ? 'Nenhuma demanda com prazo para hoje!'
+                            : demandTab === 'proximas'
+                            ? 'Nenhuma próxima demanda agendada'
                             : demandSearch
                             ? 'Nenhuma demanda encontrada com o termo buscado'
                             : 'Nenhuma demanda ativa nesta categoria'}
@@ -904,15 +1054,19 @@ export const InicioView: React.FC<InicioViewProps> = ({
                         <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                           {demandTab === 'atrasadas'
                             ? 'Excelente! Todas as entregas e cronogramas da equipe estão no prazo.'
+                            : demandTab === 'hoje'
+                            ? 'Tudo em dia para hoje! Nenhuma entrega urgente agendada para hoje.'
+                            : demandTab === 'proximas'
+                            ? 'Novas entregas planejadas para os próximos dias aparecerão aqui.'
                             : 'Crie uma nova demanda ou confira o quadro completo no Kanban.'}
                         </p>
-                        {demandTab === 'atrasadas' && (
+                        {demandTab !== 'todas' && (
                           <button
                             type="button"
                             onClick={() => setDemandTab('todas')}
                             className="mt-2 text-xs font-bold text-[#fab518] hover:underline cursor-pointer"
                           >
-                            Ver todas as demandas ativas →
+                            Ver todas as demandas em andamento →
                           </button>
                         )}
                       </div>
@@ -923,14 +1077,20 @@ export const InicioView: React.FC<InicioViewProps> = ({
                 {/* Rodapé do Card de Demandas com Atalho Rápido para Kanban */}
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
                   <span className="font-semibold text-slate-600 dark:text-slate-300">
-                    Mostrando {filteredDemandsList.length} de {activeDemands.length} demandas ativas
+                    {demandTab === 'atrasadas'
+                      ? `Mostrando ${filteredDemandsList.length} de ${overdueDemands.length} demandas atrasadas`
+                      : demandTab === 'hoje'
+                      ? `Mostrando ${filteredDemandsList.length} de ${dueTodayDemands.length} demandas do dia`
+                      : demandTab === 'proximas'
+                      ? `Mostrando ${filteredDemandsList.length} de ${upcomingDemands.length} próximas demandas`
+                      : `Mostrando ${filteredDemandsList.length} de ${activeDemands.length} demandas em andamento`}
                   </span>
                   <button
                     type="button"
                     onClick={() => onNavigate('demandas')}
                     className="font-bold text-[#142142] dark:text-[#fab518] hover:underline flex items-center gap-1 cursor-pointer"
                   >
-                    <span>Ver quadro completo</span>
+                    <span>Ver quadro completo no Kanban</span>
                     <ChevronRight size={14} />
                   </button>
                 </div>
@@ -1042,11 +1202,15 @@ export const InicioView: React.FC<InicioViewProps> = ({
     <div className="space-y-6 pb-12">
       {/* Seções do Painel de Início */}
       <div className="space-y-4">
-        {visibleSections.map((sectionId) => (
-          <div key={sectionId} id={`section-container-${sectionId}`}>
-            {renderSectionContent(sectionId)}
-          </div>
-        ))}
+        {visibleSections.map((sectionId) => {
+          const content = renderSectionContent(sectionId);
+          if (!content) return null;
+          return (
+            <div key={sectionId} id={`section-container-${sectionId}`}>
+              {content}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

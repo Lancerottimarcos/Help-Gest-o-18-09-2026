@@ -1702,10 +1702,10 @@ export default function App() {
   // Listener para sincronização automática quando a URL mudar no navegador
   useEffect(() => {
     const handleUrlChange = () => {
-      const pId = extractProposalIdFromLocation();
+      const pId = extractPublicProposalId();
       setPublicPortalProposalId(pId);
 
-      const dId = extractDemandIdFromLocation();
+      const dId = extractPublicDemandId();
       setPublicPortalDemandId(dId);
     };
 

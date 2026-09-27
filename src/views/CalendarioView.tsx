@@ -37,7 +37,7 @@ interface CalendarioViewProps {
 }
 
 export const CalendarioView: React.FC<CalendarioViewProps> = ({
-  clients,
+  clients = [],
   onOpenNewDemandModal,
 }) => {
   // Current date anchor (September 2026 as per app metadata)
@@ -85,8 +85,8 @@ export const CalendarioView: React.FC<CalendarioViewProps> = ({
 
   // Transform client birthdays into commemorative dates
   const clientBirthdays: CommemorativeDate[] = useMemo(() => {
-    return clients
-      .filter((c) => c.birthDate)
+    return (clients || [])
+      .filter((c) => c && c.birthDate)
       .map((c) => {
         const parts = c.birthDate.split('-');
         let m = 0;

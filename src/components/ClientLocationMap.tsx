@@ -50,10 +50,15 @@ interface CityCoordinates {
 // Extensive dictionary of Brazilian and global city coordinates with regional mapping
 const KNOWN_CITIES: Record<string, CityCoordinates> = {
   // SP (Sudeste)
+  'sao carlos': { name: 'São Carlos', state: 'SP', region: 'Sudeste', lat: -22.0175, lng: -47.8908 },
   'sao paulo': { name: 'São Paulo', state: 'SP', region: 'Sudeste', lat: -23.5505, lng: -46.6333 },
   'campinas': { name: 'Campinas', state: 'SP', region: 'Sudeste', lat: -22.9099, lng: -47.0626 },
-  'santos': { name: 'Santos', state: 'SP', region: 'Sudeste', lat: -23.9608, lng: -46.3336 },
+  'araraquara': { name: 'Araraquara', state: 'SP', region: 'Sudeste', lat: -21.7944, lng: -48.1756 },
   'ribeirao preto': { name: 'Ribeirão Preto', state: 'SP', region: 'Sudeste', lat: -21.1704, lng: -47.8103 },
+  'franca': { name: 'Franca', state: 'SP', region: 'Sudeste', lat: -20.5386, lng: -47.4008 },
+  'limeira': { name: 'Limeira', state: 'SP', region: 'Sudeste', lat: -22.5647, lng: -47.4017 },
+  'rio claro': { name: 'Rio Claro', state: 'SP', region: 'Sudeste', lat: -22.4114, lng: -47.5614 },
+  'santos': { name: 'Santos', state: 'SP', region: 'Sudeste', lat: -23.9608, lng: -46.3336 },
   'sao jose dos campos': { name: 'São José dos Campos', state: 'SP', region: 'Sudeste', lat: -23.1896, lng: -45.8841 },
   'sorocaba': { name: 'Sorocaba', state: 'SP', region: 'Sudeste', lat: -23.5015, lng: -47.4526 },
   'santo andre': { name: 'Santo André', state: 'SP', region: 'Sudeste', lat: -23.6639, lng: -46.5383 },
@@ -883,7 +888,7 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                           onMouseEnter={() => setHoveredCountry(country)}
                           onMouseLeave={() => setHoveredCountry(null)}
                         >
-                          <title>{country.name} ({country.region}){hasActiveClients ? ' • Clientes Cadastrados' : ''}</title>
+                          <title>{country.name}{country.region ? ` (${country.region})` : ''}{hasActiveClients ? ' • Clientes Cadastrados' : ''}</title>
                         </path>
                       );
                     })}
@@ -1152,38 +1157,39 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
 
                   {/* 4. Client City Markers on Top of the Accurate Map */}
                   <g id="city-markers-layer">
-                    {filteredClusters.map((cluster) => {
-                      const isSelected = selectedCluster?.key === cluster.key;
-                      const isHovered = hoveredCluster?.key === cluster.key;
-                      const isActive = isSelected || isHovered;
+                    {filteredClusters
+                      .filter((c) => c.region !== 'Internacional' && (c.country === 'Brasil' || !c.country))
+                      .map((cluster) => {
+                        const isSelected = selectedCluster?.key === cluster.key;
+                        const isHovered = hoveredCluster?.key === cluster.key;
+                        const isActive = isSelected || isHovered;
 
-                      return (
-                        <g
-                          key={`br-marker-${cluster.key}`}
-                          className="cursor-pointer group"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedCluster(isSelected ? null : cluster);
-                          }}
-                          onMouseEnter={() => setHoveredCluster(cluster)}
-                          onMouseLeave={() => setHoveredCluster(null)}
-                        >
-                          {/* Outer Radar Ripple */}
-                          <circle
-                            cx={cluster.brazilX}
-                            cy={cluster.brazilY}
-                            r={isActive ? 22 : 13}
-                            className="fill-[#fab518]/30 stroke-[#fab518] stroke-[1] animate-ping"
-                            style={{ transformOrigin: `${cluster.brazilX}px ${cluster.brazilY}px`, animationDuration: '2.5s' }}
-                          />
+                        return (
+                          <g
+                            key={`br-marker-${cluster.key}`}
+                            className="cursor-pointer group"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedCluster(isSelected ? null : cluster);
+                            }}
+                            onMouseEnter={() => setHoveredCluster(cluster)}
+                            onMouseLeave={() => setHoveredCluster(null)}
+                          >
+                            {/* Outer Radar Ripple */}
+                            <circle
+                              cx={cluster.brazilX}
+                              cy={cluster.brazilY}
+                              r={isActive ? 16 : 10}
+                              className="fill-[#fab518]/25 stroke-[#fab518] stroke-[1] opacity-75"
+                            />
 
-                          {/* Outer Dark Ring */}
-                          <circle
-                            cx={cluster.brazilX}
-                            cy={cluster.brazilY}
-                            r={isActive ? 9 : 6.5}
-                            className="fill-[#142142] stroke-white stroke-[1.2]"
-                          />
+                            {/* Outer Dark Ring */}
+                            <circle
+                              cx={cluster.brazilX}
+                              cy={cluster.brazilY}
+                              r={isActive ? 9 : 6.5}
+                              className="fill-[#142142] stroke-white stroke-[1.2]"
+                            />
 
                           {/* Center Core Gold Pin */}
                           <circle
@@ -1246,7 +1252,7 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                 }`} />
                 <div>
                   <p className="text-xs font-black text-white leading-none">
-                    {hoveredCountry.name} ({hoveredCountry.region})
+                    {hoveredCountry.name}{hoveredCountry.region ? ` (${hoveredCountry.region})` : ''}
                   </p>
                   <p className="text-[10px] text-slate-300 mt-0.5">
                     {hoveredCountry.id === 'BR'

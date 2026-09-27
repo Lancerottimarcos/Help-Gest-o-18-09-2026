@@ -4,10 +4,6 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const STORAGE_KEY_URL = 'help_supabase_url';
 const STORAGE_KEY_ANON = 'help_supabase_anon_key';
 
-// Credenciais padrão do projeto Help Ideias (garante que qualquer novo computador acesse imediatamente o banco na nuvem)
-const DEFAULT_SUPABASE_URL = 'https://pniiwmpxtvckivufrqhn.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_VaKxwO3n2CZWMmYUyGUVrA_ZD7H83RB';
-
 export interface SupabaseConfigStatus {
   isConfigured: boolean;
   url: string;
@@ -27,33 +23,51 @@ function getCookie(name: string): string {
 }
 
 /**
- * Obtém a URL configurada (prioridade: variáveis de ambiente VITE_*, seguido de localStorage, depois cookie, depois padrão do projeto)
+ * Obtém a URL configurada (prioridade: variáveis de ambiente VITE_*, seguido de localStorage, depois cookie)
  */
 export function getSupabaseUrl(): string {
   const envUrl = ((import.meta as any).env?.VITE_SUPABASE_URL || '').trim();
-  if (envUrl) return envUrl;
+  if (envUrl && !envUrl.includes('pniiwmpxtvckivufrqhn')) return envUrl;
+  
   try {
     const fromStorage = (localStorage.getItem(STORAGE_KEY_URL) || '').trim();
-    if (fromStorage) return fromStorage;
+    if (fromStorage && !fromStorage.includes('pniiwmpxtvckivufrqhn')) return fromStorage;
+    if (fromStorage.includes('pniiwmpxtvckivufrqhn')) {
+      localStorage.removeItem(STORAGE_KEY_URL);
+    }
   } catch {}
+
   const fromCookie = getCookie(STORAGE_KEY_URL).trim();
-  if (fromCookie) return fromCookie;
-  return DEFAULT_SUPABASE_URL;
+  if (fromCookie && !fromCookie.includes('pniiwmpxtvckivufrqhn')) return fromCookie;
+  if (fromCookie.includes('pniiwmpxtvckivufrqhn')) {
+    document.cookie = `${STORAGE_KEY_URL}=;path=/;max-age=0`;
+  }
+
+  return '';
 }
 
 /**
- * Obtém a Chave Anônima / Pública (prioridade: VITE_*, seguido de localStorage, depois cookie, depois padrão do projeto)
+ * Obtém a Chave Anônima / Pública (prioridade: VITE_*, seguido de localStorage, depois cookie)
  */
 export function getSupabaseAnonKey(): string {
   const envKey = ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '').trim();
-  if (envKey) return envKey;
+  if (envKey && !envKey.startsWith('sb_publishable_')) return envKey;
+
   try {
     const fromStorage = (localStorage.getItem(STORAGE_KEY_ANON) || '').trim();
-    if (fromStorage) return fromStorage;
+    if (fromStorage && !fromStorage.startsWith('sb_publishable_')) return fromStorage;
+    if (fromStorage.startsWith('sb_publishable_')) {
+      localStorage.removeItem(STORAGE_KEY_ANON);
+    }
   } catch {}
+
   const fromCookie = getCookie(STORAGE_KEY_ANON).trim();
-  if (fromCookie) return fromCookie;
-  return DEFAULT_SUPABASE_ANON_KEY;
+  if (fromCookie && !fromCookie.startsWith('sb_publishable_')) return fromCookie;
+  if (fromCookie.startsWith('sb_publishable_')) {
+    document.cookie = `${STORAGE_KEY_ANON}=;path=/;max-age=0`;
+  }
+
+  return '';
 }
 
 /**

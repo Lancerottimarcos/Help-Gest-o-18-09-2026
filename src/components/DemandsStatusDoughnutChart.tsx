@@ -57,15 +57,30 @@ export const DemandsStatusDoughnutChart: React.FC<DemandsStatusDoughnutChartProp
 }) => {
   const [hoveredId, setHoveredId] = useState<KanbanColumnId | null>(null);
 
+  const isConcludedCol = (colId: string, title?: string) => {
+    const idLower = (colId || '').toLowerCase().trim();
+    const titleLower = (title || '').toLowerCase().trim();
+    return (
+      idLower === 'concluidas' ||
+      idLower === 'concluidos' ||
+      idLower === 'concluida' ||
+      idLower === 'concluido' ||
+      idLower.includes('conclu') ||
+      idLower.includes('finaliz') ||
+      titleLower.includes('conclu') ||
+      titleLower.includes('finaliz')
+    );
+  };
+
   // Focus on active demands (non-concluded) for the primary distribution overview
-  const activeDemands = demands.filter((d) => d.columnId !== 'concluidas');
+  const activeDemands = demands.filter((d) => !isConcludedCol(d.columnId));
   const totalActive = activeDemands.length;
 
   // Sincronização dinâmica com os nomes reais das colunas configuradas no Kanban
   const chartData: StatusDistributionItem[] = useMemo(() => {
     if (columns && columns.length > 0) {
       return columns
-        .filter((col) => col.id !== 'concluidas')
+        .filter((col) => !isConcludedCol(col.id, col.title))
         .map((col) => {
           const count = activeDemands.filter((d) => d.columnId === col.id).length;
           const defaultConfig = STATUS_CONFIG[col.id];

@@ -403,6 +403,10 @@ export const OrcamentosView: React.FC<OrcamentosViewProps> = ({
                 approvedAt: new Date().toLocaleString('pt-BR'),
                 clientSignerName: data.signerName,
                 clientSignerRole: data.signerRole,
+                clientSignerDocument: data.signerDocument,
+                clientSignerBirthDate: data.signerBirthDate,
+                clientSignerEmail: data.signerEmail,
+                clientSignerPhone: data.signerPhone,
                 clientDecisionNote: data.notes,
               });
             }

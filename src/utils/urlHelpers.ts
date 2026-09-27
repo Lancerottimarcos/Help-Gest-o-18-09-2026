@@ -14,15 +14,16 @@ export function getPublicPortalBaseUrl(): string {
     return 'https://helpideias.com.br';
   }
 
-  let origin = window.location.origin;
+  // Permite configurar uma URL base customizada via localStorage se a agência possuir domínio próprio
+  try {
+    const customUrl = localStorage.getItem('help_custom_public_url');
+    if (customUrl && (customUrl.startsWith('http://') || customUrl.startsWith('https://'))) {
+      return customUrl.trim().replace(/\/+$/, '');
+    }
+  } catch {}
 
-  // No Google AI Studio, o subdomínio 'ais-dev-' exige autenticação Google do desenvolvedor.
-  // Já o subdomínio 'ais-pre-' é a URL pública homologada para testes e clientes externos sem qualquer login.
-  if (origin.includes('ais-dev-')) {
-    origin = origin.replace('ais-dev-', 'ais-pre-');
-  }
-
-  return origin;
+  // Utiliza a origem ativa atual do navegador
+  return window.location.origin;
 }
 
 export function getPublicProposalUrl(proposalId: string): string {

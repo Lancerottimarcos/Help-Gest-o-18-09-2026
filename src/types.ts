@@ -12,6 +12,18 @@ export type PageId =
 
 export type UserRole = 'proprietario' | 'colaborador' | 'cliente';
 
+export interface MemberPermissions {
+  clientes: boolean;
+  servicos: boolean;
+  financeiro: boolean;
+  orcamentos: boolean;
+  equipe: boolean;
+  configuracoes: boolean;
+  inicio?: boolean;
+  demandas?: boolean;
+  calendario?: boolean;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -20,6 +32,8 @@ export interface UserProfile {
   role: UserRole;
   roleLabel: string;
   avatarUrl: string;
+  isMaster?: boolean;
+  permissions?: MemberPermissions;
 }
 
 export type Priority = 'baixa' | 'media' | 'alta' | 'urgente';
@@ -211,6 +225,7 @@ export interface BudgetProposal {
   clientSignerName?: string;
   clientSignerRole?: string;
   clientSignerDocument?: string;
+  clientSignerBirthDate?: string;
   clientSignerEmail?: string;
   clientSignerPhone?: string;
   viewsCount?: number;
@@ -253,6 +268,7 @@ export interface TeamMember {
   password?: string;
   createdAt?: string;
   createdBy?: string;
+  permissions?: MemberPermissions;
 }
 
 export type ActivityType = 

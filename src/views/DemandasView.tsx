@@ -46,6 +46,7 @@ import { DemandDetailModal } from '../components/DemandDetailModal';
 import { ApprovalNotificationConfigModal } from '../components/ApprovalNotificationConfigModal';
 import { AddColumnModal, COLUMN_COLOR_PRESETS } from '../components/AddColumnModal';
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
+import { VirtualizedDemandList } from '../components/VirtualizedDemandList';
 
 interface DemandasViewProps {
   demands: DemandItem[];
@@ -1182,296 +1183,134 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                   onDragLeave={(e) => handleColumnDragLeave(e, col.id)}
                   onDrop={(e) => handleColumnDrop(e, col.id)}
                   className={`
-                    rounded-2xl sm:rounded-[26px] p-3.5 sm:p-4.5 border flex flex-col w-[84vw] sm:w-[320px] min-w-[270px] sm:min-w-[320px] max-w-[340px] shrink-0 snap-center transition-colors
+                    relative rounded-2xl sm:rounded-[24px] p-3 sm:p-3.5 border flex flex-col w-[85vw] sm:w-[324px] min-w-[280px] sm:min-w-[324px] max-w-[344px] shrink-0 snap-center transition-all duration-200
                     min-h-[580px] sm:min-h-[700px] lg:min-h-[780px] xl:min-h-[860px] max-h-[88vh] lg:max-h-[calc(100vh-140px)] overflow-y-auto kanban-column-scrollbar
                     ${isDragOver 
-                      ? 'bg-amber-50/80 dark:bg-amber-950/30 border-[#fab518] ring-2 ring-[#fab518]/30' 
-                      : 'bg-[#F8F9FA] dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800'
+                      ? 'bg-amber-500/10 dark:bg-[#fab518]/10 border-[#fab518] ring-2 ring-[#fab518]/30 shadow-lg' 
+                      : 'bg-slate-100/75 dark:bg-[#0c1424]/75 border-slate-200/80 dark:border-slate-800/90 shadow-2xs hover:border-slate-300/90 dark:hover:border-slate-700/90'
                     }
                   `}
                 >
-                {/* Sticky Header & Action Bar */}
-                <div 
-                  className={`sticky -top-4.5 z-10 -mt-4.5 -mx-4.5 px-4.5 pt-4.5 pb-2.5 mb-1 backdrop-blur-md rounded-t-[26px] transition-colors ${
-                    isDragOver 
-                      ? 'bg-amber-50/95 dark:bg-amber-950/95' 
-                      : 'bg-[#F8F9FA]/95 dark:bg-slate-900/95'
-                  }`}
-                >
-                  {/* Column Header */}
-                  <div className="flex items-center justify-between mb-3 px-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: col.color }}
-                      />
-                      <h3 className="text-sm font-black text-[#142142] dark:text-white tracking-tight">
-                        {col.title}
-                      </h3>
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                        {columnDemands.length}
-                      </span>
-                    </div>
+                  {/* Subtle Top Accent Stripe for each Column */}
+                  <div 
+                    className="absolute top-0 left-5 right-5 h-[3px] rounded-b-full opacity-90 transition-opacity"
+                    style={{ backgroundColor: col.color }}
+                  />
 
-                    <div className="relative column-menu-container">
-                      <button
-                        type="button"
-                        onClick={() => setColumnMenuOpenId(columnMenuOpenId === col.id ? null : col.id)}
-                        className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 p-1 rounded-md cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
-                        title="Opções da sessão"
-                      >
-                        <MoreVertical size={14} />
-                      </button>
-
-                      {columnMenuOpenId === col.id && (
-                        <div className="absolute right-0 top-full mt-1 z-30 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 text-xs font-semibold animate-in fade-in zoom-in-95 duration-100">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setColumnToEdit(col);
-                              setIsAddColumnModalOpen(true);
-                              setColumnMenuOpenId(null);
-                            }}
-                            className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer transition-colors"
-                          >
-                            <Edit size={13} className="text-slate-400" />
-                            <span>Editar Sessão</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setColumnToDelete(col);
-                              setColumnMenuOpenId(null);
-                            }}
-                            className="w-full px-3 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-2 cursor-pointer transition-colors border-t border-slate-100 dark:border-slate-700"
-                          >
-                            <Trash2 size={13} className="text-red-500" />
-                            <span>Excluir Sessão</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* "+ Nova demanda" pill button matching screenshot */}
-                  <button
-                    type="button"
-                    onClick={onOpenNewDemandModal}
-                    className={`
-                      w-full py-2.5 px-3 rounded-xl text-xs font-bold text-white shadow-xs
-                      flex items-center justify-center transition-transform active:scale-98 cursor-pointer
-                      ${col.buttonBg}
-                    `}
+                  {/* Sticky Header & Action Bar */}
+                  <div 
+                    className={`sticky -top-3 sm:-top-3.5 z-10 -mt-3 sm:-mt-3.5 -mx-3 sm:-mx-3.5 px-3.5 sm:px-4 pt-3.5 sm:pt-4 pb-2.5 mb-2 backdrop-blur-md rounded-t-[24px] transition-colors border-b border-slate-200/50 dark:border-slate-800/50 ${
+                      isDragOver 
+                        ? 'bg-amber-50/95 dark:bg-amber-950/95' 
+                        : 'bg-slate-100/95 dark:bg-[#0c1424]/95'
+                    }`}
                   >
-                    <span>+ Nova demanda</span>
-                  </button>
-                </div>
-
-                {/* Cards List */}
-                <div className="space-y-3 flex-1 min-h-[80px] pb-1">
-                  {columnDemands.map((demand, index) => {
-                    const isDragging = draggedDemandId === demand.id;
-                    const isTargetBefore = dropTarget?.demandId === demand.id && dropTarget?.position === 'before';
-                    const isTargetAfter = dropTarget?.demandId === demand.id && dropTarget?.position === 'after';
-
-                    return (
-                      <React.Fragment key={demand.id}>
-                        {/* Visual Drop Target Indicator - Before */}
-                        {isTargetBefore && (
-                          <div 
-                            className="h-1.5 bg-[#fab518] rounded-full shadow-xs mx-1 -my-1 animate-pulse transition-all"
-                            aria-label="Posicionar aqui"
-                          />
-                        )}
-
-                        <div
-                          id={`demand-card-${demand.id}`}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, demand.id)}
-                          onDragEnd={handleDragEnd}
-                          onDragOver={(e) => handleCardDragOver(e, demand, col.id)}
-                          onDrop={(e) => handleCardDrop(e, demand, col.id)}
-                          onClick={() => setEditingDemand(demand)}
-                          className={`
-                            bg-white dark:bg-[#0f172a] rounded-[20px] p-4 border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md 
-                            hover:border-[#fab518]/70 dark:hover:border-[#fab518]/70 transition-all group relative cursor-pointer select-none
-                            ${isDragging ? 'opacity-35 scale-98 border-dashed border-[#fab518] shadow-none cursor-grabbing' : ''}
-                          `}
-                        >
-                          {/* Priority bars indicator on top */}
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              {getPriorityColorBars(demand.priority, demand.priorityBars)}
-                            </div>
-
-                            <div className="flex items-center gap-1.5">
-                              {(demand.attachmentsCount || (demand.attachments && demand.attachments.length > 0)) && (
-                                <span 
-                                  className="flex items-center gap-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 border border-amber-200/80 dark:border-amber-800 px-1.5 py-0.2 rounded"
-                                  title={`${demand.attachmentsCount || demand.attachments?.length} anexo(s)`}
-                                >
-                                  <Paperclip size={10} />
-                                  <span>{demand.attachmentsCount || demand.attachments?.length}</span>
-                                </span>
-                              )}
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 group-hover:text-[#142142] dark:group-hover:text-white transition-colors">
-                                {demand.id}
-                              </span>
-                            </div>
-                          </div>
-
-                        {/* Content Row: Thumbnail + Title */}
-                        <div className="flex items-start gap-3 mb-3">
-                          {(() => {
-                            const cardThumbnail = getDemandImageThumbnail(demand);
-                            if (!cardThumbnail) return null;
-                            return (
-                              <img
-                                src={cardThumbnail}
-                                alt={demand.title}
-                                className="w-12 h-12 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0 pointer-events-none group-hover:ring-[#fab518] transition-all"
-                              />
-                            );
-                          })()}
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-xs sm:text-sm font-bold text-[#142142] dark:text-white leading-tight group-hover:underline line-clamp-2">
-                              {demand.title}
-                            </h4>
-                            {(() => {
-                              const matchedClient = (clients || []).find((c) =>
-                                (demand.clientId && c.id === demand.clientId) ||
-                                (demand.client && (
-                                  c.name.trim().toLowerCase() === demand.client.trim().toLowerCase() ||
-                                  (c.companyName && c.companyName.trim().toLowerCase() === demand.client.trim().toLowerCase())
-                                ))
-                              );
-                              const displayClient = matchedClient ? (matchedClient.name || matchedClient.companyName) : (demand.client || demand.clientProject || '');
-                              if (!displayClient) return null;
-                              return (
-                                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 truncate" title={displayClient}>
-                                  {displayClient}
-                                </p>
-                              );
-                            })()}
-                          </div>
-                        </div>
-
-                        {/* Metadata Badges */}
-                        <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                          {(() => {
-                            const pBadge = getPriorityBadgeStyle(demand.priority);
-                            return (
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${pBadge.classes}`}>
-                                • {pBadge.label}
-                              </span>
-                            );
-                          })()}
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/60">
-                            • {demand.type}
-                          </span>
-                          {demand.dueDate && (
-                            <span 
-                              className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 border border-sky-200/70 dark:border-sky-800/70 flex items-center gap-1 shrink-0"
-                              title={`Data da demanda / Prazo: ${formatDemandDateFull(demand.dueDate)}`}
-                            >
-                              <CalendarIcon size={11} className="text-sky-600 dark:text-sky-400" />
-                              <span>{formatDemandDate(demand.dueDate)}</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Bottom Card Footer: Assignee & Move Action */}
-                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-slate-400 text-xs">
-                          {(() => {
-                            const assigneeDisplay = getAssigneeDisplay(demand.assignee);
-                            return (
-                              <div className="flex items-center gap-2 min-w-0">
-                                {assigneeDisplay.avatar?.trim() ? (
-                                  <img
-                                    src={assigneeDisplay.avatar}
-                                    alt={assigneeDisplay.name}
-                                    title={`Responsável: ${assigneeDisplay.name}`}
-                                    className="w-6 h-6 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700 pointer-events-none shrink-0"
-                                  />
-                                ) : (
-                                  <div
-                                    title={`Responsável: ${assigneeDisplay.name}`}
-                                    className="w-6 h-6 rounded-full bg-[#142142] text-[#fab518] text-[10px] font-bold flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
-                                  >
-                                    {assigneeDisplay.name.charAt(0).toUpperCase()}
-                                  </div>
-                                )}
-                                <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 hidden sm:inline truncate max-w-[80px]">
-                                  {assigneeDisplay.name.split(' ')[0]}
-                                </span>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Quick Column Advancement */}
-                          <div className="flex items-center gap-1">
-                            {(() => {
-                              const currentColIdx = activeColumns.findIndex((c) => c.id === col.id);
-                              const hasNextCol = currentColIdx !== -1 && currentColIdx < activeColumns.length - 1;
-                              const nextCol = hasNextCol ? activeColumns[currentColIdx + 1] : null;
-
-                              if (hasNextCol && nextCol) {
-                                return (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onUpdateDemandColumn(demand.id, nextCol.id);
-                                    }}
-                                    className="px-2 py-1 bg-[#F2F2F2] dark:bg-slate-800 hover:bg-[#fab518] hover:text-[#142142] text-slate-600 dark:text-slate-300 rounded-md text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                                    title={`Avançar para: ${nextCol.title}`}
-                                  >
-                                    <span>Avançar</span>
-                                    <ArrowRight size={11} />
-                                  </button>
-                                );
-                              }
-
-                              return (
-                                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold">
-                                  <CheckCircle2 size={13} />
-                                  <span>Pronto</span>
-                                </span>
-                              );
-                            })()}
-                          </div>
-                        </div>
+                    {/* Column Header */}
+                    <div className="flex items-center justify-between gap-2 mb-2 px-0.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                          style={{ backgroundColor: col.color }}
+                        />
+                        <h3 className="text-xs sm:text-[13px] font-black text-[#142142] dark:text-white tracking-tight truncate">
+                          {col.title}
+                        </h3>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0 tabular-nums">
+                          {columnDemands.length}
+                        </span>
                       </div>
 
-                      {/* Visual Drop Target Indicator - After */}
-                      {isTargetAfter && (
-                        <div 
-                          className="h-1.5 bg-[#fab518] rounded-full shadow-xs mx-1 -my-1 animate-pulse transition-all"
-                          aria-label="Posicionar aqui"
-                        />
-                      )}
-                    </React.Fragment>
-                    );
-                  })}
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={onOpenNewDemandModal}
+                          className="p-1 rounded-lg text-slate-400 hover:text-[#142142] dark:hover:text-[#fab518] hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                          title={`Adicionar demanda em ${col.title}`}
+                          aria-label="Adicionar demanda"
+                        >
+                          <Plus size={15} className="stroke-[2.5]" />
+                        </button>
 
-                  {columnDemands.length === 0 && (
-                    <div 
+                        <div className="relative column-menu-container">
+                          <button
+                            type="button"
+                            onClick={() => setColumnMenuOpenId(columnMenuOpenId === col.id ? null : col.id)}
+                            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 p-1 rounded-lg cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors"
+                            title="Opções da coluna"
+                          >
+                            <MoreVertical size={14} />
+                          </button>
+
+                          {columnMenuOpenId === col.id && (
+                            <div className="absolute right-0 top-full mt-1 z-30 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 text-xs font-semibold animate-in fade-in zoom-in-95 duration-100">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setColumnToEdit(col);
+                                  setIsAddColumnModalOpen(true);
+                                  setColumnMenuOpenId(null);
+                                }}
+                                className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer transition-colors"
+                              >
+                                <Edit size={13} className="text-slate-400" />
+                                <span>Editar Coluna</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setColumnToDelete(col);
+                                  setColumnMenuOpenId(null);
+                                }}
+                                className="w-full px-3 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-2 cursor-pointer transition-colors border-t border-slate-100 dark:border-slate-700"
+                              >
+                                <Trash2 size={13} className="text-red-500" />
+                                <span>Excluir Coluna</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* "+ Nova demanda" action button */}
+                    <button
+                      type="button"
+                      onClick={onOpenNewDemandModal}
                       className={`
-                        py-10 px-3 text-center border-2 border-dashed rounded-2xl transition-all flex flex-col items-center justify-center gap-1.5
-                        ${isDragOver 
-                          ? 'border-[#fab518] bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 font-bold scale-[1.01]' 
-                          : 'border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 font-medium'
-                        }
+                        w-full py-2 px-3 rounded-xl text-xs font-bold text-white shadow-2xs hover:shadow-xs
+                        flex items-center justify-center gap-1.5 transition-all active:scale-98 cursor-pointer
+                        ${col.buttonBg}
                       `}
                     >
-                      <p className="text-xs">
-                        {isDragOver ? 'Solte a demanda aqui nesta coluna' : 'Nenhuma demanda nesta etapa'}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                      <Plus size={13} className="stroke-[2.5]" />
+                      <span>Nova demanda</span>
+                    </button>
+                  </div>
+
+                {/* Cards List (Virtualized with react-window) */}
+                <VirtualizedDemandList
+                  demands={columnDemands}
+                  col={col}
+                  clients={clients}
+                  activeColumns={activeColumns}
+                  draggedDemandId={draggedDemandId}
+                  dropTarget={dropTarget}
+                  isDragOver={isDragOver}
+                  onCardClick={(demand) => setEditingDemand(demand)}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onCardDragOver={handleCardDragOver}
+                  onCardDrop={handleCardDrop}
+                  onUpdateDemandColumn={onUpdateDemandColumn}
+                  getPriorityBadgeStyle={getPriorityBadgeStyle}
+                  getPriorityColorBars={getPriorityColorBars}
+                  getAssigneeDisplay={getAssigneeDisplay}
+                  getDemandImageThumbnail={getDemandImageThumbnail}
+                  formatDemandDate={formatDemandDate}
+                  formatDemandDateFull={formatDemandDateFull}
+                />
               </div>
             );
           })}

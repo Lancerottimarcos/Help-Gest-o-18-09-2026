@@ -24,10 +24,27 @@ import {
   Crown,
   Copy,
   CheckCircle2,
-  Shield
+  Shield,
+  Users,
+  Wallet,
+  FileSpreadsheet,
+  UsersRound,
+  Settings,
+  ShieldAlert,
+  Unlock,
+  SlidersHorizontal
 } from 'lucide-react';
-import { TeamMember, TeamFunctionOption } from '../types';
+import { TeamMember, TeamFunctionOption, MemberPermissions } from '../types';
 import { isOwnerOrMarcos, updateMasterPassword } from '../utils/securityProtocols';
+import {
+  DEFAULT_NEW_COLLABORATOR_PERMISSIONS,
+  FULL_ACCESS_PERMISSIONS,
+  OPERATIONAL_LEADER_PERMISSIONS,
+  RESTRICTED_PAGES_CONFIG,
+  RestrictedPageKey,
+  getEffectivePermissions,
+  countBlockedPages,
+} from '../utils/permissionUtils';
 
 interface ColaboradorModalProps {
   isOpen: boolean;
@@ -139,6 +156,30 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
   const [formError, setFormError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Regras de Acesso e Permissões (Padrão para novos colaboradores: páginas restritas bloqueadas)
+  const [permissions, setPermissions] = useState<MemberPermissions>({
+    ...DEFAULT_NEW_COLLABORATOR_PERMISSIONS,
+  });
+
+  const handleTogglePermission = (pageKey: RestrictedPageKey) => {
+    if (isEditingOwner) return;
+    setPermissions((prev) => ({
+      ...prev,
+      [pageKey]: !prev[pageKey],
+    }));
+  };
+
+  const handleApplyPreset = (preset: 'restrito' | 'lider' | 'total') => {
+    if (isEditingOwner) return;
+    if (preset === 'restrito') {
+      setPermissions({ ...DEFAULT_NEW_COLLABORATOR_PERMISSIONS });
+    } else if (preset === 'lider') {
+      setPermissions({ ...OPERATIONAL_LEADER_PERMISSIONS });
+    } else {
+      setPermissions({ ...FULL_ACCESS_PERMISSIONS });
+    }
+  };
+
   const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -236,6 +277,7 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
       setAvatar(memberToEdit.avatar || PRESET_AVATARS[0]);
       setSpecialties(memberToEdit.specialties || []);
       setCustomAvatarUrl(memberToEdit.avatar || '');
+      setPermissions(getEffectivePermissions(memberToEdit));
       setFormError('');
     } else {
       setName('');
@@ -250,6 +292,7 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
       setAvatar(randomAvatar);
       setCustomAvatarUrl('');
       setSpecialties(['Meta Ads', 'Google Ads']);
+      setPermissions({ ...DEFAULT_NEW_COLLABORATOR_PERMISSIONS });
       setFormError('');
     }
   }, [memberToEdit, isOpen]);
@@ -317,6 +360,10 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
     const finalAvatar = customAvatarUrl.trim() || avatar || PRESET_AVATARS[0];
     const finalEmail = email.trim() || `${cleanUsername}@ideiasdigitais.com.br`;
 
+    const finalPermissions: MemberPermissions = isEditingOwner
+      ? { ...FULL_ACCESS_PERMISSIONS }
+      : permissions;
+
     const finalMember: TeamMember = {
       id: memberToEdit ? memberToEdit.id : `tm-${Date.now()}`,
       name: name.trim(),
@@ -331,6 +378,7 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
       password: finalPassword,
       createdBy: memberToEdit?.createdBy || 'Marcos Lancerotti',
       createdAt: memberToEdit?.createdAt || new Date().toISOString(),
+      permissions: finalPermissions,
     };
 
     // Se o colaborador salvo for o Marcos Lancerotti, sincroniza com a Senha Mestra
@@ -849,6 +897,168 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Section 7: Regras de Acesso e Permissões do Sistema */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800 space-y-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#142142] text-[#fab518] dark:bg-[#fab518] dark:text-[#142142] flex items-center justify-center font-black shrink-0 shadow-xs">
+                  <ShieldAlert size={18} className="stroke-[2.2]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs sm:text-sm font-black text-[#142142] dark:text-white tracking-tight">
+                      Regras de Acesso e Permissões do Sistema
+                    </h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      {isEditingOwner ? 'Proprietário' : `${6 - countBlockedPages(permissions)}/6 Liberadas`}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    {isEditingOwner
+                      ? 'O proprietário da agência possui acesso irrestrito a todos os módulos.'
+                      : 'Defina o que este colaborador pode ou não fazer. Páginas sensíveis vêm bloqueadas por padrão para novos colaboradores.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Presets rápidos */}
+              {!isEditingOwner && (
+                <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('restrito')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
+                      countBlockedPages(permissions) === 6
+                        ? 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                    title="Bloqueia as 6 páginas estratégicas (Padrão para novos colaboradores)"
+                  >
+                    🔒 Padrão Restrito
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('lider')}
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-all cursor-pointer"
+                    title="Libera Clientes e Serviços, bloqueia Financeiro, Orçamentos, Equipe e Configurações"
+                  >
+                    ⚡ Líder Operacional
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('total')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
+                      countBlockedPages(permissions) === 0
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                    title="Libera todas as páginas da agência"
+                  >
+                    ✓ Acesso Total
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Banner de Proteção do Dono se for o Marcos */}
+            {isEditingOwner && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                <Crown size={15} className="text-[#fab518] shrink-0" />
+                <span>Conta Mestra: Por ser o Dono e Fundador da agência, Marcos Lancerotti possui liberação total obrigatória e permanente.</span>
+              </div>
+            )}
+
+            {/* Grid dos 6 Módulos com Switch / Status Bloqueado ou Liberado */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {RESTRICTED_PAGES_CONFIG.map((module) => {
+                const isAllowed = isEditingOwner ? true : Boolean(permissions[module.id]);
+                
+                const iconMap = {
+                  clientes: Users,
+                  servicos: Briefcase,
+                  financeiro: Wallet,
+                  orcamentos: FileSpreadsheet,
+                  equipe: UsersRound,
+                  configuracoes: Settings,
+                };
+                const ModuleIcon = iconMap[module.id] || Shield;
+
+                return (
+                  <div
+                    key={module.id}
+                    onClick={() => !isEditingOwner && handleTogglePermission(module.id)}
+                    className={`p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all select-none ${
+                      isEditingOwner
+                        ? 'bg-white/60 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/80 cursor-default opacity-90'
+                        : isAllowed
+                        ? 'bg-white dark:bg-slate-800 border-emerald-300/80 dark:border-emerald-700/80 shadow-xs cursor-pointer hover:border-emerald-400'
+                        : 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200/80 dark:border-rose-900/60 shadow-2xs cursor-pointer hover:border-rose-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        isAllowed
+                          ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300'
+                      }`}>
+                        <ModuleIcon size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-bold text-xs text-[#142142] dark:text-white truncate">
+                            {module.label}
+                          </p>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug truncate">
+                          {module.shortDescription}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                        isAllowed
+                          ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                          : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                      }`}>
+                        {isAllowed ? (
+                          <>
+                            <Unlock size={10} />
+                            <span>Liberado</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock size={10} />
+                            <span>Bloqueado</span>
+                          </>
+                        )}
+                      </span>
+
+                      {/* Switch Button */}
+                      {!isEditingOwner && (
+                        <div
+                          className={`w-9 h-5 rounded-full transition-colors p-0.5 flex items-center ${
+                            isAllowed ? 'bg-emerald-500 justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'
+                          }`}
+                        >
+                          <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Informational note about open modules */}
+            <div className="pt-1 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between border-t border-slate-200/60 dark:border-slate-800/60">
+              <span className="flex items-center gap-1">
+                <Check size={12} className="text-emerald-600" />
+                <span>Páginas operacionais liberadas para trabalho: <strong>Início, Demandas (Kanban) e Datas Comemorativas</strong>.</span>
+              </span>
             </div>
           </div>
 

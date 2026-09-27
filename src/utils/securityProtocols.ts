@@ -1,7 +1,7 @@
 // Security Protocols & Real-Time Cyber Defense Engine
 // Help Ideias Digitais - Anti-Intrusion, Antivirus, and Malware Prevention Layer
 
-import { TeamMember } from '../types';
+import { TeamMember, MemberPermissions } from '../types';
 import { initialTeamMembers } from '../data/mockData';
 
 export interface SecurityLogEntry {
@@ -936,6 +936,7 @@ export async function computeSha256(text: string): Promise<string> {
 }
 
 export interface AuthenticatedUserPayload {
+  id?: string;
   username: string;
   name: string;
   email: string;
@@ -943,6 +944,7 @@ export interface AuthenticatedUserPayload {
   roleLabel: string;
   avatarUrl?: string;
   isMaster: boolean;
+  permissions?: MemberPermissions;
 }
 
 /**
@@ -1057,6 +1059,7 @@ export async function validateMasterCredentials(
       usernameMatched: true,
       passwordMatched,
       authenticatedUser: passwordMatched ? {
+        id: marcosMember?.id || 'tm-1',
         username: marcosMember?.username || 'lancerotti',
         name: marcosMember?.name || 'Marcos Lancerotti',
         email: marcosMember?.email || 'lancerottirmarcos@gmail.com',
@@ -1064,6 +1067,17 @@ export async function validateMasterCredentials(
         roleLabel: 'Proprietário da Agência',
         avatarUrl: marcosMember?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         isMaster: true,
+        permissions: {
+          clientes: true,
+          servicos: true,
+          financeiro: true,
+          orcamentos: true,
+          equipe: true,
+          configuracoes: true,
+          inicio: true,
+          demandas: true,
+          calendario: true,
+        },
       } : undefined
     };
   }
@@ -1091,6 +1105,7 @@ export async function validateMasterCredentials(
         usernameMatched: true,
         passwordMatched,
         authenticatedUser: passwordMatched ? {
+          id: matchedMember.id,
           username: matchedMember.username || matchedMember.email.split('@')[0],
           name: matchedMember.name,
           email: matchedMember.email,
@@ -1098,6 +1113,17 @@ export async function validateMasterCredentials(
           roleLabel: isOwner ? 'Proprietário da Agência' : (matchedMember.role || 'Colaborador'),
           avatarUrl: matchedMember.avatar,
           isMaster: isOwner,
+          permissions: matchedMember.permissions || {
+            clientes: false,
+            servicos: false,
+            financeiro: false,
+            orcamentos: false,
+            equipe: false,
+            configuracoes: false,
+            inicio: true,
+            demandas: true,
+            calendario: true,
+          },
         } : undefined
       };
     }

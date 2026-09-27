@@ -191,7 +191,12 @@ async function startServer() {
   // Endpoint de busca direta de orçamento público para o cliente
   app.get("/api/public/proposal/:id", (req, res) => {
     try {
-      const targetId = (req.params.id || "").trim().toLowerCase();
+      const rawParam = req.params.id || "";
+      let targetId = rawParam.trim().toLowerCase();
+      try {
+        targetId = decodeURIComponent(rawParam).trim().toLowerCase();
+      } catch {}
+
       if (!targetId) {
         return res.status(400).json({ success: false, error: "Identificador de orçamento inválido." });
       }
@@ -232,7 +237,12 @@ async function startServer() {
   // Decisão do cliente no orçamento público (Aprovar / Recusar / Ajuste)
   app.post("/api/public/proposal/:id/decision", (req, res) => {
     try {
-      const targetId = (req.params.id || "").trim().toLowerCase();
+      const rawParam = req.params.id || "";
+      let targetId = rawParam.trim().toLowerCase();
+      try {
+        targetId = decodeURIComponent(rawParam).trim().toLowerCase();
+      } catch {}
+
       const { action, signerName, signerRole, signerEmail, signerPhone, notes, reason, feedback } = req.body || {};
 
       if (!targetId || !action) {

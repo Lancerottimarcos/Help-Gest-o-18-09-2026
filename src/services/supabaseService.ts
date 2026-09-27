@@ -556,7 +556,7 @@ export const supabaseService = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Erro ao buscar demandas no Supabase:', error);
+        console.warn('Aviso ao consultar demandas no Supabase (offline ou não configurado):', error?.message || error);
         return null;
       }
 
@@ -591,8 +591,8 @@ export const supabaseService = {
         whatsappNotified: Boolean(row.whatsapp_notified),
         attachments: row.attachments || [],
       }));
-    } catch (e) {
-      console.error('Exceção ao buscar demandas no Supabase:', e);
+    } catch (e: any) {
+      console.warn('Exceção ao buscar demandas no Supabase (modo offline):', e?.message || e);
       return null;
     }
   },
@@ -634,12 +634,12 @@ export const supabaseService = {
 
       const { error } = await resilientSupabaseUpsert(supabase, 'demands', payload);
       if (error) {
-        console.error('Erro ao fazer upsert da demanda no Supabase:', error);
+        console.warn('Aviso ao fazer upsert da demanda no Supabase:', error?.message || error);
         return false;
       }
       return true;
-    } catch (e) {
-      console.error('Exceção ao sincronizar demanda:', e);
+    } catch (e: any) {
+      console.warn('Exceção ao sincronizar demanda no Supabase:', e?.message || e);
       return false;
     }
   },
@@ -670,7 +670,7 @@ export const supabaseService = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Erro ao buscar clientes no Supabase:', error);
+        console.warn('Aviso ao consultar clientes no Supabase (offline ou não configurado):', error?.message || error);
         return null;
       }
 
@@ -712,8 +712,8 @@ export const supabaseService = {
         isAnonymized: Boolean(row.is_anonymized),
         anonymizedAt: row.anonymized_at || undefined,
       }));
-    } catch (e) {
-      console.error('Exceção ao buscar clientes no Supabase:', e);
+    } catch (e: any) {
+      console.warn('Exceção ao buscar clientes no Supabase (modo offline):', e?.message || e);
       return null;
     }
   },
@@ -764,12 +764,12 @@ export const supabaseService = {
 
       const { error } = await resilientSupabaseUpsert(supabase, 'clients', payload);
       if (error) {
-        console.error('Erro ao fazer upsert do cliente no Supabase:', error);
+        console.warn('Aviso ao fazer upsert do cliente no Supabase:', error?.message || error);
         return false;
       }
       return true;
-    } catch (e) {
-      console.error('Exceção ao sincronizar cliente:', e);
+    } catch (e: any) {
+      console.warn('Exceção ao sincronizar cliente no Supabase:', e?.message || e);
       return false;
     }
   },

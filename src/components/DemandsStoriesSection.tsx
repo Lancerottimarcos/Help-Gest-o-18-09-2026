@@ -4,12 +4,13 @@ import {
   ChevronLeft, 
   CheckCheck 
 } from 'lucide-react';
-import { Client, DemandItem } from '../types';
+import { Client, DemandItem, KanbanColumn } from '../types';
 import { DemandStoryModal, StoryClientData } from './DemandStoryModal';
 
 interface DemandsStoriesSectionProps {
   clients: Client[];
   demands: DemandItem[];
+  columns?: KanbanColumn[];
   onSelectDemand?: (demandId: string) => void;
   onOpenNewDemandModal?: () => void;
 }
@@ -170,25 +171,69 @@ const formatStoryLabel = (name: string): string => {
 
 const STORAGE_VIEWED_SIGNATURES_KEY = 'ideias_digitais_viewed_stories_signatures_v2';
 
-export const isDemandCompleted = (demand: DemandItem): boolean => {
-  const colId = (demand.columnId || '').toLowerCase().trim();
-  const status = (demand.statusLabel || '').toLowerCase().trim();
-  return (
+export const isDemandCompleted = (demand: DemandItem, columns?: KanbanColumn[]): boolean => {
+  const colId = (demand.columnId || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  const status = (demand.statusLabel || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  if (
     colId === 'concluidas' ||
+    colId === 'concluidos' ||
     colId === 'concluida' ||
+    colId === 'concluido' ||
     colId === 'done' ||
     colId === 'finalizado' ||
-    colId === 'completed' ||
-    colId.includes('conclui') ||
-    status === 'concluída' ||
+    colId === 'finalizados' ||
+    colId === 'finalizada' ||
+    colId === 'finalizadas' ||
+    colId.includes('conclu') ||
+    colId.includes('finaliz') ||
     status === 'concluida' ||
-    status.includes('conclui')
-  );
+    status === 'concluido' ||
+    status === 'concluidas' ||
+    status === 'concluidos' ||
+    status.includes('conclui') ||
+    status.includes('finaliz') ||
+    status === 'done'
+  ) {
+    return true;
+  }
+  if (columns && columns.length > 0) {
+    const matchedCol = columns.find(c => {
+      const cId = c.id.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+      return cId === colId;
+    });
+    if (matchedCol) {
+      const titleClean = (matchedCol.title || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+      if (
+        titleClean.includes('conclu') ||
+        titleClean.includes('finaliz') ||
+        titleClean === 'done' ||
+        titleClean === 'pronto' ||
+        titleClean === 'entregue'
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
 };
 
 export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
   clients = [],
   demands = [],
+  columns = [],
   onSelectDemand,
   onOpenNewDemandModal,
 }) => {
@@ -241,8 +286,8 @@ export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
   // Synchronize clients & demands directly from state
   const { storyClients, newUpdatesCount } = useMemo(() => {
     // Only active (non-completed) demands represent updates in this section.
-    // When a demand is placed in "Concluídas", it is removed from this section.
-    const activeDemands = demands.filter((demand) => !isDemandCompleted(demand));
+    // When a demand is placed in "Concluídos", it is removed from this section.
+    const activeDemands = demands.filter((demand) => !isDemandCompleted(demand, columns));
 
     // 1. Group active demands by client
     // Support matching by name, companyName, id, or normalized string
@@ -383,7 +428,7 @@ export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
     });
 
     return { storyClients: list, newUpdatesCount: unviewedCount };
-  }, [allKnownClients, demands, viewedSignatures]);
+  }, [allKnownClients, demands, columns, viewedSignatures]);
 
   // Scroll checking
   const updateScrollButtons = useCallback(() => {
@@ -452,6 +497,11 @@ export const DemandsStoriesSection: React.FC<DemandsStoriesSectionProps> = ({
       return updated;
     });
   }, [storyClients]);
+
+  // Quando todas as demandas estiverem na coluna concluídos (não restam clientes com demandas ativas), a seção não é exibida
+  if (storyClients.length === 0) {
+    return null;
+  }
 
   return (
     <section 

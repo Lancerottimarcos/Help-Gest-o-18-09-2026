@@ -342,16 +342,21 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
 
           {/* Descrição */}
           <div>
-            <label htmlFor="demand-description-textarea" className="block text-xs font-bold text-[#142142] dark:text-white mb-1">
-              Descrição da Demanda
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="demand-description-textarea" className="block text-xs font-bold text-[#142142] dark:text-white">
+                Descrição da Demanda
+              </label>
+              <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500">
+                Briefing detalhado e orientações
+              </span>
+            </div>
             <textarea
               id="demand-description-textarea"
-              rows={3}
-              placeholder="Descreva o escopo, orientações, briefing ou detalhes da demanda..."
+              rows={7}
+              placeholder="Descreva detalhadamente o escopo, orientações de design, briefing de copy, formato ou diretrizes da demanda..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-[#F2F2F2] dark:bg-slate-800 text-xs sm:text-sm text-[#142142] dark:text-slate-100 p-2.5 rounded-xl border border-transparent focus:border-[#fab518] focus:outline-none resize-none placeholder:text-slate-400 font-medium transition-colors"
+              className="w-full min-h-[170px] sm:min-h-[190px] bg-[#F2F2F2] dark:bg-slate-800/90 text-xs sm:text-sm text-[#142142] dark:text-slate-100 p-3.5 sm:p-4 rounded-xl border border-slate-200/60 dark:border-slate-700/60 focus:border-[#fab518] focus:ring-2 focus:ring-[#fab518]/20 focus:outline-none resize-y placeholder:text-slate-400 font-normal leading-relaxed transition-all"
             />
           </div>
 

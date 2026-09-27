@@ -15,8 +15,6 @@ import {
   FileSpreadsheet, 
   Lock, 
   ArrowRight, 
-  CreditCard, 
-  CheckSquare, 
   Phone, 
   Mail, 
   Briefcase,
@@ -32,6 +30,7 @@ import { BudgetProposal, Client, ProposalItem } from '../types';
 import { detectAndSanitizeInput } from '../utils/securityProtocols';
 import { HelpLogo } from './HelpLogo';
 import { serverDbService } from '../services/serverDbService';
+import { supabaseService } from '../services/supabaseService';
 
 interface PublicBudgetProposalViewProps {
   proposalId: string;
@@ -42,6 +41,8 @@ interface PublicBudgetProposalViewProps {
     signerRole?: string;
     signerEmail?: string;
     signerPhone?: string;
+    signerDocument?: string;
+    signerBirthDate?: string;
     notes?: string;
   }) => void;
   onReject: (proposalId: string, reason: string) => void;
@@ -50,6 +51,34 @@ interface PublicBudgetProposalViewProps {
   isPreviewMode?: boolean;
   onClosePreview?: () => void;
 }
+
+// Format mask helpers
+const formatCpfCnpj = (value: string): string => {
+  const digits = value.replace(/\D/g, '').slice(0, 14);
+  if (digits.length <= 11) {
+    return digits
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return digits
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2');
+};
+
+const formatPhone = (value: string): string => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 10) {
+    return digits
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+  return digits
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2');
+};
 
 export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> = ({
   proposalId,
@@ -62,12 +91,22 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
   isPreviewMode = false,
   onClosePreview,
 }) => {
+  // Normalize search ID handling url encoding and whitespace
+  const normalizedTargetId = (() => {
+    const raw = (proposalId || '').trim();
+    try {
+      return decodeURIComponent(raw).trim().toLowerCase();
+    } catch {
+      return raw.toLowerCase();
+    }
+  })();
+
   // Find proposal by id, code or shareToken in initial props
   const initialFound = proposals.find(
     (p) => 
-      p.id.toLowerCase() === proposalId.toLowerCase() ||
-      p.code.toLowerCase() === proposalId.toLowerCase() ||
-      (p.shareToken && p.shareToken.toLowerCase() === proposalId.toLowerCase())
+      p.id?.toLowerCase() === normalizedTargetId ||
+      p.code?.toLowerCase() === normalizedTargetId ||
+      (p.shareToken && p.shareToken?.toLowerCase() === normalizedTargetId)
   );
 
   const [remoteProposal, setRemoteProposal] = useState<BudgetProposal | null>(null);
@@ -82,8 +121,8 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
     ? (clients.find(
         (c) =>
           (proposal.clientId && c.id === proposal.clientId) ||
-          c.companyName.toLowerCase() === proposal.clientName.toLowerCase() ||
-          c.name.toLowerCase() === proposal.clientName.toLowerCase()
+          c.companyName?.toLowerCase() === proposal.clientName?.toLowerCase() ||
+          c.name?.toLowerCase() === proposal.clientName?.toLowerCase()
       ) || remoteClient)
     : null;
 
@@ -99,7 +138,7 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
       setIsLoading(true);
 
       // 1. Try dedicated public proposal endpoint
-      const result = await serverDbService.fetchPublicProposal(proposalId);
+      const result = await serverDbService.fetchPublicProposal(normalizedTargetId || proposalId);
       if (!isMounted) return;
 
       if (result?.proposal) {
@@ -116,9 +155,9 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
           const list: BudgetProposal[] = JSON.parse(saved);
           const found = list.find(
             (p) =>
-              p.id.toLowerCase() === proposalId.toLowerCase() ||
-              p.code.toLowerCase() === proposalId.toLowerCase() ||
-              (p.shareToken && p.shareToken.toLowerCase() === proposalId.toLowerCase())
+              p.id?.toLowerCase() === normalizedTargetId ||
+              p.code?.toLowerCase() === normalizedTargetId ||
+              (p.shareToken && p.shareToken?.toLowerCase() === normalizedTargetId)
           );
           if (found) {
             setRemoteProposal(found);
@@ -127,6 +166,38 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
           }
         }
       } catch {}
+
+      // 3. Check Supabase as cloud fallback
+      if (supabaseService.isConfigured()) {
+        try {
+          const [supaProposals, supaClients] = await Promise.all([
+            supabaseService.fetchProposals(),
+            supabaseService.fetchClients(),
+          ]);
+          if (!isMounted) return;
+
+          const found = supaProposals?.find(
+            (p) =>
+              p.id?.toLowerCase() === normalizedTargetId ||
+              p.code?.toLowerCase() === normalizedTargetId ||
+              (p.shareToken && p.shareToken?.toLowerCase() === normalizedTargetId)
+          );
+          if (found) {
+            setRemoteProposal(found);
+            const clientMatch = supaClients?.find(
+              (c) =>
+                (found.clientId && c.id === found.clientId) ||
+                c.companyName?.toLowerCase() === found.clientName?.toLowerCase() ||
+                c.name?.toLowerCase() === found.clientName?.toLowerCase()
+            );
+            if (clientMatch) setRemoteClient(clientMatch);
+            setIsLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Erro ao buscar proposta no Supabase:', err);
+        }
+      }
 
       if (isMounted) {
         setIsLoading(false);
@@ -137,21 +208,27 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
     return () => {
       isMounted = false;
     };
-  }, [proposalId, initialFound, fetchAttempt]);
+  }, [proposalId, normalizedTargetId, initialFound, fetchAttempt]);
 
   // Approval Modal State
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
-  const [signerName, setSignerName] = useState(
-    proposal?.contactName || matchedClient?.contactName || matchedClient?.name || ''
+  const [signerDocument, setSignerDocument] = useState(
+    proposal?.clientCpfCnpj || matchedClient?.cpfCnpj || ''
   );
-  const [signerRole, setSignerRole] = useState(
-    proposal?.contactRole || matchedClient?.contactRole || 'Diretor / Responsável'
+  const [signerName, setSignerName] = useState(
+    proposal?.clientName || matchedClient?.companyName || matchedClient?.name || proposal?.contactName || ''
+  );
+  const [signerPhone, setSignerPhone] = useState(
+    proposal?.clientPhone || matchedClient?.phone || ''
   );
   const [signerEmail, setSignerEmail] = useState(
     proposal?.clientEmail || matchedClient?.email || ''
   );
-  const [signerPhone, setSignerPhone] = useState(
-    proposal?.clientPhone || matchedClient?.phone || ''
+  const [signerBirthDate, setSignerBirthDate] = useState(
+    matchedClient?.birthDate || ''
+  );
+  const [signerRole, setSignerRole] = useState(
+    proposal?.contactRole || matchedClient?.contactRole || 'Diretor / Responsável'
   );
   const [termsAccepted, setTermsAccepted] = useState(true);
   const [approvalNotes, setApprovalNotes] = useState('');
@@ -159,10 +236,12 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
   // Sync signer form states when proposal or client resolves
   useEffect(() => {
     if (proposal) {
-      setSignerName(prev => prev || proposal.contactName || matchedClient?.contactName || matchedClient?.name || '');
-      setSignerRole(prev => prev || proposal.contactRole || matchedClient?.contactRole || 'Diretor / Responsável');
-      setSignerEmail(prev => prev || proposal.clientEmail || matchedClient?.email || '');
+      setSignerDocument(prev => prev || proposal.clientCpfCnpj || matchedClient?.cpfCnpj || '');
+      setSignerName(prev => prev || proposal.clientName || matchedClient?.companyName || matchedClient?.name || proposal.contactName || '');
       setSignerPhone(prev => prev || proposal.clientPhone || matchedClient?.phone || '');
+      setSignerEmail(prev => prev || proposal.clientEmail || matchedClient?.email || '');
+      setSignerBirthDate(prev => prev || matchedClient?.birthDate || '');
+      setSignerRole(prev => prev || proposal.contactRole || matchedClient?.contactRole || 'Diretor / Responsável');
     }
   }, [proposal, matchedClient]);
 
@@ -255,9 +334,13 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
 
   const handleConfirmApproval = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signerName.trim() || !termsAccepted) return;
+    if (!signerName.trim() || !signerDocument.trim() || !termsAccepted) return;
 
     const sanitizedSigner = detectAndSanitizeInput(signerName.trim(), 'Aprovação de Orçamento: Nome').sanitized;
+    const sanitizedDocument = detectAndSanitizeInput(signerDocument.trim(), 'Aprovação de Orçamento: CPF/CNPJ').sanitized;
+    const sanitizedBirthDate = signerBirthDate.trim()
+      ? detectAndSanitizeInput(signerBirthDate.trim(), 'Aprovação de Orçamento: Data de Nascimento').sanitized
+      : undefined;
     const sanitizedNotes = approvalNotes.trim()
       ? detectAndSanitizeInput(approvalNotes.trim(), 'Aprovação de Orçamento: Observações').sanitized
       : undefined;
@@ -267,6 +350,8 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
       signerRole: signerRole.trim() || undefined,
       signerEmail: signerEmail.trim() || undefined,
       signerPhone: signerPhone.trim() || undefined,
+      signerDocument: sanitizedDocument,
+      signerBirthDate: sanitizedBirthDate,
       notes: sanitizedNotes,
     });
 
@@ -351,27 +436,6 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
           >
             <Printer size={14} className="text-slate-500" />
             <span className="hidden sm:inline">Imprimir / PDF</span>
-          </button>
-
-          <a
-            href={contactWhatsAppUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold transition-all border border-emerald-200"
-            title="Tirar dúvidas com o consultor"
-          >
-            <MessageCircle size={14} className="text-emerald-600" />
-            <span>Falar no WhatsApp</span>
-          </a>
-
-          <button
-            type="button"
-            onClick={onGoToAdminLogin}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#142142] hover:bg-[#1d2e56] text-white text-xs font-semibold transition-all cursor-pointer shadow-xs"
-            title="Acesso exclusivo para a equipe da agência"
-          >
-            <Lock size={12} className="text-[#fab518]" />
-            <span className="hidden sm:inline">Área da Agência</span>
           </button>
         </div>
       </header>
@@ -624,46 +688,6 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
             </div>
           </div>
 
-          {/* Commercial Terms & Guarantees */}
-          <div className="space-y-3 pt-2">
-            <h3 className="text-sm font-bold text-[#142142] flex items-center gap-2">
-              <CreditCard size={16} className="text-[#fab518]" />
-              <span>Condições Comerciais, Faturamento & Garantias</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                <span className="font-bold text-[#142142] flex items-center gap-1.5">
-                  <CheckSquare size={13} className="text-emerald-600" />
-                  <span>Faturamento PJ</span>
-                </span>
-                <p className="text-slate-500 text-[11px] leading-relaxed">
-                  Pix PJ corporativo ou Boleto bancário com emissão automática de Nota Fiscal Eletrônica (NFS-e).
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                <span className="font-bold text-[#142142] flex items-center gap-1.5">
-                  <Clock size={13} className="text-emerald-600" />
-                  <span>Início Operacional</span>
-                </span>
-                <p className="text-slate-500 text-[11px] leading-relaxed">
-                  Kickoff da equipe de atendimento e início dos alinhamentos em até 48 horas úteis após a aprovação online.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                <span className="font-bold text-[#142142] flex items-center gap-1.5">
-                  <ShieldCheck size={13} className="text-emerald-600" />
-                  <span>Propriedade Intelectual</span>
-                </span>
-                <p className="text-slate-500 text-[11px] leading-relaxed">
-                  Todos os criativos, materiais, copys e códigos tornam-se propriedade integral da empresa contratante.
-                </p>
-              </div>
-            </div>
-          </div>
-
           {/* DECISION ACTION SECTION: APPROVE / REJECT / ALREADY DECIDED */}
           <div className="pt-4 print:hidden">
             {proposal.status === 'Aprovado' ? (
@@ -690,6 +714,11 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
                     <span className="font-bold text-[#142142] text-sm">
                       {proposal.clientSignerName} {proposal.clientSignerRole ? `(${proposal.clientSignerRole})` : ''}
                     </span>
+                    {proposal.clientSignerDocument && (
+                      <span className="text-[11px] font-mono text-slate-600">
+                        CPF/CNPJ: {proposal.clientSignerDocument}
+                      </span>
+                    )}
                     {proposal.approvedAt && (
                       <span className="text-[11px] font-mono text-emerald-700">
                         Data do aceite: {proposal.approvedAt}
@@ -771,12 +800,12 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
                   <button
                     type="button"
                     onClick={() => {
-                      setFeedbackType('ajuste');
+                      setFeedbackType('recusa');
                       setIsFeedbackModalOpen(true);
                     }}
                     className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-xs font-semibold text-slate-700 transition-all cursor-pointer text-center shadow-xs"
                   >
-                    Solicitar Ajustes / Recusar
+                    Recusar
                   </button>
 
                   <button
@@ -785,7 +814,7 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
                     className="px-6 py-2.5 rounded-xl bg-[#fab518] hover:bg-[#e29f11] text-[#142142] font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95"
                   >
                     <Check size={16} className="stroke-[3]" />
-                    <span>Aprovar Orçamento Online</span>
+                    <span>Aprovar Orçamento</span>
                   </button>
                 </div>
               </div>
@@ -835,15 +864,46 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
               </button>
             </div>
 
-            <form onSubmit={handleConfirmApproval} className="space-y-4 text-xs">
+            <form onSubmit={handleConfirmApproval} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* CPF/ CNPJ: */}
+                <div>
+                  <label className="block font-bold text-[#142142] mb-1">
+                    CPF/ CNPJ: <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                    value={signerDocument}
+                    onChange={(e) => setSignerDocument(formatCpfCnpj(e.target.value))}
+                    className="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-[#142142] focus:outline-none focus:border-[#fab518]"
+                  />
+                </div>
+
+                {/* Data de nascimento: */}
+                <div>
+                  <label className="block font-bold text-[#142142] mb-1">
+                    Data de nascimento:
+                  </label>
+                  <input
+                    type="date"
+                    value={signerBirthDate}
+                    onChange={(e) => setSignerBirthDate(e.target.value)}
+                    className="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-[#142142] focus:outline-none focus:border-[#fab518]"
+                  />
+                </div>
+              </div>
+
+              {/* Nome/Razão Social: */}
               <div>
                 <label className="block font-bold text-[#142142] mb-1">
-                  Nome Completo do Responsável <span className="text-rose-500">*</span>
+                  Nome/Razão Social: <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Carlos Eduardo de Oliveira"
+                  placeholder="Ex: Razão Social ou Nome Completo"
                   value={signerName}
                   onChange={(e) => setSignerName(e.target.value)}
                   className="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-[#142142] focus:outline-none focus:border-[#fab518]"
@@ -851,43 +911,48 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Telefone: */}
                 <div>
                   <label className="block font-bold text-[#142142] mb-1">
-                    Cargo / Função na Empresa
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Diretor Comercial, CEO, Sócio"
-                    value={signerRole}
-                    onChange={(e) => setSignerRole(e.target.value)}
-                    className="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-[#142142] focus:outline-none focus:border-[#fab518]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-[#142142] mb-1">
-                    WhatsApp para Contato
+                    Telefone: <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="tel"
+                    required
                     placeholder="(00) 00000-0000"
                     value={signerPhone}
-                    onChange={(e) => setSignerPhone(e.target.value)}
-                    className="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-[#142142] focus:outline-none focus:border-[#fab518]"
+                    onChange={(e) => setSignerPhone(formatPhone(e.target.value))}
+                    className="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-[#142142] focus:outline-none focus:border-[#fab518]"
+                  />
+                </div>
+
+                {/* E-mail: */}
+                <div>
+                  <label className="block font-bold text-[#142142] mb-1">
+                    E-mail: <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="contato@empresa.com.br"
+                    value={signerEmail}
+                    onChange={(e) => setSignerEmail(e.target.value)}
+                    className="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-[#142142] focus:outline-none focus:border-[#fab518]"
                   />
                 </div>
               </div>
 
+              {/* Cargo / Função */}
               <div>
                 <label className="block font-bold text-[#142142] mb-1">
-                  E-mail para Envio do Contrato / NFS-e
+                  Cargo / Função na Empresa (opcional)
                 </label>
                 <input
-                  type="email"
-                  placeholder="contato@empresa.com.br"
-                  value={signerEmail}
-                  onChange={(e) => setSignerEmail(e.target.value)}
-                  className="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-[#142142] focus:outline-none focus:border-[#fab518]"
+                  type="text"
+                  placeholder="Ex: Diretor Comercial, CEO, Sócio"
+                  value={signerRole}
+                  onChange={(e) => setSignerRole(e.target.value)}
+                  className="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-[#142142] focus:outline-none focus:border-[#fab518]"
                 />
               </div>
 
@@ -929,7 +994,7 @@ export const PublicBudgetProposalView: React.FC<PublicBudgetProposalViewProps> =
                 </button>
                 <button
                   type="submit"
-                  disabled={!signerName.trim() || !termsAccepted}
+                  disabled={!signerName.trim() || !signerDocument.trim() || !termsAccepted}
                   className="px-6 py-2.5 rounded-xl bg-[#fab518] hover:bg-[#e29f11] disabled:opacity-40 text-[#142142] font-black text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer"
                 >
                   <Check size={15} className="stroke-[3]" />
