@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../lib/supabaseClient';
+import { serverDbService } from './serverDbService';
 import { 
   DemandItem, 
   Client, 
@@ -8,6 +9,22 @@ import {
   TeamMember,
   KanbanColumn 
 } from '../types';
+
+function recordSyncFailure(
+  operation: string,
+  error: any,
+  details?: any,
+  severity: 'WARNING' | 'ERROR' | 'CRITICAL' = 'ERROR'
+) {
+  try {
+    serverDbService.recordSupabaseSyncError({
+      operation,
+      error,
+      details,
+      severity,
+    });
+  } catch {}
+}
 
 export interface FullSyncPayload {
   clients?: Client[];
@@ -547,7 +564,10 @@ export const supabaseService = {
   // ==================================================================
   async fetchDemands(): Promise<DemandItem[] | null> {
     const supabase = getSupabaseClient();
-    if (!supabase) return null;
+    if (!supabase) {
+      recordSyncFailure('FETCH_DEMANDS', 'Supabase não inicializado ou credenciais ausentes no storage', undefined, 'WARNING');
+      return null;
+    }
 
     try {
       const { data, error } = await supabase
@@ -556,6 +576,7 @@ export const supabaseService = {
         .order('created_at', { ascending: false });
 
       if (error) {
+        recordSyncFailure('FETCH_DEMANDS', error.message || error, { error, hint: error.hint });
         console.warn('Aviso ao consultar demandas no Supabase (offline ou não configurado):', error?.message || error);
         return null;
       }
@@ -592,6 +613,7 @@ export const supabaseService = {
         attachments: row.attachments || [],
       }));
     } catch (e: any) {
+      recordSyncFailure('FETCH_DEMANDS', e?.message || e, e);
       console.warn('Exceção ao buscar demandas no Supabase (modo offline):', e?.message || e);
       return null;
     }
@@ -599,7 +621,10 @@ export const supabaseService = {
 
   async upsertDemand(demand: DemandItem): Promise<boolean> {
     const supabase = getSupabaseClient();
-    if (!supabase) return false;
+    if (!supabase) {
+      recordSyncFailure('UPSERT_DEMAND', 'Supabase não inicializado', { demandId: demand.id }, 'WARNING');
+      return false;
+    }
 
     try {
       const payload = {
@@ -634,11 +659,13 @@ export const supabaseService = {
 
       const { error } = await resilientSupabaseUpsert(supabase, 'demands', payload);
       if (error) {
+        recordSyncFailure('UPSERT_DEMAND', error.message || error, { demandId: demand.id, error });
         console.warn('Aviso ao fazer upsert da demanda no Supabase:', error?.message || error);
         return false;
       }
       return true;
     } catch (e: any) {
+      recordSyncFailure('UPSERT_DEMAND', e?.message || e, { demandId: demand.id, error: e });
       console.warn('Exceção ao sincronizar demanda no Supabase:', e?.message || e);
       return false;
     }
@@ -661,7 +688,10 @@ export const supabaseService = {
   // ==================================================================
   async fetchClients(): Promise<Client[] | null> {
     const supabase = getSupabaseClient();
-    if (!supabase) return null;
+    if (!supabase) {
+      recordSyncFailure('FETCH_CLIENTS', 'Supabase não inicializado ou credenciais ausentes no storage', undefined, 'WARNING');
+      return null;
+    }
 
     try {
       const { data, error } = await supabase
@@ -670,6 +700,7 @@ export const supabaseService = {
         .order('created_at', { ascending: false });
 
       if (error) {
+        recordSyncFailure('FETCH_CLIENTS', error.message || error, { error, hint: error.hint });
         console.warn('Aviso ao consultar clientes no Supabase (offline ou não configurado):', error?.message || error);
         return null;
       }
@@ -713,6 +744,7 @@ export const supabaseService = {
         anonymizedAt: row.anonymized_at || undefined,
       }));
     } catch (e: any) {
+      recordSyncFailure('FETCH_CLIENTS', e?.message || e, e);
       console.warn('Exceção ao buscar clientes no Supabase (modo offline):', e?.message || e);
       return null;
     }
@@ -720,7 +752,10 @@ export const supabaseService = {
 
   async upsertClient(client: Client): Promise<boolean> {
     const supabase = getSupabaseClient();
-    if (!supabase) return false;
+    if (!supabase) {
+      recordSyncFailure('UPSERT_CLIENT', 'Supabase não inicializado', { clientId: client.id }, 'WARNING');
+      return false;
+    }
 
     try {
       const payload = {
@@ -764,11 +799,13 @@ export const supabaseService = {
 
       const { error } = await resilientSupabaseUpsert(supabase, 'clients', payload);
       if (error) {
+        recordSyncFailure('UPSERT_CLIENT', error.message || error, { clientId: client.id, error });
         console.warn('Aviso ao fazer upsert do cliente no Supabase:', error?.message || error);
         return false;
       }
       return true;
     } catch (e: any) {
+      recordSyncFailure('UPSERT_CLIENT', e?.message || e, { clientId: client.id, error: e });
       console.warn('Exceção ao sincronizar cliente no Supabase:', e?.message || e);
       return false;
     }
@@ -791,7 +828,10 @@ export const supabaseService = {
   // ==================================================================
   async fetchServices(): Promise<Service[] | null> {
     const supabase = getSupabaseClient();
-    if (!supabase) return null;
+    if (!supabase) {
+      recordSyncFailure('FETCH_SERVICES', 'Supabase não inicializado ou credenciais ausentes no storage', undefined, 'WARNING');
+      return null;
+    }
 
     try {
       const { data, error } = await supabase
@@ -799,7 +839,10 @@ export const supabaseService = {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) return null;
+      if (error) {
+        recordSyncFailure('FETCH_SERVICES', error.message || error, { error });
+        return null;
+      }
 
       return (data || []).map((row: any): Service => ({
         id: row.id,
@@ -811,7 +854,8 @@ export const supabaseService = {
         deliverables: Array.isArray(row.deliverables) ? row.deliverables : [],
         activeClientsCount: Number(row.active_clients_count) || 0,
       }));
-    } catch {
+    } catch (e: any) {
+      recordSyncFailure('FETCH_SERVICES', e?.message || e, e);
       return null;
     }
   },
@@ -855,7 +899,10 @@ export const supabaseService = {
   // ==================================================================
   async fetchProposals(): Promise<BudgetProposal[] | null> {
     const supabase = getSupabaseClient();
-    if (!supabase) return null;
+    if (!supabase) {
+      recordSyncFailure('FETCH_PROPOSALS', 'Supabase não inicializado ou credenciais ausentes no storage', undefined, 'WARNING');
+      return null;
+    }
 
     try {
       const { data, error } = await supabase
@@ -863,7 +910,10 @@ export const supabaseService = {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) return null;
+      if (error) {
+        recordSyncFailure('FETCH_PROPOSALS', error.message || error, { error });
+        return null;
+      }
 
       return (data || []).map((row: any): BudgetProposal => ({
         id: row.id,
@@ -875,7 +925,8 @@ export const supabaseService = {
         status: (row.status as any) || 'Rascunho',
         servicesCount: Number(row.services_count) || 0,
       }));
-    } catch {
+    } catch (e: any) {
+      recordSyncFailure('FETCH_PROPOSALS', e?.message || e, e);
       return null;
     }
   },
@@ -919,7 +970,10 @@ export const supabaseService = {
   // ==================================================================
   async fetchInvoices(): Promise<Invoice[] | null> {
     const supabase = getSupabaseClient();
-    if (!supabase) return null;
+    if (!supabase) {
+      recordSyncFailure('FETCH_INVOICES', 'Supabase não inicializado ou credenciais ausentes no storage', undefined, 'WARNING');
+      return null;
+    }
 
     try {
       const { data, error } = await supabase
@@ -927,7 +981,10 @@ export const supabaseService = {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) return null;
+      if (error) {
+        recordSyncFailure('FETCH_INVOICES', error.message || error, { error });
+        return null;
+      }
 
       return (data || []).map((row: any): Invoice => ({
         id: row.id,
@@ -940,7 +997,8 @@ export const supabaseService = {
         category: row.category || 'Geral',
         paymentMethod: row.payment_method || 'PIX',
       }));
-    } catch {
+    } catch (e: any) {
+      recordSyncFailure('FETCH_INVOICES', e?.message || e, e);
       return null;
     }
   },
@@ -985,7 +1043,10 @@ export const supabaseService = {
   // ==================================================================
   async fetchTeamMembers(): Promise<TeamMember[] | null> {
     const supabase = getSupabaseClient();
-    if (!supabase) return null;
+    if (!supabase) {
+      recordSyncFailure('FETCH_TEAM_MEMBERS', 'Supabase não inicializado ou credenciais ausentes no storage', undefined, 'WARNING');
+      return null;
+    }
 
     try {
       const { data, error } = await supabase
@@ -994,6 +1055,7 @@ export const supabaseService = {
         .order('created_at', { ascending: true });
 
       if (error) {
+        recordSyncFailure('FETCH_TEAM_MEMBERS', error.message || error, { error });
         console.warn('Erro ao buscar membros no Supabase:', error);
         return null;
       }
@@ -1028,7 +1090,8 @@ export const supabaseService = {
           createdAt: row.created_at || undefined,
         };
       });
-    } catch {
+    } catch (e: any) {
+      recordSyncFailure('FETCH_TEAM_MEMBERS', e?.message || e, e);
       return null;
     }
   },
@@ -1081,7 +1144,10 @@ export const supabaseService = {
   // ==================================================================
   async fetchKanbanColumns(): Promise<KanbanColumn[] | null> {
     const supabase = getSupabaseClient();
-    if (!supabase) return null;
+    if (!supabase) {
+      recordSyncFailure('FETCH_KANBAN_COLUMNS', 'Supabase não inicializado ou credenciais ausentes no storage', undefined, 'WARNING');
+      return null;
+    }
 
     try {
       const { data, error } = await supabase
@@ -1089,7 +1155,10 @@ export const supabaseService = {
         .select('*')
         .order('position_order', { ascending: true });
 
-      if (error) return null;
+      if (error) {
+        recordSyncFailure('FETCH_KANBAN_COLUMNS', error.message || error, { error });
+        return null;
+      }
 
       return (data || []).map((row: any): KanbanColumn => ({
         id: row.id,
@@ -1099,7 +1168,8 @@ export const supabaseService = {
         buttonBg: row.button_bg,
         isCustom: Boolean(row.is_custom),
       }));
-    } catch {
+    } catch (e: any) {
+      recordSyncFailure('FETCH_KANBAN_COLUMNS', e?.message || e, e);
       return null;
     }
   },

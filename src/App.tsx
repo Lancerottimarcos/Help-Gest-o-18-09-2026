@@ -235,7 +235,14 @@ export function Layout({ children, onLogout }: LayoutProps) {
   const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
 
   const handleSyncWithSupabase = useCallback(async (isSilent = false) => {
-    if (!supabaseService.isConfigured()) return;
+    if (!supabaseService.isConfigured()) {
+      serverDbService.recordSupabaseSyncError({
+        operation: 'SUPABASE_SYNC_CHECK',
+        error: 'Sincronização com Supabase pausada: credenciais não configuradas ou ausentes nesta sessão (guia anônima sem credenciais no localStorage)',
+        severity: 'WARNING',
+      });
+      return;
+    }
     if (!isSilent) setSupabaseSyncStatus('syncing');
 
     try {
@@ -348,7 +355,13 @@ export function Layout({ children, onLogout }: LayoutProps) {
 
       setIsSupabaseOnline(true);
       setSupabaseSyncStatus('synced');
-    } catch (err) {
+    } catch (err: any) {
+      serverDbService.recordSupabaseSyncError({
+        operation: 'FULL_SYNC_ALL_COLLECTIONS',
+        error: err?.message || err,
+        details: err,
+        severity: 'ERROR',
+      });
       console.warn('Erro ao sincronizar com Supabase:', err);
       setSupabaseSyncStatus('error');
     }
@@ -1703,8 +1716,8 @@ export function Layout({ children, onLogout }: LayoutProps) {
       case 'financeiro':
         return (
           <FinanceiroView
-            clients={clients}
-            invoices={invoices}
+            clients={clients || []}
+            invoices={invoices || []}
             onAddInvoice={handleAddInvoice}
             onToggleStatus={handleToggleInvoiceStatus}
             onDeleteInvoice={handleDeleteInvoice}

@@ -79,7 +79,7 @@ export const normalizeInvoice = (raw: any): Invoice => {
 };
 
 interface FinanceiroViewProps {
-  clients: Client[];
+  clients?: Client[];
   invoices?: Invoice[];
   onAddInvoice?: (newInvoice: Invoice) => void;
   onToggleStatus?: (id: string) => void;
@@ -88,19 +88,24 @@ interface FinanceiroViewProps {
 }
 
 export const FinanceiroView: React.FC<FinanceiroViewProps> = ({ 
-  clients, 
+  clients = [], 
   invoices: externalInvoices,
   onAddInvoice,
   onToggleStatus: externalToggleStatus,
   onDeleteInvoice: externalDeleteInvoice,
   onDeleteMultipleInvoices,
 }) => {
+  const safeClients = useMemo(() => {
+    if (!Array.isArray(clients)) return [];
+    return clients.filter((c): c is Client => Boolean(c && typeof c === 'object' && c.name));
+  }, [clients]);
+
   const [localInvoices, setLocalInvoices] = useState<Invoice[]>([]);
   
   const invoices = useMemo(() => {
     const list = externalInvoices !== undefined ? externalInvoices : localInvoices;
     if (!Array.isArray(list)) return [];
-    return list.map(normalizeInvoice);
+    return list.filter(Boolean).map(normalizeInvoice);
   }, [externalInvoices, localInvoices]);
 
   const [activeTab, setActiveTab] = useState<'all' | 'paid' | 'pending'>('all');
@@ -830,7 +835,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 <label className="block text-xs font-bold text-[#142142] dark:text-slate-200 mb-1.5">
                   Cliente *
                 </label>
-                {clients.length > 0 ? (
+                {safeClients.length > 0 ? (
                   <div className="space-y-2">
                     <select
                       value={newClient}
@@ -839,8 +844,8 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                       required
                     >
                       <option value="">Selecione um cliente cadastrado...</option>
-                      {clients.map(c => (
-                        <option key={c.id} value={c.name}>
+                      {safeClients.map(c => (
+                        <option key={c.id || c.name} value={c.name}>
                           {c.name} {c.companyName ? `(${c.companyName})` : ''}
                         </option>
                       ))}
