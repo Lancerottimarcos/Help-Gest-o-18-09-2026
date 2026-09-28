@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   TrendingUp, 
   ArrowUpRight, 
@@ -23,6 +23,61 @@ import {
 } from 'lucide-react';
 import { Client, Invoice } from '../types';
 
+export const normalizeInvoice = (raw: any): Invoice => {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      id: `FAT-${Date.now()}`,
+      client: 'Cliente',
+      service: 'Serviço da Agência',
+      value: 0,
+      dueDate: new Date().toLocaleDateString('pt-BR'),
+      status: 'Pendente',
+      category: 'Recorrência Mensal',
+      paymentMethod: 'PIX PJ Direto'
+    };
+  }
+
+  const rawVal = raw.value !== undefined ? raw.value : raw.amount;
+  const numVal = typeof rawVal === 'number' ? rawVal : (parseFloat(String(rawVal || 0).replace(/[^\d.-]/g, '')) || 0);
+
+  const clientName = String(raw.client || raw.clientName || 'Cliente').trim();
+  const serviceName = String(raw.service || raw.description || 'Serviço da Agência').trim();
+  const categoryName = String(raw.category || 'Recorrência Mensal').trim();
+  const method = String(raw.paymentMethod || 'PIX PJ Direto').trim();
+  
+  const rawStatus = String(raw.status || 'Pendente').trim().toLowerCase();
+  const isPaid = rawStatus === 'pago' || rawStatus === 'paga' || rawStatus === 'paid';
+  const status: 'Pago' | 'Pendente' = isPaid ? 'Pago' : 'Pendente';
+
+  const clientInitials = raw.clientInitial || clientName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w: string) => w[0]?.toUpperCase() || '')
+    .join('') || 'CL';
+
+  let rawDate = String(raw.dueDate || raw.issueDate || '').trim();
+  let formattedDate = rawDate;
+  if (rawDate && rawDate.includes('-')) {
+    const parts = rawDate.split('T')[0].split('-');
+    if (parts.length === 3) {
+      formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+  }
+
+  return {
+    id: String(raw.id || raw.code || `FAT-${Date.now()}`),
+    client: clientName,
+    clientInitial: clientInitials,
+    service: serviceName,
+    value: numVal,
+    dueDate: formattedDate || new Date().toLocaleDateString('pt-BR'),
+    status,
+    category: categoryName,
+    paymentMethod: method,
+  };
+};
+
 interface FinanceiroViewProps {
   clients: Client[];
   invoices?: Invoice[];
@@ -41,7 +96,12 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
   onDeleteMultipleInvoices,
 }) => {
   const [localInvoices, setLocalInvoices] = useState<Invoice[]>([]);
-  const invoices = externalInvoices !== undefined ? externalInvoices : localInvoices;
+  
+  const invoices = useMemo(() => {
+    const list = externalInvoices !== undefined ? externalInvoices : localInvoices;
+    if (!Array.isArray(list)) return [];
+    return list.map(normalizeInvoice);
+  }, [externalInvoices, localInvoices]);
 
   const [activeTab, setActiveTab] = useState<'all' | 'paid' | 'pending'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,6 +144,23 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
   const expenses = 0; // Despesas reais registradas
   const netProfit = totalPaid - expenses;
   const netMargin = totalPaid > 0 ? Math.round((netProfit / totalPaid) * 100) : 0;
+
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter(inv => {
+      if (activeTab === 'paid' && inv.status !== 'Pago') return false;
+      if (activeTab === 'pending' && inv.status !== 'Pendente') return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return (
+          (inv.client || '').toLowerCase().includes(q) ||
+          (inv.id || '').toLowerCase().includes(q) ||
+          (inv.service || '').toLowerCase().includes(q) ||
+          (inv.category || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [invoices, activeTab, searchQuery]);
 
   const handleCopyPix = (id: string) => {
     setCopiedId(id);
@@ -206,13 +283,13 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
     const headers = ['Código', 'Cliente', 'Serviço', 'Categoria', 'Forma Pagamento', 'Vencimento', 'Valor (R$)', 'Status'];
     const rows = invoices.map(i => [
       i.id,
-      `"${i.client.replace(/"/g, '""')}"`,
-      `"${i.service.replace(/"/g, '""')}"`,
-      i.category,
-      i.paymentMethod,
-      i.dueDate,
-      i.value.toFixed(2),
-      i.status
+      `"${(i.client || '').replace(/"/g, '""')}"`,
+      `"${(i.service || '').replace(/"/g, '""')}"`,
+      i.category || 'Recorrência',
+      i.paymentMethod || 'PIX Direto',
+      i.dueDate || '',
+      (i.value || 0).toFixed(2),
+      i.status || 'Pendente'
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' 
@@ -227,21 +304,6 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
     document.body.removeChild(link);
     showToast('Relatório financeiro exportado em CSV com sucesso!');
   };
-
-  const filteredInvoices = invoices.filter(inv => {
-    if (activeTab === 'paid' && inv.status !== 'Pago') return false;
-    if (activeTab === 'pending' && inv.status !== 'Pendente') return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return (
-        inv.client.toLowerCase().includes(q) ||
-        inv.id.toLowerCase().includes(q) ||
-        inv.service.toLowerCase().includes(q) ||
-        inv.category.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
 
   return (
     <div className="space-y-6">
@@ -580,10 +642,10 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                         </div>
                         <div className="text-right shrink-0">
                           <span className="text-sm font-black text-[#142142] dark:text-white block">
-                            R$ {inv.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            R$ {(inv.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
                           <span className="text-[10px] text-slate-400 font-medium">
-                            Venc: {new Date(`${inv.dueDate}T00:00:00`).toLocaleDateString('pt-BR')}
+                            Venc: {inv.dueDate}
                           </span>
                         </div>
                       </div>
@@ -685,7 +747,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                         {inv.dueDate}
                       </td>
                       <td className="p-4 font-mono font-black text-slate-900 dark:text-white tabular-nums text-sm">
-                        R$ {inv.value.toLocaleString('pt-BR')},00
+                        R$ {(inv.value || 0).toLocaleString('pt-BR')},00
                       </td>
                       <td className="p-4">
                         <button

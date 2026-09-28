@@ -153,6 +153,10 @@ async function startServer() {
         "teamMembers",
         "kanbanColumns",
         "updatedAt",
+        "masterPasswordHash",
+        "securityConfig",
+        "newMemberDefaultPermissions",
+        "collaboratorRules",
       ];
 
       // Mescla com os dados existentes se houver

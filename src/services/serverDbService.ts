@@ -9,6 +9,10 @@ export interface AppDatabasePayload {
   activities?: ClientActivity[];
   teamMembers?: TeamMember[];
   kanbanColumns?: KanbanColumn[];
+  masterPasswordHash?: string;
+  securityConfig?: any;
+  newMemberDefaultPermissions?: any;
+  collaboratorRules?: any;
   updatedAt?: number;
 }
 

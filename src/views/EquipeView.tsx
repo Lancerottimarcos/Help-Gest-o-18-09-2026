@@ -32,9 +32,10 @@ import {
 import { TeamMember, UserProfile, TeamFunctionOption } from '../types';
 import { initialTeamMembers } from '../data/mockData';
 import { ColaboradorModal, PREDEFINED_ROLES } from '../components/ColaboradorModal';
+import { RegraNovosColaboradoresModal } from '../components/RegraNovosColaboradoresModal';
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
 import { isOwnerOrMarcos } from '../utils/securityProtocols';
-import { getAccessLevelLabel, countBlockedPages } from '../utils/permissionUtils';
+import { getAccessLevelLabel, countBlockedPages, getDefaultNewMemberPermissions, MemberPermissions } from '../utils/permissionUtils';
 
 interface EquipeViewProps {
   teamMembers?: TeamMember[];
@@ -44,6 +45,7 @@ interface EquipeViewProps {
   currentUser?: UserProfile;
   onSimulateMember?: (member: TeamMember) => void;
   simulatedMemberId?: string;
+  onBulkUpdatePermissions?: (perms: MemberPermissions) => void;
 }
 
 export const EquipeView: React.FC<EquipeViewProps> = ({
@@ -54,6 +56,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
   currentUser,
   onSimulateMember,
   simulatedMemberId,
+  onBulkUpdatePermissions,
 }) => {
   // Local fallback if props are not provided
   const [localTeamMembers, setLocalTeamMembers] = useState<TeamMember[]>(initialTeamMembers);
@@ -68,6 +71,8 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [currentDefaultRule, setCurrentDefaultRule] = useState<MemberPermissions>(() => getDefaultNewMemberPermissions());
   const [memberToEdit, setMemberToEdit] = useState<TeamMember | null>(null);
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
   const [showRestrictedModal, setShowRestrictedModal] = useState(false);
@@ -140,6 +145,25 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
       }
       showNotification(`Colaborador ${member.name} cadastrado com sucesso!`);
     }
+  };
+
+  const handleApplyRuleToAllMembers = (rule: MemberPermissions) => {
+    if (!isMarcosLancerotti) return;
+    setCurrentDefaultRule(rule);
+    if (onBulkUpdatePermissions) {
+      onBulkUpdatePermissions(rule);
+    } else {
+      setLocalTeamMembers((prev) =>
+        prev.map((m) => {
+          if (isOwnerOrMarcos(m)) return m;
+          return {
+            ...m,
+            permissions: { ...rule },
+          };
+        })
+      );
+    }
+    showNotification('Regra de acesso aplicada a todos os colaboradores atuais!');
   };
 
   const handleConfirmDelete = () => {
@@ -507,8 +531,21 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
             </button>
           </div>
 
-          {/* Primary Action: Novo Colaborador */}
-          <div className="pl-1 sm:border-l sm:border-slate-200 dark:sm:border-slate-700 shrink-0">
+          {/* Primary Action: Novo Colaborador & Regra */}
+          <div className="pl-1 sm:border-l sm:border-slate-200 dark:sm:border-slate-700 shrink-0 flex items-center gap-2">
+            {isMarcosLancerotti && (
+              <button
+                type="button"
+                onClick={() => setIsRuleModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
+                title="Configurar a regra do que os novos colaboradores podem ou não fazer no sistema"
+              >
+                <SlidersHorizontal size={14} className="text-[#fab518]" />
+                <span className="hidden sm:inline">Configurar Regra</span>
+                <span className="sm:hidden">Regra</span>
+              </button>
+            )}
+
             {isMarcosLancerotti ? (
               <button
                 type="button"
@@ -545,27 +582,39 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
           <div className="text-xs">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-black text-[#142142] dark:text-white sm:text-sm">
-                Regra de Acesso de Novos Colaboradores Ativa
+                Regra de Acesso para Novos Colaboradores
               </span>
-              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
-                6 Páginas Bloqueadas por Padrão
+              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                countBlockedPages(currentDefaultRule) === 6
+                  ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-900'
+                  : 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-900'
+              }`}>
+                {countBlockedPages(currentDefaultRule)} Páginas Bloqueadas por Padrão
               </span>
             </div>
             <p className="text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-              Por segurança, novos membros adicionados não têm acesso a <strong>Clientes, Serviços, Financeiro, Orçamento, Equipe e Configurações</strong> até liberação explícita pelo administrador.
+              Por segurança, novos membros adicionados vêm com acesso bloqueado a <strong>Clientes, Serviços, Financeiro, Orçamento, Equipe e Configurações</strong> até liberação explícita pelo administrador.
             </p>
           </div>
         </div>
 
         {isMarcosLancerotti && (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsRuleModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-[#142142] dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+            >
+              <SlidersHorizontal size={13} className="text-[#fab518]" />
+              <span>Configurar Regra</span>
+            </button>
             <button
               type="button"
               onClick={handleOpenAddModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-[#142142] dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#fab518] hover:bg-[#e29f11] text-[#142142] text-xs font-black shadow-2xs transition-all cursor-pointer whitespace-nowrap"
             >
-              <Plus size={13} className="text-[#fab518]" />
-              <span>Novo com Regra Padrão</span>
+              <Plus size={13} className="stroke-[3]" />
+              <span>+ Novo Colaborador</span>
             </button>
           </div>
         )}
@@ -1190,6 +1239,24 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal for Setting Rules for New Collaborators */}
+      {isRuleModalOpen && (
+        <RegraNovosColaboradoresModal
+          isOpen={isRuleModalOpen}
+          onClose={() => setIsRuleModalOpen(false)}
+          onRuleSaved={(savedRule) => {
+            setCurrentDefaultRule(savedRule);
+            showNotification('Regra para novos colaboradores salva!');
+          }}
+          onApplyToAllMembers={handleApplyRuleToAllMembers}
+          onOpenAddMemberWithRule={() => {
+            setMemberToEdit(null);
+            setIsModalOpen(true);
+          }}
+          totalTeamMembersCount={currentMembers.length}
+        />
       )}
 
       {/* Modal for Add / Edit Colaborador */}

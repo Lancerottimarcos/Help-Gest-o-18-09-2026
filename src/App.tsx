@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, EyeOff } from 'lucide-react';
 import { PageId, DemandItem, Client, KanbanColumnId, ClientActivity, Service, TeamMember, KanbanColumn, BudgetProposal, Invoice, UserProfile, UserRole } from './types';
 import { initialDemands, initialClients, initialRecentActivities, initialServices, initialTeamMembers, initialProposals, initialInvoices, currentUser, kanbanColumnsData } from './data/mockData';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
+import { AccessDeniedView } from './components/AccessDeniedView';
+import { canAccessPage, getEffectivePermissions, MemberPermissions } from './utils/permissionUtils';
 import { InicioView } from './views/InicioView';
 import { DemandasView } from './views/DemandasView';
 import { ClientesView } from './views/ClientesView';
 import { ServicosView } from './views/ServicosView';
-import { FinanceiroView } from './views/FinanceiroView';
+import { FinanceiroView, normalizeInvoice } from './views/FinanceiroView';
 import { OrcamentosView } from './views/OrcamentosView';
 import { EquipeView } from './views/EquipeView';
 import { ConfiguracoesView } from './views/ConfiguracoesView';
@@ -114,10 +116,10 @@ export function Layout({ children, onLogout }: LayoutProps) {
       const saved = localStorage.getItem('agency_invoices');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return parsed.map(normalizeInvoice);
       }
     } catch {}
-    return initialInvoices;
+    return initialInvoices.map(normalizeInvoice);
   });
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
@@ -154,6 +156,24 @@ export function Layout({ children, onLogout }: LayoutProps) {
     } catch {}
     return currentUser;
   });
+
+  // Modo de simulação para testar visão dos colaboradores
+  const [simulatedMember, setSimulatedMember] = useState<TeamMember | null>(null);
+
+  const effectiveUser: UserProfile = useMemo(() => {
+    if (simulatedMember) {
+      return {
+        id: simulatedMember.id,
+        name: simulatedMember.name,
+        email: simulatedMember.email || `${simulatedMember.username || 'colaborador'}@ideiasdigitais.com.br`,
+        role: 'colaborador' as UserRole,
+        roleLabel: simulatedMember.role || 'Colaborador',
+        avatarUrl: simulatedMember.avatar,
+        permissions: getEffectivePermissions(simulatedMember),
+      };
+    }
+    return currentUserProfile;
+  }, [simulatedMember, currentUserProfile]);
 
   useEffect(() => {
     try {
@@ -338,22 +358,182 @@ export function Layout({ children, onLogout }: LayoutProps) {
   useEffect(() => {
     let isMounted = true;
 
+    const syncWithServerDb = async (_isSilent = true) => {
+      try {
+        const remoteData = await serverDbService.fetchDatabase();
+        if (!isMounted || !remoteData) return;
+
+        if (remoteData.clients && Array.isArray(remoteData.clients) && remoteData.clients.length > 0) {
+          setClients((prev) => {
+            if (
+              prev.length === remoteData.clients!.length &&
+              prev.every((p, idx) => p.id === remoteData.clients![idx]?.id && p.name === remoteData.clients![idx]?.name)
+            ) {
+              return prev;
+            }
+            try {
+              localStorage.setItem('agency_clients', JSON.stringify(remoteData.clients));
+            } catch {}
+            return remoteData.clients!;
+          });
+        }
+
+        if (remoteData.demands && Array.isArray(remoteData.demands) && remoteData.demands.length > 0) {
+          setDemands((prev) => {
+            if (
+              prev.length === remoteData.demands!.length &&
+              prev.every((p, idx) => p.id === remoteData.demands![idx]?.id && p.columnId === remoteData.demands![idx]?.columnId)
+            ) {
+              return prev;
+            }
+            try {
+              localStorage.setItem('agency_demands', JSON.stringify(remoteData.demands));
+            } catch {}
+            return remoteData.demands!;
+          });
+        }
+      } catch {}
+    };
+
     const initData = async () => {
       // Inicia sincronização direta com a nuvem Supabase
       handleSyncWithSupabase(false);
 
-      // Também busca do servidor de banco compartilhado (fallback redundante)
+      // Também busca do servidor de banco central compartilhado
       try {
         const remoteData = await serverDbService.fetchDatabase();
         if (!isMounted) return;
 
+        // Recupera dados gravados no localStorage deste navegador
+        let localClients: Client[] = [];
+        try {
+          const raw = localStorage.getItem('agency_clients');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) localClients = parsed;
+          }
+        } catch {}
+
+        let localDemands: DemandItem[] = [];
+        try {
+          const raw = localStorage.getItem('agency_demands');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) localDemands = parsed;
+          }
+        } catch {}
+
+        let localServices: Service[] = [];
+        try {
+          const raw = localStorage.getItem('agency_services');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) localServices = parsed;
+          }
+        } catch {}
+
+        let localProposals: BudgetProposal[] = [];
+        try {
+          const raw = localStorage.getItem('agency_proposals');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) localProposals = parsed;
+          }
+        } catch {}
+
+        let localInvoices: Invoice[] = [];
+        try {
+          const raw = localStorage.getItem('agency_invoices');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) localInvoices = parsed;
+          }
+        } catch {}
+
+        let localTeam: TeamMember[] = [];
+        try {
+          const raw = localStorage.getItem('agency_team_members');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) localTeam = parsed;
+          }
+        } catch {}
+
+        let localColumns: KanbanColumn[] = [];
+        try {
+          const raw = localStorage.getItem('agency_kanban_columns');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) localColumns = parsed;
+          }
+        } catch {}
+
+        let needsServerPush = false;
+        const pushPayload: any = {};
+
         if (remoteData) {
+          // 1. CLIENTES (Mescla e aplica dados reais)
           if (remoteData.clients && Array.isArray(remoteData.clients) && remoteData.clients.length > 0) {
-            setClients((prev) => (prev.length === 0 ? remoteData.clients! : prev));
+            const remoteMap = new Map(remoteData.clients.map((c) => [c.id, c]));
+            const mergedClients = [...remoteData.clients];
+            let hasNewLocal = false;
+
+            if (localClients.length > 0) {
+              for (const loc of localClients) {
+                if (!remoteMap.has(loc.id)) {
+                  mergedClients.push(loc);
+                  hasNewLocal = true;
+                }
+              }
+            }
+
+            const sanitizedClients = mergedClients.map((c) => (c.id === 'client-piloto-3405' ? { ...c, monthlyFee: 0 } : c));
+            setClients(sanitizedClients);
+            try {
+              localStorage.setItem('agency_clients', JSON.stringify(sanitizedClients));
+            } catch {}
+
+            if (hasNewLocal) {
+              needsServerPush = true;
+              pushPayload.clients = sanitizedClients;
+            }
+          } else if (localClients.length > 0) {
+            setClients(localClients);
+            needsServerPush = true;
+            pushPayload.clients = localClients;
           }
+
+          // 2. DEMANDAS (Mescla e aplica dados reais)
           if (remoteData.demands && Array.isArray(remoteData.demands) && remoteData.demands.length > 0) {
-            setDemands((prev) => (prev.length === 0 ? remoteData.demands! : prev));
+            const remoteDemandMap = new Map(remoteData.demands.map((d) => [d.id, d]));
+            const mergedDemands = [...remoteData.demands];
+            let hasNewLocalDemand = false;
+
+            if (localDemands.length > 0) {
+              for (const loc of localDemands) {
+                if (!remoteDemandMap.has(loc.id)) {
+                  mergedDemands.push(loc);
+                  hasNewLocalDemand = true;
+                }
+              }
+            }
+
+            setDemands(mergedDemands);
+            try {
+              localStorage.setItem('agency_demands', JSON.stringify(mergedDemands));
+            } catch {}
+
+            if (hasNewLocalDemand) {
+              needsServerPush = true;
+              pushPayload.demands = mergedDemands;
+            }
+          } else if (localDemands.length > 0) {
+            setDemands(localDemands);
+            needsServerPush = true;
+            pushPayload.demands = localDemands;
           }
+
+          // 3. EQUIPE (TEAM MEMBERS)
           if (remoteData.teamMembers && Array.isArray(remoteData.teamMembers) && remoteData.teamMembers.length > 0) {
             setTeamMembers((prevLocal) => {
               const merged = remoteData.teamMembers!.map((rm) => {
@@ -371,32 +551,74 @@ export function Layout({ children, onLogout }: LayoutProps) {
               return merged;
             });
           }
+
+          // 4. COLUNAS KANBAN
           if (remoteData.kanbanColumns && Array.isArray(remoteData.kanbanColumns) && remoteData.kanbanColumns.length > 0) {
             setKanbanColumns(remoteData.kanbanColumns);
             try {
               localStorage.setItem('agency_kanban_columns', JSON.stringify(remoteData.kanbanColumns));
             } catch {}
           }
+
+          // 5. ORÇAMENTOS (PROPOSALS)
           if (remoteData.proposals && Array.isArray(remoteData.proposals) && remoteData.proposals.length > 0) {
             setProposals(remoteData.proposals);
             try {
               localStorage.setItem('agency_proposals', JSON.stringify(remoteData.proposals));
             } catch {}
+          } else if (localProposals.length > 0) {
+            setProposals(localProposals);
+            needsServerPush = true;
+            pushPayload.proposals = localProposals;
           }
+
+          // 6. SERVIÇOS
           if (remoteData.services && Array.isArray(remoteData.services) && remoteData.services.length > 0) {
             setServices(remoteData.services);
             try {
               localStorage.setItem('agency_services', JSON.stringify(remoteData.services));
             } catch {}
+          } else if (localServices.length > 0) {
+            setServices(localServices);
+            needsServerPush = true;
+            pushPayload.services = localServices;
           }
+
+          // 7. FATURAS (INVOICES)
           if (remoteData.invoices && Array.isArray(remoteData.invoices) && remoteData.invoices.length > 0) {
-            setInvoices(remoteData.invoices);
+            const normalizedInvoices = remoteData.invoices.map(normalizeInvoice);
+            setInvoices(normalizedInvoices);
             try {
-              localStorage.setItem('agency_invoices', JSON.stringify(remoteData.invoices));
+              localStorage.setItem('agency_invoices', JSON.stringify(normalizedInvoices));
             } catch {}
+          } else if (localInvoices.length > 0) {
+            const normalizedInvoices = localInvoices.map(normalizeInvoice);
+            setInvoices(normalizedInvoices);
+            needsServerPush = true;
+            pushPayload.invoices = normalizedInvoices;
           }
+
+          if (needsServerPush && Object.keys(pushPayload).length > 0) {
+            serverDbService.saveDatabase(pushPayload, true);
+          }
+        } else {
+          // Servidor ainda sem dados: envia o estado deste navegador para popular a base central
+          serverDbService.saveDatabase(
+            {
+              clients: localClients.length > 0 ? localClients : undefined,
+              demands: localDemands.length > 0 ? localDemands : undefined,
+              services: localServices.length > 0 ? localServices : undefined,
+              proposals: localProposals.length > 0 ? localProposals : undefined,
+              invoices: localInvoices.length > 0 ? localInvoices : undefined,
+              teamMembers: localTeam.length > 0 ? localTeam : undefined,
+              kanbanColumns: localColumns.length > 0 ? localColumns : undefined,
+            },
+            true
+          );
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Erro ao inicializar base de dados centralizada:', err);
+      }
 
       if (isMounted) {
         isServerDbLoadedRef.current = true;
@@ -405,14 +627,16 @@ export function Layout({ children, onLogout }: LayoutProps) {
 
     initData();
 
-    // Sincronização periódica a cada 20 segundos para manter múltiplos computadores alinhados
+    // Sincronização periódica a cada 15 segundos para manter abas anônimas e múltiplos dispositivos alinhados
     const pollInterval = setInterval(() => {
       handleSyncWithSupabase(true);
-    }, 20000);
+      syncWithServerDb(true);
+    }, 15000);
 
-    // Sincroniza imediatamente quando a janela / aba do navegador ganha foco
+    // Sincroniza imediatamente quando a janela / aba do navegador ganha foco (ao alternar para guia anônima)
     const handleFocus = () => {
       handleSyncWithSupabase(true);
+      syncWithServerDb(true);
     };
     window.addEventListener('focus', handleFocus);
     window.addEventListener('visibilitychange', handleFocus);
@@ -791,7 +1015,14 @@ export function Layout({ children, onLogout }: LayoutProps) {
   };
 
   const handleAddDemand = (newDemand: DemandItem) => {
-    setDemands((prev) => [newDemand, ...prev]);
+    setDemands((prev) => {
+      const updated = [newDemand, ...prev];
+      try {
+        localStorage.setItem('agency_demands', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ demands: updated }, true);
+      return updated;
+    });
 
     // Sincroniza em background com o Supabase PostgreSQL
     supabaseService.upsertDemand(newDemand);
@@ -1075,12 +1306,26 @@ export function Layout({ children, onLogout }: LayoutProps) {
   };
 
   const handleDeleteDemand = (demandId: string) => {
-    setDemands((prev) => prev.filter((item) => item.id !== demandId));
+    setDemands((prev) => {
+      const updated = prev.filter((item) => item.id !== demandId);
+      try {
+        localStorage.setItem('agency_demands', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ demands: updated }, true);
+      return updated;
+    });
     supabaseService.deleteDemand(demandId);
   };
 
   const handleAddClient = (newClient: Client) => {
-    setClients((prev) => [newClient, ...prev]);
+    setClients((prev) => {
+      const updated = [newClient, ...prev];
+      try {
+        localStorage.setItem('agency_clients', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ clients: updated }, true);
+      return updated;
+    });
     supabaseService.upsertClient(newClient);
   };
 
@@ -1172,12 +1417,26 @@ export function Layout({ children, onLogout }: LayoutProps) {
   };
 
   const handleDeleteClient = (clientId: string) => {
-    setClients((prev) => prev.filter((c) => c.id !== clientId));
+    setClients((prev) => {
+      const updated = prev.filter((c) => c.id !== clientId);
+      try {
+        localStorage.setItem('agency_clients', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ clients: updated }, true);
+      return updated;
+    });
     supabaseService.deleteClient(clientId);
   };
 
   const handleDeleteMultipleClients = (clientIds: string[]) => {
-    setClients((prev) => prev.filter((c) => !clientIds.includes(c.id)));
+    setClients((prev) => {
+      const updated = prev.filter((c) => !clientIds.includes(c.id));
+      try {
+        localStorage.setItem('agency_clients', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ clients: updated }, true);
+      return updated;
+    });
     clientIds.forEach(id => supabaseService.deleteClient(id));
   };
 
@@ -1324,7 +1583,37 @@ export function Layout({ children, onLogout }: LayoutProps) {
     }
   };
 
+  const handleBulkUpdatePermissions = (newPermissions: MemberPermissions) => {
+    setTeamMembers((prev) => {
+      const updated = prev.map((m) => {
+        if (isOwnerOrMarcos(m)) return m;
+        return {
+          ...m,
+          permissions: { ...newPermissions },
+        };
+      });
+      try {
+        localStorage.setItem('agency_team_members', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ teamMembers: updated }, true);
+      return updated;
+    });
+  };
+
   const renderCurrentView = () => {
+    // Verificação de regras de acesso do sistema
+    if (!canAccessPage(currentPage, effectiveUser)) {
+      return (
+        <AccessDeniedView
+          page={currentPage}
+          user={effectiveUser}
+          onNavigate={setCurrentPage}
+          onExitSimulation={() => setSimulatedMember(null)}
+          isSimulating={Boolean(simulatedMember)}
+        />
+      );
+    }
+
     switch (currentPage) {
       case 'inicio':
         return (
@@ -1452,6 +1741,9 @@ export function Layout({ children, onLogout }: LayoutProps) {
             onUpdateTeamMember={handleUpdateTeamMember}
             onDeleteTeamMember={handleDeleteTeamMember}
             currentUser={currentUserProfile}
+            onSimulateMember={(member) => setSimulatedMember(member)}
+            simulatedMemberId={simulatedMember?.id}
+            onBulkUpdatePermissions={handleBulkUpdatePermissions}
           />
         );
       case 'configuracoes':
@@ -1536,7 +1828,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
         isCollapsed={isDesktopSidebarCollapsed}
         onToggleCollapse={() => setIsDesktopSidebarCollapsed((prev) => !prev)}
         onLogout={onLogout}
-        currentUser={currentUserProfile}
+        currentUser={effectiveUser}
       />
 
       {/* Main Workspace Column */}
@@ -1557,6 +1849,32 @@ export function Layout({ children, onLogout }: LayoutProps) {
           onRefreshSupabase={() => handleSyncWithSupabase(false)}
           clientsCount={clients.length}
         />
+
+        {/* Simulation Banner Notice if active */}
+        {simulatedMember && (
+          <div className="mx-3 sm:mx-4 mt-3 p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-[#fab518] text-[#142142] border border-amber-600/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#142142] text-[#fab518] flex items-center justify-center font-black shrink-0 shadow-xs">
+                <EyeOff size={16} />
+              </div>
+              <div className="text-xs">
+                <p className="font-black text-sm">
+                  Modo de Teste de Visão: {simulatedMember.name} ({simulatedMember.role})
+                </p>
+                <p className="text-[11px] text-[#142142]/90 font-medium">
+                  Você está visualizando a agência como este colaborador. As 6 páginas bloqueadas (Clientes, Serviços, Financeiro, Orçamento, Equipe, Configurações) exibirão a tela de acesso negado.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSimulatedMember(null)}
+              className="px-4 py-2 rounded-xl bg-[#142142] hover:bg-[#1e3060] text-white text-xs font-black transition-all cursor-pointer shadow-xs whitespace-nowrap self-start sm:self-auto"
+            >
+              Encerrar Teste de Visão
+            </button>
+          </div>
+        )}
 
         {/* Page Content Container */}
         <main

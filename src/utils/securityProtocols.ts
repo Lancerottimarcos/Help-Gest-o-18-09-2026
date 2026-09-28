@@ -997,11 +997,15 @@ export async function validateMasterCredentials(
   } catch {}
 
   // Se não houver equipe no localStorage deste computador, busca da base de dados centralizada do servidor
+  let serverMasterHash: string | null = null;
   if (!storedTeam) {
     try {
       const res = await fetch('/api/database');
       if (res.ok) {
         const json = await res.json();
+        if (json?.data?.masterPasswordHash) {
+          serverMasterHash = json.data.masterPasswordHash;
+        }
         if (json?.data?.teamMembers && Array.isArray(json.data.teamMembers) && json.data.teamMembers.length > 0) {
           team = json.data.teamMembers;
           try {
@@ -1036,9 +1040,9 @@ export async function validateMasterCredentials(
       }
     }
 
-    // Prioridade 2: Hash armazenado da senha mestra
-    if (!passwordMatched && savedHash) {
-      passwordMatched = inputHash === savedHash;
+    // Prioridade 2: Hash armazenado da senha mestra (local ou servidor central)
+    if (!passwordMatched && (savedHash || serverMasterHash)) {
+      passwordMatched = inputHash === savedHash || inputHash === serverMasterHash;
     }
 
     // Prioridade 3: Senha padrão de fábrica (521Spide#*)
@@ -1150,6 +1154,15 @@ export async function updateMasterPassword(newPassword: string): Promise<void> {
       source: 'Módulo de Gestão de Credenciais',
       threatDetails: 'Novo digest SHA-256 gerado e armazenado com segurança'
     });
+
+    // Sincroniza hash no banco central para que outros dispositivos e guias anônimas reconheçam
+    if (typeof window !== 'undefined' && window.fetch) {
+      fetch('/api/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ masterPasswordHash: newHash }),
+      }).catch(() => {});
+    }
   } catch {}
 }
 

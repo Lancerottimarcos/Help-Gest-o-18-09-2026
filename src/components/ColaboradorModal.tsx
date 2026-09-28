@@ -44,6 +44,7 @@ import {
   RestrictedPageKey,
   getEffectivePermissions,
   countBlockedPages,
+  getDefaultNewMemberPermissions,
 } from '../utils/permissionUtils';
 
 interface ColaboradorModalProps {
@@ -157,9 +158,7 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Regras de Acesso e Permissões (Padrão para novos colaboradores: páginas restritas bloqueadas)
-  const [permissions, setPermissions] = useState<MemberPermissions>({
-    ...DEFAULT_NEW_COLLABORATOR_PERMISSIONS,
-  });
+  const [permissions, setPermissions] = useState<MemberPermissions>(() => getDefaultNewMemberPermissions());
 
   const handleTogglePermission = (pageKey: RestrictedPageKey) => {
     if (isEditingOwner) return;
@@ -172,7 +171,7 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
   const handleApplyPreset = (preset: 'restrito' | 'lider' | 'total') => {
     if (isEditingOwner) return;
     if (preset === 'restrito') {
-      setPermissions({ ...DEFAULT_NEW_COLLABORATOR_PERMISSIONS });
+      setPermissions(getDefaultNewMemberPermissions());
     } else if (preset === 'lider') {
       setPermissions({ ...OPERATIONAL_LEADER_PERMISSIONS });
     } else {
@@ -292,7 +291,7 @@ export const ColaboradorModal: React.FC<ColaboradorModalProps> = ({
       setAvatar(randomAvatar);
       setCustomAvatarUrl('');
       setSpecialties(['Meta Ads', 'Google Ads']);
-      setPermissions({ ...DEFAULT_NEW_COLLABORATOR_PERMISSIONS });
+      setPermissions(getDefaultNewMemberPermissions());
       setFormError('');
     }
   }, [memberToEdit, isOpen]);
