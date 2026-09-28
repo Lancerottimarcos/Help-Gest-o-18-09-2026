@@ -163,11 +163,23 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
 
   const activeColumns = columns || localColumns;
 
+  // Sincroniza estado local com as colunas fornecidas pelo componente pai (App.tsx)
+  useEffect(() => {
+    if (columns && Array.isArray(columns) && columns.length > 0) {
+      setLocalColumns(columns);
+    }
+  }, [columns]);
+
   // Add/Edit column states
   const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
   const [columnToEdit, setColumnToEdit] = useState<KanbanColumn | null>(null);
   const [columnToDelete, setColumnToDelete] = useState<KanbanColumn | null>(null);
   const [columnMenuOpenId, setColumnMenuOpenId] = useState<string | null>(null);
+
+  // Quick inline rename column states
+  const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
+  const [editingColumnTitle, setEditingColumnTitle] = useState('');
+  const isSavingColumnTitleRef = useRef(false);
 
   // Quick inline creation state inside the Kanban board
   const [isInlineAdding, setIsInlineAdding] = useState(false);
@@ -278,35 +290,62 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     if (columnToEdit) {
       if (onUpdateColumn) {
         onUpdateColumn(newCol);
-      } else {
-        setLocalColumns((prev) => {
-          const updated = prev.map((c) => (c.id === newCol.id ? newCol : c));
-          try { localStorage.setItem('agency_kanban_columns', JSON.stringify(updated)); } catch {}
-          return updated;
-        });
       }
+      setLocalColumns((prev) => {
+        const updated = prev.map((c) => (c.id === newCol.id ? newCol : c));
+        try { localStorage.setItem('agency_kanban_columns', JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+      setColumnToEdit(null);
     } else {
       if (onAddColumn) {
         onAddColumn(newCol, insertBeforeConcluded);
-      } else {
-        setLocalColumns((prev) => {
-          let updated: KanbanColumn[];
-          if (insertBeforeConcluded) {
-            const concludedIdx = prev.findIndex((c) => c.id === 'concluidas');
-            if (concludedIdx !== -1) {
-              const copy = [...prev];
-              copy.splice(concludedIdx, 0, newCol);
-              updated = copy;
-            } else {
-              updated = [...prev, newCol];
-            }
+      }
+      setLocalColumns((prev) => {
+        let updated: KanbanColumn[];
+        if (insertBeforeConcluded) {
+          const concludedIdx = prev.findIndex((c) => c.id === 'concluidas');
+          if (concludedIdx !== -1) {
+            const copy = [...prev];
+            copy.splice(concludedIdx, 0, newCol);
+            updated = copy;
           } else {
             updated = [...prev, newCol];
           }
+        } else {
+          updated = [...prev, newCol];
+        }
+        try { localStorage.setItem('agency_kanban_columns', JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+    }
+  };
+
+  const handleSaveInlineTitle = (col: KanbanColumn) => {
+    if (isSavingColumnTitleRef.current) return;
+    isSavingColumnTitleRef.current = true;
+
+    try {
+      const trimmed = editingColumnTitle.trim();
+      if (trimmed && trimmed !== col.title) {
+        const updatedCol: KanbanColumn = {
+          ...col,
+          title: trimmed,
+        };
+        if (onUpdateColumn) {
+          onUpdateColumn(updatedCol);
+        }
+        setLocalColumns((prev) => {
+          const updated = prev.map((c) => (c.id === col.id ? updatedCol : c));
           try { localStorage.setItem('agency_kanban_columns', JSON.stringify(updated)); } catch {}
           return updated;
         });
       }
+    } finally {
+      setEditingColumnId(null);
+      setTimeout(() => {
+        isSavingColumnTitleRef.current = false;
+      }, 150);
     }
   };
 
@@ -1207,18 +1246,88 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                   >
                     {/* Column Header */}
                     <div className="flex items-center justify-between gap-2 mb-2 px-0.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
-                          style={{ backgroundColor: col.color }}
-                        />
-                        <h3 className="text-xs sm:text-[13px] font-black text-[#142142] dark:text-white tracking-tight truncate">
-                          {col.title}
-                        </h3>
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0 tabular-nums">
-                          {columnDemands.length}
-                        </span>
-                      </div>
+                      {editingColumnId === col.id ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleSaveInlineTitle(col);
+                          }}
+                          className="flex items-center gap-1 flex-1 min-w-0"
+                        >
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingColumnTitle}
+                            onChange={(e) => setEditingColumnTitle(e.target.value)}
+                            onBlur={() => handleSaveInlineTitle(col)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.stopPropagation();
+                                setEditingColumnId(null);
+                              }
+                            }}
+                            className="w-full px-2 py-0.5 text-xs sm:text-[13px] font-black text-[#142142] dark:text-white bg-white dark:bg-slate-800 border-2 border-[#fab518] rounded-md shadow-xs focus:outline-none"
+                            placeholder="Nome da coluna..."
+                          />
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSaveInlineTitle(col);
+                            }}
+                            className="p-1 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white shrink-0 cursor-pointer shadow-xs transition-colors"
+                            title="Salvar nome da coluna"
+                            aria-label="Salvar"
+                          >
+                            <Check size={12} className="stroke-[3]" />
+                          </button>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setEditingColumnId(null);
+                            }}
+                            className="p-1 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 shrink-0 cursor-pointer transition-colors"
+                            title="Cancelar edição"
+                            aria-label="Cancelar"
+                          >
+                            <X size={12} className="stroke-[2.5]" />
+                          </button>
+                        </form>
+                      ) : (
+                        <div 
+                          className="flex items-center gap-2 min-w-0 group/title cursor-pointer"
+                          onDoubleClick={() => {
+                            setEditingColumnId(col.id);
+                            setEditingColumnTitle(col.title);
+                          }}
+                          title="Clique duas vezes para renomear rápido"
+                        >
+                          <span
+                            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                            style={{ backgroundColor: col.color }}
+                          />
+                          <h3 className="text-xs sm:text-[13px] font-black text-[#142142] dark:text-white tracking-tight truncate group-hover/title:text-[#fab518] transition-colors">
+                            {col.title}
+                          </h3>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingColumnId(col.id);
+                              setEditingColumnTitle(col.title);
+                            }}
+                            className="opacity-0 group-hover/title:opacity-100 p-0.5 text-slate-400 hover:text-[#fab518] transition-all cursor-pointer"
+                            title="Renomear coluna"
+                            aria-label="Renomear coluna"
+                          >
+                            <Edit size={11} />
+                          </button>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0 tabular-nums">
+                            {columnDemands.length}
+                          </span>
+                        </div>
+                      )}
 
                       <div className="flex items-center gap-0.5 shrink-0">
                         <button
@@ -1253,7 +1362,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                                 className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer transition-colors"
                               >
                                 <Edit size={13} className="text-slate-400" />
-                                <span>Editar Coluna</span>
+                                <span>Renomear / Editar Coluna</span>
                               </button>
 
                               <button

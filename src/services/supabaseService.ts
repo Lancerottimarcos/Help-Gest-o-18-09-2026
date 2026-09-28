@@ -549,6 +549,13 @@ async function resilientSupabaseUpsert(
   return { data: null, error: new Error(`Não foi possível ajustar o payload para a tabela ${tableName}`) };
 }
 
+const LEGACY_COLUMN_ALIASES: Record<string, string> = {
+  pauta: 'ideias',
+  'col-em-produ--o-5023': 'producao',
+  'col-aprova--o-8870': 'aprovacao',
+  'col-conclu-do-7806': 'concluidas',
+};
+
 export const supabaseService = {
   isAvailable(): boolean {
     return getSupabaseClient() !== null;
@@ -581,37 +588,42 @@ export const supabaseService = {
         return null;
       }
 
-      return (data || []).map((row: any): DemandItem => ({
-        id: row.id,
-        title: row.title,
-        client: row.client_name,
-        clientId: row.client_id || undefined,
-        clientProject: row.client_project || undefined,
-        description: row.description || '',
-        type: row.type || 'Post',
-        serviceCategory: row.service_category || 'Social Media',
-        columnId: row.column_id || 'ideias',
-        priority: row.priority || 'media',
-        priorityBars: row.priority_bars ?? 2,
-        dueDate: row.due_date || 'Sem prazo',
-        assignee: row.assignee || {
-          name: 'Marcos Lancerotti',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        },
-        thumbnail: row.thumbnail || undefined,
-        statusLabel: row.status_label || undefined,
-        checklistTotal: row.checklist_total ?? 0,
-        checklistCompleted: row.checklist_completed ?? 0,
-        commentsCount: row.comments_count ?? 0,
-        attachmentsCount: row.attachments_count ?? 0,
-        approvalStatus: row.approval_status || undefined,
-        approvalFeedback: row.approval_feedback || undefined,
-        approvalSentAt: row.approval_sent_at || undefined,
-        approvalAnsweredAt: row.approval_answered_at || undefined,
-        clientPortalToken: row.client_portal_token || undefined,
-        whatsappNotified: Boolean(row.whatsapp_notified),
-        attachments: row.attachments || [],
-      }));
+      return (data || []).map((row: any): DemandItem => {
+        const rawCol = row.column_id || 'ideias';
+        const resolvedCol = LEGACY_COLUMN_ALIASES[rawCol] || rawCol;
+
+        return {
+          id: row.id,
+          title: row.title,
+          client: row.client_name,
+          clientId: row.client_id || undefined,
+          clientProject: row.client_project || undefined,
+          description: row.description || '',
+          type: row.type || 'Post',
+          serviceCategory: row.service_category || 'Social Media',
+          columnId: resolvedCol,
+          priority: row.priority || 'media',
+          priorityBars: row.priority_bars ?? 2,
+          dueDate: row.due_date || 'Sem prazo',
+          assignee: row.assignee || {
+            name: 'Marcos Lancerotti',
+            avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          },
+          thumbnail: row.thumbnail || undefined,
+          statusLabel: row.status_label || undefined,
+          checklistTotal: row.checklist_total ?? 0,
+          checklistCompleted: row.checklist_completed ?? 0,
+          commentsCount: row.comments_count ?? 0,
+          attachmentsCount: row.attachments_count ?? 0,
+          approvalStatus: row.approval_status || undefined,
+          approvalFeedback: row.approval_feedback || undefined,
+          approvalSentAt: row.approval_sent_at || undefined,
+          approvalAnsweredAt: row.approval_answered_at || undefined,
+          clientPortalToken: row.client_portal_token || undefined,
+          whatsappNotified: Boolean(row.whatsapp_notified),
+          attachments: row.attachments || [],
+        };
+      });
     } catch (e: any) {
       recordSyncFailure('FETCH_DEMANDS', e?.message || e, e);
       console.warn('Exceção ao buscar demandas no Supabase (modo offline):', e?.message || e);
@@ -677,8 +689,13 @@ export const supabaseService = {
 
     try {
       const { error } = await supabase.from('demands').delete().eq('id', id);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('DELETE_DEMAND', error.message || error, { id, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('DELETE_DEMAND', e?.message || e, { id, error: e });
       return false;
     }
   },
@@ -817,8 +834,13 @@ export const supabaseService = {
 
     try {
       const { error } = await supabase.from('clients').delete().eq('id', id);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('DELETE_CLIENT', error.message || error, { id, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('DELETE_CLIENT', e?.message || e, { id, error: e });
       return false;
     }
   },
@@ -877,8 +899,13 @@ export const supabaseService = {
         updated_at: new Date().toISOString(),
       };
       const { error } = await resilientSupabaseUpsert(supabase, 'services', payload);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('UPSERT_SERVICE', error.message || error, { service, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('UPSERT_SERVICE', e?.message || e, { service, error: e });
       return false;
     }
   },
@@ -888,8 +915,13 @@ export const supabaseService = {
     if (!supabase) return false;
     try {
       const { error } = await supabase.from('services').delete().eq('id', id);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('DELETE_SERVICE', error.message || error, { id, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('DELETE_SERVICE', e?.message || e, { id, error: e });
       return false;
     }
   },
@@ -948,8 +980,13 @@ export const supabaseService = {
         updated_at: new Date().toISOString(),
       };
       const { error } = await resilientSupabaseUpsert(supabase, 'proposals', payload);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('UPSERT_PROPOSAL', error.message || error, { proposal, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('UPSERT_PROPOSAL', e?.message || e, { proposal, error: e });
       return false;
     }
   },
@@ -959,8 +996,13 @@ export const supabaseService = {
     if (!supabase) return false;
     try {
       const { error } = await supabase.from('proposals').delete().eq('id', id);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('DELETE_PROPOSAL', error.message || error, { id, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('DELETE_PROPOSAL', e?.message || e, { id, error: e });
       return false;
     }
   },
@@ -1021,8 +1063,13 @@ export const supabaseService = {
         updated_at: new Date().toISOString(),
       };
       const { error } = await resilientSupabaseUpsert(supabase, 'invoices', payload);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('UPSERT_INVOICE', error.message || error, { invoice, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('UPSERT_INVOICE', e?.message || e, { invoice, error: e });
       return false;
     }
   },
@@ -1032,8 +1079,13 @@ export const supabaseService = {
     if (!supabase) return false;
     try {
       const { error } = await supabase.from('invoices').delete().eq('id', id);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('DELETE_INVOICE', error.message || error, { id, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('DELETE_INVOICE', e?.message || e, { id, error: e });
       return false;
     }
   },
@@ -1116,8 +1168,13 @@ export const supabaseService = {
         created_by: member.createdBy || null,
       };
       const { error } = await resilientSupabaseUpsert(supabase, 'team_members', payload);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('UPSERT_TEAM_MEMBER', error.message || error, { member, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('UPSERT_TEAM_MEMBER', e?.message || e, { member, error: e });
       return false;
     }
   },
@@ -1133,8 +1190,13 @@ export const supabaseService = {
     if (!supabase) return false;
     try {
       const { error } = await supabase.from('team_members').delete().eq('id', id);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('DELETE_TEAM_MEMBER', error.message || error, { id, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('DELETE_TEAM_MEMBER', e?.message || e, { id, error: e });
       return false;
     }
   },
@@ -1182,14 +1244,45 @@ export const supabaseService = {
       const payload = {
         id: column.id,
         title: column.title,
-        color: column.color,
-        button_bg: column.buttonBg,
+        color: column.color || '#FAB518',
+        button_bg: column.buttonBg || 'bg-amber-500 hover:bg-amber-600',
         is_custom: Boolean(column.isCustom),
         position_order: positionOrder,
       };
       const { error } = await resilientSupabaseUpsert(supabase, 'kanban_columns', payload);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('UPSERT_KANBAN_COLUMN', error.message || error, { column, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('UPSERT_KANBAN_COLUMN', e?.message || e, { column, error: e });
+      return false;
+    }
+  },
+
+  async syncAllKanbanColumns(columns: KanbanColumn[]): Promise<boolean> {
+    const supabase = getSupabaseClient();
+    if (!supabase || !Array.isArray(columns) || columns.length === 0) return false;
+
+    try {
+      const payloads = columns.map((col, idx) => ({
+        id: col.id,
+        title: col.title,
+        color: col.color || '#FAB518',
+        button_bg: col.buttonBg || 'bg-amber-500 hover:bg-amber-600',
+        is_custom: Boolean(col.isCustom),
+        position_order: idx + 1,
+      }));
+
+      const { error } = await resilientSupabaseUpsert(supabase, 'kanban_columns', payloads);
+      if (error) {
+        recordSyncFailure('SYNC_ALL_KANBAN_COLUMNS', error.message || error, { error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('SYNC_ALL_KANBAN_COLUMNS', e?.message || e, e);
       return false;
     }
   },
@@ -1199,8 +1292,13 @@ export const supabaseService = {
     if (!supabase) return false;
     try {
       const { error } = await supabase.from('kanban_columns').delete().eq('id', id);
-      return !error;
-    } catch {
+      if (error) {
+        recordSyncFailure('DELETE_KANBAN_COLUMN', error.message || error, { id, error });
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      recordSyncFailure('DELETE_KANBAN_COLUMN', e?.message || e, { id, error: e });
       return false;
     }
   },

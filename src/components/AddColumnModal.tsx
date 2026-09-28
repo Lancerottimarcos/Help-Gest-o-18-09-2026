@@ -66,7 +66,7 @@ export const AddColumnModal: React.FC<AddColumnModalProps> = ({
       count: columnToEdit ? columnToEdit.count : 0,
       color: selectedPreset.color,
       buttonBg: selectedPreset.buttonBg,
-      isCustom: true,
+      isCustom: columnToEdit ? (columnToEdit.isCustom ?? false) : true,
     };
 
     onSaveColumn(newColumn, !columnToEdit && position === 'before-concluded');

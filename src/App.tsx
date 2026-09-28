@@ -347,10 +347,31 @@ export function Layout({ children, onLogout }: LayoutProps) {
 
       // Se o Supabase tiver colunas do kanban personalizadas
       if (remoteColumns && Array.isArray(remoteColumns) && remoteColumns.length > 0) {
-        setKanbanColumns(remoteColumns);
-        try {
-          localStorage.setItem('agency_kanban_columns', JSON.stringify(remoteColumns));
-        } catch {}
+        setKanbanColumns((prevColumns) => {
+          if (prevColumns && prevColumns.length > 0) {
+            const remoteMap = new Map(remoteColumns.map(rc => [rc.id, rc]));
+            const merged = prevColumns.map(lc => {
+              const remote = remoteMap.get(lc.id);
+              return remote ? { ...remote, ...lc, title: lc.title || remote.title } : lc;
+            });
+            remoteColumns.forEach(rc => {
+              if (!merged.some(m => m.id === rc.id)) {
+                merged.push(rc);
+              }
+            });
+            try {
+              localStorage.setItem('agency_kanban_columns', JSON.stringify(merged));
+            } catch {}
+            serverDbService.saveDatabase({ kanbanColumns: merged });
+            return merged;
+          }
+
+          try {
+            localStorage.setItem('agency_kanban_columns', JSON.stringify(remoteColumns));
+          } catch {}
+          serverDbService.saveDatabase({ kanbanColumns: remoteColumns });
+          return remoteColumns;
+        });
       }
 
       setIsSupabaseOnline(true);
@@ -403,6 +424,21 @@ export function Layout({ children, onLogout }: LayoutProps) {
               localStorage.setItem('agency_demands', JSON.stringify(remoteData.demands));
             } catch {}
             return remoteData.demands!;
+          });
+        }
+
+        if (remoteData.kanbanColumns && Array.isArray(remoteData.kanbanColumns) && remoteData.kanbanColumns.length > 0) {
+          setKanbanColumns((prev) => {
+            if (
+              prev.length === remoteData.kanbanColumns!.length &&
+              prev.every((p, idx) => p.id === remoteData.kanbanColumns![idx]?.id && p.title === remoteData.kanbanColumns![idx]?.title)
+            ) {
+              return prev;
+            }
+            try {
+              localStorage.setItem('agency_kanban_columns', JSON.stringify(remoteData.kanbanColumns));
+            } catch {}
+            return remoteData.kanbanColumns!;
           });
         }
       } catch {}
@@ -567,10 +603,33 @@ export function Layout({ children, onLogout }: LayoutProps) {
 
           // 4. COLUNAS KANBAN
           if (remoteData.kanbanColumns && Array.isArray(remoteData.kanbanColumns) && remoteData.kanbanColumns.length > 0) {
-            setKanbanColumns(remoteData.kanbanColumns);
-            try {
-              localStorage.setItem('agency_kanban_columns', JSON.stringify(remoteData.kanbanColumns));
-            } catch {}
+            if (localColumns.length > 0) {
+              const remoteMap = new Map(remoteData.kanbanColumns.map(rc => [rc.id, rc]));
+              const merged = localColumns.map(lc => {
+                const rem = remoteMap.get(lc.id);
+                return rem ? { ...rem, ...lc, title: lc.title || rem.title } : lc;
+              });
+              remoteData.kanbanColumns.forEach(rc => {
+                if (!merged.some(m => m.id === rc.id)) {
+                  merged.push(rc);
+                }
+              });
+              setKanbanColumns(merged);
+              needsServerPush = true;
+              pushPayload.kanbanColumns = merged;
+              try {
+                localStorage.setItem('agency_kanban_columns', JSON.stringify(merged));
+              } catch {}
+            } else {
+              setKanbanColumns(remoteData.kanbanColumns);
+              try {
+                localStorage.setItem('agency_kanban_columns', JSON.stringify(remoteData.kanbanColumns));
+              } catch {}
+            }
+          } else if (localColumns.length > 0) {
+            setKanbanColumns(localColumns);
+            needsServerPush = true;
+            pushPayload.kanbanColumns = localColumns;
           }
 
           // 5. ORÇAMENTOS (PROPOSALS)
@@ -805,6 +864,17 @@ export function Layout({ children, onLogout }: LayoutProps) {
     return kanbanColumnsData;
   });
 
+  useEffect(() => {
+    if (kanbanColumns && kanbanColumns.length > 0) {
+      try {
+        localStorage.setItem('agency_kanban_columns', JSON.stringify(kanbanColumns));
+      } catch {}
+      if (isServerDbLoadedRef.current) {
+        serverDbService.saveDatabase({ kanbanColumns });
+      }
+    }
+  }, [kanbanColumns]);
+
   const handleAddColumn = (newCol: KanbanColumn, insertBeforeConcluded = false) => {
     setKanbanColumns((prev) => {
       let updated: KanbanColumn[];
@@ -823,11 +893,13 @@ export function Layout({ children, onLogout }: LayoutProps) {
       try {
         localStorage.setItem('agency_kanban_columns', JSON.stringify(updated));
       } catch {}
+      serverDbService.saveDatabase({ kanbanColumns: updated }, true);
+
+      if (supabaseService.isConfigured()) {
+        supabaseService.syncAllKanbanColumns(updated);
+      }
       return updated;
     });
-    if (supabaseService.isConfigured()) {
-      supabaseService.upsertKanbanColumn(newCol);
-    }
   };
 
   const handleUpdateColumn = (updatedCol: KanbanColumn) => {
@@ -836,11 +908,13 @@ export function Layout({ children, onLogout }: LayoutProps) {
       try {
         localStorage.setItem('agency_kanban_columns', JSON.stringify(updated));
       } catch {}
+      serverDbService.saveDatabase({ kanbanColumns: updated }, true);
+
+      if (supabaseService.isConfigured()) {
+        supabaseService.syncAllKanbanColumns(updated);
+      }
       return updated;
     });
-    if (supabaseService.isConfigured()) {
-      supabaseService.upsertKanbanColumn(updatedCol);
-    }
   };
 
   const handleDeleteColumn = (colId: string) => {
@@ -849,15 +923,23 @@ export function Layout({ children, onLogout }: LayoutProps) {
       try {
         localStorage.setItem('agency_kanban_columns', JSON.stringify(updated));
       } catch {}
+      serverDbService.saveDatabase({ kanbanColumns: updated }, true);
+
+      if (supabaseService.isConfigured()) {
+        supabaseService.deleteKanbanColumn(colId);
+        supabaseService.syncAllKanbanColumns(updated);
+      }
       return updated;
     });
-    if (supabaseService.isConfigured()) {
-      supabaseService.deleteKanbanColumn(colId);
-    }
     // Move any demands in this deleted column to 'ideias'
-    setDemands((prev) =>
-      prev.map((d) => (d.columnId === colId ? { ...d, columnId: 'ideias' } : d))
-    );
+    setDemands((prev) => {
+      const updated = prev.map((d) => (d.columnId === colId ? { ...d, columnId: 'ideias' } : d));
+      try {
+        localStorage.setItem('agency_demands', JSON.stringify(updated));
+      } catch {}
+      serverDbService.saveDatabase({ demands: updated }, true);
+      return updated;
+    });
   };
 
   // Client Approval & WhatsApp Notification Modal States
@@ -2292,6 +2374,14 @@ export default function App() {
     try {
       localStorage.setItem('agency_demands', JSON.stringify(updated));
     } catch {}
+
+    // Salva imediatamente no banco central do servidor
+    serverDbService.saveDatabase({ demands: updated }, true);
+
+    const updatedTarget = updated.find((d) => d.id === demandId);
+    if (updatedTarget && supabaseService.isConfigured()) {
+      supabaseService.upsertDemand(updatedTarget);
+    }
 
     if (target) {
       if (action === 'aprovado') {
