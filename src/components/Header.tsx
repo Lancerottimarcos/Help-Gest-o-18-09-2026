@@ -148,6 +148,26 @@ const PAGE_TITLES: Record<PageId, { title: string; subtitle: string }> = {
     title: 'Portal do Cliente & Aprovações',
     subtitle: 'Gerencie envios de materiais, links exclusivos e aprovações em tempo real',
   },
+  apis: {
+    title: 'APIs & Consultas Oficiais',
+    subtitle: 'Consulta em tempo real de CNPJ na Receita Federal e auto-preenchimento cadastral',
+  },
+  producao: {
+    title: 'Produção & Serviços',
+    subtitle: 'Catálogo de serviços, calendário editorial e consultas de APIs',
+  },
+  comunicacao: {
+    title: 'Comunicação & Mensagens',
+    subtitle: 'Chat interno da equipe em tempo real para alinhamento e envio de mensagens',
+  },
+  gestao: {
+    title: 'Gestão da Agência',
+    subtitle: 'Financeiro, orçamentos comerciais e gestão da equipe',
+  },
+  agenda: {
+    title: 'Agenda & Google Calendar',
+    subtitle: 'Gestão de reuniões, briefings com clientes e videoconferências sincronizadas',
+  },
 };
 
 export const Header: React.FC<HeaderProps> = ({

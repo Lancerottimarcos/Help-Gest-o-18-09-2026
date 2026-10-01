@@ -312,7 +312,7 @@ export const WhatsAppNotificationModal: React.FC<WhatsAppNotificationModalProps>
                       setMessageText(updated);
                     }}
                     placeholder="Nome do cliente"
-                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl px-2.5 py-1.5 text-xs font-normal font-sofia-regular text-[#142142] dark:text-white focus:outline-none focus:border-[#128C7E]"
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl px-2.5 py-1.5 text-xs font-normal font-lufga-regular text-[#142142] dark:text-white focus:outline-none focus:border-[#128C7E]"
                   />
                 </div>
 
@@ -328,7 +328,7 @@ export const WhatsAppNotificationModal: React.FC<WhatsAppNotificationModalProps>
                       value={customPhone}
                       onChange={(e) => setCustomPhone(e.target.value)}
                       placeholder="(11) 98765-4321"
-                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl pl-8 pr-2.5 py-1.5 text-xs font-normal font-sofia-regular text-[#142142] dark:text-white focus:outline-none focus:border-[#128C7E]"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl pl-8 pr-2.5 py-1.5 text-xs font-normal font-lufga-regular text-[#142142] dark:text-white focus:outline-none focus:border-[#128C7E]"
                     />
                   </div>
                 </div>
@@ -423,7 +423,7 @@ export const WhatsAppNotificationModal: React.FC<WhatsAppNotificationModalProps>
                   rows={7}
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-800 rounded-xl p-3 shadow-xs text-xs font-normal font-sofia-regular text-[#111B21] dark:text-slate-100 leading-relaxed border-l-4 border-[#25D366] focus:outline-none focus:ring-1 focus:ring-[#128C7E] resize-y"
+                  className="w-full bg-white dark:bg-slate-800 rounded-xl p-3 shadow-xs text-xs font-normal font-lufga-regular text-[#111B21] dark:text-slate-100 leading-relaxed border-l-4 border-[#25D366] focus:outline-none focus:ring-1 focus:ring-[#128C7E] resize-y"
                   placeholder="Mensagem para o WhatsApp..."
                 />
 

@@ -1,63 +1,151 @@
 @import "tailwindcss";
 
-@import url('https://fonts.cdnfonts.com/css/sofia-pro');
+/* ==========================================================================
+   Lufga Font Family Declarations (Light 300, Regular 400, SemiBold 600, Bold 700)
+   ========================================================================== */
 
-/* Sofia Pro Font Family Declarations */
+/* Lufga Light (Weight 300) */
+@font-face {
+  font-family: 'Lufga';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: local('Lufga Light'), local('Lufga-Light'),
+       url('/fonts/Lufga-Light.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/1ddf17687f8773fda121f4ef0e6a9885.woff2') format('woff2');
+}
+
+/* Lufga Regular (Weight 400) */
+@font-face {
+  font-family: 'Lufga';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lufga Regular'), local('Lufga-Regular'), local('Lufga'),
+       url('/fonts/Lufga-Regular.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/9df35b2045f6e32dcfa5bbc421ed05b1.woff2') format('woff2');
+}
+
+/* Lufga Medium / SemiBold (Weight 500 & 600) */
+@font-face {
+  font-family: 'Lufga';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: local('Lufga SemiBold'), local('Lufga-SemiBold'), local('Lufga Medium'),
+       url('/fonts/Lufga-SemiBold.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/1e053b4805d075f403dd3e44a3d4ec31.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lufga';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Lufga SemiBold'), local('Lufga-SemiBold'), local('Lufga-Semi-Bold'),
+       url('/fonts/Lufga-SemiBold.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/1e053b4805d075f403dd3e44a3d4ec31.woff2') format('woff2');
+}
+
+/* Lufga Bold (Weight 700, 800, 900) */
+@font-face {
+  font-family: 'Lufga';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lufga Bold'), local('Lufga-Bold'),
+       url('/fonts/Lufga-Bold.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/adecc4bca5b2a9687481c342a4fe9f40.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lufga';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: local('Lufga Bold'), local('Lufga-Bold'),
+       url('/fonts/Lufga-Bold.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/adecc4bca5b2a9687481c342a4fe9f40.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lufga';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: local('Lufga Bold'), local('Lufga-Bold'),
+       url('/fonts/Lufga-Bold.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/adecc4bca5b2a9687481c342a4fe9f40.woff2') format('woff2');
+}
+
+/* ==========================================================================
+   Explicit Named Font-Family Aliases for Lufga Light, Regular, SemiBold & Bold
+   ========================================================================== */
+@font-face {
+  font-family: 'Lufga Light';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: local('Lufga Light'), local('Lufga-Light'),
+       url('/fonts/Lufga-Light.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/1ddf17687f8773fda121f4ef0e6a9885.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lufga Regular';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lufga Regular'), local('Lufga-Regular'), local('Lufga'),
+       url('/fonts/Lufga-Regular.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/9df35b2045f6e32dcfa5bbc421ed05b1.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lufga Semibold';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Lufga SemiBold'), local('Lufga-SemiBold'),
+       url('/fonts/Lufga-SemiBold.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/1e053b4805d075f403dd3e44a3d4ec31.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lufga SemiBold';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Lufga SemiBold'), local('Lufga-SemiBold'),
+       url('/fonts/Lufga-SemiBold.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/1e053b4805d075f403dd3e44a3d4ec31.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lufga Bold';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lufga Bold'), local('Lufga-Bold'),
+       url('/fonts/Lufga-Bold.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/adecc4bca5b2a9687481c342a4fe9f40.woff2') format('woff2');
+}
+
+/* Backward-compatibility aliases for legacy font calls */
 @font-face {
   font-family: 'Sofia Pro';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: local('Sofia Pro Regular'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Regular Az.woff') format('woff');
+  src: local('Lufga Regular'), local('Lufga-Regular'), url('/fonts/Lufga-Regular.woff2') format('woff2');
 }
 
-@font-face {
-  font-family: 'Sofia Pro';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: local('Sofia Pro Medium'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Medium Az.woff') format('woff');
-}
-
-@font-face {
-  font-family: 'Sofia Pro';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: local('Sofia Pro Semi Bold'), local('Sofia Pro SemiBold'), local('Sofia Pro-SemiBold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Semi Bold Az.woff') format('woff');
-}
-
-@font-face {
-  font-family: 'Sofia Pro';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: local('Sofia Pro Bold'), local('Sofia Pro-Bold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Bold Az.woff') format('woff');
-}
-
-@font-face {
-  font-family: 'Sofia Pro';
-  font-style: normal;
-  font-weight: 800;
-  font-display: swap;
-  src: local('Sofia Pro Bold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Bold Az.woff') format('woff');
-}
-
-@font-face {
-  font-family: 'Sofia Pro';
-  font-style: normal;
-  font-weight: 900;
-  font-display: swap;
-  src: local('Sofia Pro Black'), local('Sofia Pro-Black'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Black Az.woff') format('woff');
-}
-
-/* Explicit Named Font-Family Aliases for Sofia Pro Regular, SemiBold, and Bold */
 @font-face {
   font-family: 'Sofia Pro Regular';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: local('Sofia Pro Regular'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Regular Az.woff') format('woff');
+  src: local('Lufga Regular'), local('Lufga-Regular'), url('/fonts/Lufga-Regular.woff2') format('woff2');
 }
 
 @font-face {
@@ -65,15 +153,7 @@
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: local('Sofia Pro Semi Bold'), local('Sofia Pro SemiBold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Semi Bold Az.woff') format('woff');
-}
-
-@font-face {
-  font-family: 'Sofia Pro SEmibold';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: local('Sofia Pro Semi Bold'), local('Sofia Pro SemiBold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Semi Bold Az.woff') format('woff');
+  src: local('Lufga SemiBold'), local('Lufga-SemiBold'), url('/fonts/Lufga-SemiBold.woff2') format('woff2');
 }
 
 @font-face {
@@ -81,7 +161,7 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: local('Sofia Pro Bold'), local('Sofia Pro'), url('https://fonts.cdnfonts.com/s/14903/Sofia Pro Bold Az.woff') format('woff');
+  src: local('Lufga Bold'), local('Lufga-Bold'), url('/fonts/Lufga-Bold.woff2') format('woff2');
 }
 
 @variant dark (&:where(.dark, .dark *));
@@ -97,7 +177,7 @@
   --color-brand-gray: #F2F2F2;
   --color-brand-gray-dark: #E6E6E6;
   --color-brand-text: #142142;
-  --font-sans: 'Sofia Pro', 'Sofia Pro Regular', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Lufga', 'Lufga Regular', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 }
 
@@ -132,17 +212,18 @@ html.dark {
 }
 
 html, body, button {
-  font-family: 'Sofia Pro', 'Sofia Pro Regular', var(--font-sans);
+  font-family: 'Lufga', 'Lufga Regular', var(--font-sans);
 }
 
-/* User requirement: Informações inseridas nos campos utilizam fonte Sofia Pro Regular */
+/* User requirement: Informações inseridas nos campos utilizam fonte Lufga Regular */
 input:not([type="checkbox"]):not([type="radio"]),
 textarea,
 select,
 input::placeholder,
 textarea::placeholder,
+.form-input-lufga-regular,
 .form-input-sofia-regular {
-  font-family: 'Sofia Pro Regular', 'Sofia Pro', var(--font-sans) !important;
+  font-family: 'Lufga Regular', 'Lufga', var(--font-sans) !important;
   font-weight: 400 !important;
   font-style: normal !important;
 }
@@ -150,7 +231,7 @@ textarea::placeholder,
 body {
   background-color: var(--bg-app);
   color: #142142;
-  font-family: 'Sofia Pro', 'Sofia Pro Regular', var(--font-sans);
+  font-family: 'Lufga', 'Lufga Regular', var(--font-sans);
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -175,20 +256,41 @@ html.dark .app-texture-canvas {
   letter-spacing: -0.02em;
 }
 
-/* Explicit Sofia Pro Weights Utility Classes */
+/* Explicit Lufga Weights Utility Classes */
+.font-lufga {
+  font-family: 'Lufga', var(--font-sans);
+}
+.font-lufga-light {
+  font-family: 'Lufga Light', 'Lufga', var(--font-sans);
+  font-weight: 300;
+}
+.font-lufga-regular {
+  font-family: 'Lufga Regular', 'Lufga', var(--font-sans);
+  font-weight: 400;
+}
+.font-lufga-semibold {
+  font-family: 'Lufga SemiBold', 'Lufga Semibold', 'Lufga', var(--font-sans);
+  font-weight: 600;
+}
+.font-lufga-bold {
+  font-family: 'Lufga Bold', 'Lufga', var(--font-sans);
+  font-weight: 700;
+}
+
+/* Aliases for Sofia Pro utility classes */
 .font-sofia {
-  font-family: 'Sofia Pro', var(--font-sans);
+  font-family: 'Lufga', var(--font-sans);
 }
 .font-sofia-regular {
-  font-family: 'Sofia Pro', 'Sofia Pro Regular', var(--font-sans);
+  font-family: 'Lufga Regular', 'Lufga', var(--font-sans);
   font-weight: 400;
 }
 .font-sofia-semibold {
-  font-family: 'Sofia Pro', 'Sofia Pro SemiBold', var(--font-sans);
+  font-family: 'Lufga SemiBold', 'Lufga', var(--font-sans);
   font-weight: 600;
 }
 .font-sofia-bold {
-  font-family: 'Sofia Pro', 'Sofia Pro Bold', var(--font-sans);
+  font-family: 'Lufga Bold', 'Lufga', var(--font-sans);
   font-weight: 700;
 }
 

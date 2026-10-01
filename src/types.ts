@@ -4,11 +4,16 @@ export type PageId =
   | 'servicos'
   | 'demandas'
   | 'calendario'
+  | 'agenda'
   | 'financeiro'
   | 'orcamentos'
   | 'equipe'
   | 'configuracoes'
-  | 'portal-cliente';
+  | 'portal-cliente'
+  | 'apis'
+  | 'producao'
+  | 'gestao'
+  | 'comunicacao';
 
 export type UserRole = 'proprietario' | 'colaborador' | 'cliente';
 
@@ -22,6 +27,7 @@ export interface MemberPermissions {
   inicio?: boolean;
   demandas?: boolean;
   calendario?: boolean;
+  agenda?: boolean;
 }
 
 export interface UserProfile {
@@ -262,7 +268,7 @@ export interface TeamMember {
   email: string;
   avatar: string;
   activeTasks: number;
-  status: 'Disponível' | 'Ocupado' | 'Férias';
+  status: 'Disponível' | 'Ocupado' | 'Férias' | 'Ausente';
   specialties: string[];
   username?: string;
   password?: string;
@@ -343,7 +349,7 @@ export type CommemorativeDateCategory =
 export interface CommemorativeDate {
   id: string;
   title: string;
-  date: string; // YYYY-MM-DD
+  date?: string; // YYYY-MM-DD
   day: number;
   month: number; // 1 to 12
   year: number; // e.g. 2026
@@ -370,4 +376,76 @@ export interface AgencyNotification {
   targetPage?: PageId;
   actionLabel?: string;
 }
+
+export interface ChatMessage {
+  id: string;
+  channelId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  senderRole?: string;
+  content: string;
+  timestamp: number;
+  createdAt: string;
+  reactions?: Record<string, string[]>;
+  isPinned?: boolean;
+  replyTo?: {
+    id: string;
+    senderName: string;
+    content: string;
+  };
+  attachments?: Array<{
+    type: 'image' | 'file';
+    url: string;
+    name: string;
+    size?: string;
+  }>;
+}
+
+export interface ChatChannel {
+  id: string;
+  name: string;
+  description: string;
+  icon?: string;
+  isPrivate?: boolean;
+  memberIds?: string[];
+  unreadCount?: number;
+  totalMessages?: number;
+}
+
+export type AppointmentCategory = 
+  | 'briefing'
+  | 'apresentacao'
+  | 'trafego'
+  | 'design_web'
+  | 'comercial'
+  | 'sprint_interna'
+  | 'outro';
+
+export interface AgencyAppointment {
+  id: string;
+  googleEventId?: string;
+  title: string;
+  category: AppointmentCategory;
+  clientId?: string;
+  clientName?: string;
+  description?: string;
+  startDate: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endDate: string;   // YYYY-MM-DD
+  endTime: string;   // HH:mm
+  meetLink?: string;
+  location?: string;
+  attendees: Array<{
+    email: string;
+    name?: string;
+    responseStatus?: 'needsAction' | 'accepted' | 'declined' | 'tentative';
+  }>;
+  status: 'confirmed' | 'tentative' | 'cancelled';
+  htmlLink?: string;
+  syncedWithGoogle: boolean;
+  lastSyncedAt?: string;
+}
+
+
 

@@ -1133,20 +1133,20 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                         >
                           {/* Mini Navy Badge with Gold Border */}
                           <rect
-                            x="-12"
-                            y="-9"
-                            width="24"
-                            height="18"
-                            rx="5"
+                            x="-11"
+                            y="-8"
+                            width="22"
+                            height="16"
+                            rx="4.5"
                             fill="#142142"
-                            stroke="#ffffff"
-                            strokeWidth="1.1"
+                            stroke="#fab518"
+                            strokeWidth="1.2"
                             className="drop-shadow-md"
                           />
                           <text
                             textAnchor="middle"
-                            y="4.5"
-                            className="fill-white text-[9.5px] font-black tracking-tight"
+                            y="3.5"
+                            className="fill-white text-[9px] font-black tracking-tight"
                           >
                             {state.id}
                           </text>
@@ -1221,19 +1221,29 @@ export const ClientLocationMap: React.FC<ClientLocationMapProps> = ({
                             </g>
                           )}
 
-                          {/* City Name Label */}
-                          <text
-                            x={cluster.brazilX}
-                            y={cluster.brazilY + 15}
-                            textAnchor="middle"
-                            className={`text-[9.5px] font-bold tracking-tight pointer-events-none drop-shadow-md transition-all ${
-                              isActive
-                                ? 'fill-[#fab518] font-black text-[10.5px]'
-                                : 'fill-white group-hover:fill-[#fab518]'
-                            }`}
-                          >
-                            {cluster.cityName}
-                          </text>
+                          {/* City Name Label with contrast pill container */}
+                          <g transform={`translate(${cluster.brazilX}, ${cluster.brazilY + 14})`}>
+                            <rect
+                              x={-((cluster.cityName.length * 5.4 + 14) / 2)}
+                              y="-2"
+                              width={cluster.cityName.length * 5.4 + 14}
+                              height="14"
+                              rx="4"
+                              className={`transition-colors drop-shadow-md ${
+                                isActive ? 'fill-[#fab518] stroke-[#142142] stroke-[1]' : 'fill-slate-950/90 stroke-slate-700/80 stroke-[0.8]'
+                              }`}
+                            />
+                            <text
+                              x="0"
+                              y="8"
+                              textAnchor="middle"
+                              className={`text-[8.5px] font-extrabold tracking-tight pointer-events-none select-none ${
+                                isActive ? 'fill-[#142142] font-black' : 'fill-white'
+                              }`}
+                            >
+                              {cluster.cityName}
+                            </text>
+                          </g>
                         </g>
                       );
                     })}

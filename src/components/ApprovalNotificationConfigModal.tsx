@@ -317,7 +317,7 @@ export const ApprovalNotificationConfigModal: React.FC<ApprovalNotificationConfi
                     }))
                   }
                   placeholder="Escreva seu modelo customizado com as tags acima..."
-                  className="w-full bg-white dark:bg-slate-900 text-xs font-normal font-sofia-regular text-[#142142] dark:text-slate-100 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:outline-none"
+                  className="w-full bg-white dark:bg-slate-900 text-xs font-normal font-lufga-regular text-[#142142] dark:text-slate-100 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:outline-none"
                 />
               </div>
             )}
@@ -328,7 +328,7 @@ export const ApprovalNotificationConfigModal: React.FC<ApprovalNotificationConfi
                 <span className="text-[10.5px] font-bold text-slate-600 dark:text-slate-400 block mb-1.5 uppercase tracking-wider">
                   Prévia da Estrutura do Texto:
                 </span>
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-2xs text-xs text-[#111B21] dark:text-slate-100 whitespace-pre-wrap leading-relaxed border-l-4 border-[#25D366] font-normal font-sofia-regular">
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-2xs text-xs text-[#111B21] dark:text-slate-100 whitespace-pre-wrap leading-relaxed border-l-4 border-[#25D366] font-normal font-lufga-regular">
                   {NOTIFICATION_TEMPLATES.find((p) => p.id === config.defaultTemplateId)?.template}
                 </div>
               </div>
@@ -348,7 +348,7 @@ export const ApprovalNotificationConfigModal: React.FC<ApprovalNotificationConfi
                   setConfig((prev) => ({ ...prev, agencySignature: e.target.value }))
                 }
                 placeholder="Ex: Equipe Help Agência Digital"
-                className="w-full bg-[#F4F5F7] dark:bg-slate-800 text-xs font-normal font-sofia-regular text-[#142142] dark:text-white px-3 py-2 rounded-xl border border-transparent focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none"
+                className="w-full bg-[#F4F5F7] dark:bg-slate-800 text-xs font-normal font-lufga-regular text-[#142142] dark:text-white px-3 py-2 rounded-xl border border-transparent focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none"
               />
             </div>
 

@@ -27,23 +27,18 @@ function getCookie(name: string): string {
  */
 export function getSupabaseUrl(): string {
   const envUrl = ((import.meta as any).env?.VITE_SUPABASE_URL || '').trim();
-  if (envUrl && !envUrl.includes('pniiwmpxtvckivufrqhn')) return envUrl;
+  if (envUrl && !envUrl.includes('your-project')) return envUrl;
   
   try {
     const fromStorage = (localStorage.getItem(STORAGE_KEY_URL) || '').trim();
-    if (fromStorage && !fromStorage.includes('pniiwmpxtvckivufrqhn')) return fromStorage;
-    if (fromStorage.includes('pniiwmpxtvckivufrqhn')) {
-      localStorage.removeItem(STORAGE_KEY_URL);
-    }
+    if (fromStorage && !fromStorage.includes('your-project')) return fromStorage;
   } catch {}
 
   const fromCookie = getCookie(STORAGE_KEY_URL).trim();
-  if (fromCookie && !fromCookie.includes('pniiwmpxtvckivufrqhn')) return fromCookie;
-  if (fromCookie.includes('pniiwmpxtvckivufrqhn')) {
-    document.cookie = `${STORAGE_KEY_URL}=;path=/;max-age=0`;
-  }
+  if (fromCookie && !fromCookie.includes('your-project')) return fromCookie;
 
-  return '';
+  // URL padrão configurada no servidor do projeto
+  return 'https://pniiwmpxtvckivufrqhn.supabase.co';
 }
 
 /**
@@ -51,23 +46,18 @@ export function getSupabaseUrl(): string {
  */
 export function getSupabaseAnonKey(): string {
   const envKey = ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '').trim();
-  if (envKey && !envKey.startsWith('sb_publishable_')) return envKey;
+  if (envKey && !envKey.includes('your-anon')) return envKey;
 
   try {
     const fromStorage = (localStorage.getItem(STORAGE_KEY_ANON) || '').trim();
-    if (fromStorage && !fromStorage.startsWith('sb_publishable_')) return fromStorage;
-    if (fromStorage.startsWith('sb_publishable_')) {
-      localStorage.removeItem(STORAGE_KEY_ANON);
-    }
+    if (fromStorage && !fromStorage.includes('your-anon')) return fromStorage;
   } catch {}
 
   const fromCookie = getCookie(STORAGE_KEY_ANON).trim();
-  if (fromCookie && !fromCookie.startsWith('sb_publishable_')) return fromCookie;
-  if (fromCookie.startsWith('sb_publishable_')) {
-    document.cookie = `${STORAGE_KEY_ANON}=;path=/;max-age=0`;
-  }
+  if (fromCookie && !fromCookie.includes('your-anon')) return fromCookie;
 
-  return '';
+  // Chave anônima padrão configurada no servidor do projeto
+  return 'sb_publishable_VaKxwO3n2CZWMmYUyGUVrA_ZD7H83RB';
 }
 
 /**

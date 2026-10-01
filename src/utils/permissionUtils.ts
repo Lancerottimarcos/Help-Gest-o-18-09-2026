@@ -203,8 +203,8 @@ export function getEffectivePermissions(
 export function canAccessPage(page: PageId, userOrMember?: UserProfile | TeamMember | null): boolean {
   if (!userOrMember) return false;
 
-  // Início, demandas operacionais e datas comemorativas são sempre acessíveis
-  if (page === 'inicio' || page === 'demandas' || page === 'calendario') {
+  // Início, demandas operacionais, datas comemorativas, APIs, Produção, Comunicação, Agenda e Gestão são sempre acessíveis
+  if (page === 'inicio' || page === 'demandas' || page === 'calendario' || page === 'apis' || page === 'producao' || page === 'comunicacao' || page === 'agenda' || page === 'gestao') {
     return true;
   }
 

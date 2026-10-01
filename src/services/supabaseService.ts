@@ -1126,20 +1126,35 @@ export const supabaseService = {
         const localMatch = localMembers.find((l) => l.id === row.id);
         const isOwner = row.id === 'tm-1' || String(row.name || '').toLowerCase().includes('marcos lancerotti');
 
+        let parsedMeta: any = {};
+        const cleanSpecialties: string[] = [];
+        if (Array.isArray(row.specialties)) {
+          row.specialties.forEach((s: any) => {
+            if (typeof s === 'string' && s.startsWith('__meta__:')) {
+              try {
+                parsedMeta = JSON.parse(s.slice(9));
+              } catch {}
+            } else {
+              cleanSpecialties.push(String(s));
+            }
+          });
+        }
+
         return {
           id: row.id,
           name: row.name,
           role: row.role,
-          functionRole: row.function_role || row.role,
+          functionRole: row.function_role || parsedMeta.functionRole || localMatch?.functionRole || row.role,
           email: row.email,
-          avatar: row.avatar || '',
+          avatar: row.avatar || localMatch?.avatar || '',
           activeTasks: Number(row.active_tasks) || 0,
           status: (row.status as any) || 'Disponível',
-          specialties: Array.isArray(row.specialties) ? row.specialties : [],
-          username: row.username || localMatch?.username || (isOwner ? 'lancerotti' : undefined),
-          password: row.password || localMatch?.password || (isOwner ? '521Spide#*' : '123456'),
-          createdBy: row.created_by || undefined,
-          createdAt: row.created_at || undefined,
+          specialties: cleanSpecialties.length > 0 ? cleanSpecialties : (localMatch?.specialties || []),
+          username: row.username || parsedMeta.username || localMatch?.username || (isOwner ? 'lancerotti' : undefined),
+          password: row.password || parsedMeta.password || localMatch?.password || (isOwner ? '521Spide#*' : '123456'),
+          permissions: parsedMeta.permissions || localMatch?.permissions,
+          createdBy: row.created_by || parsedMeta.createdBy || localMatch?.createdBy || undefined,
+          createdAt: row.created_at || localMatch?.createdAt || undefined,
         };
       });
     } catch (e: any) {
@@ -1153,20 +1168,32 @@ export const supabaseService = {
     if (!supabase) return false;
 
     try {
-      const payload = {
+      // Codifica metadados essenciais (permissões, usuário, senha, cargo detalhado, data de criação) em __meta__
+      // para garantir persistência robusta sem falhas de cache de schema no Supabase
+      const metaTag = `__meta__:${JSON.stringify({
+        functionRole: member.functionRole,
+        username: member.username,
+        password: member.password,
+        permissions: member.permissions,
+        createdBy: member.createdBy,
+        createdAt: member.createdAt,
+      })}`;
+
+      const rawSpecialties = Array.isArray(member.specialties)
+        ? member.specialties.filter((s) => typeof s === 'string' && !s.startsWith('__meta__:'))
+        : [];
+
+      const payload: any = {
         id: member.id,
         name: member.name,
         role: member.role,
-        function_role: member.functionRole || member.role,
         email: member.email,
         avatar: member.avatar || '',
         active_tasks: member.activeTasks || 0,
         status: member.status || 'Disponível',
-        specialties: member.specialties || [],
-        username: member.username || null,
-        password: member.password || null,
-        created_by: member.createdBy || null,
+        specialties: [...rawSpecialties, metaTag],
       };
+
       const { error } = await resilientSupabaseUpsert(supabase, 'team_members', payload);
       if (error) {
         recordSyncFailure('UPSERT_TEAM_MEMBER', error.message || error, { member, error });

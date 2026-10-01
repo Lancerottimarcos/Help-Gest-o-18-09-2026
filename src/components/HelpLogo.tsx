@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 
 interface HelpLogoProps {
@@ -15,6 +15,38 @@ export const HelpLogo: React.FC<HelpLogoProps> = ({
   onClick,
 }) => {
   const [imgError, setImgError] = useState(false);
+  const [customLogoLight, setCustomLogoLight] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('agency_custom_logo_light') || localStorage.getItem('agency_custom_logo') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [customLogoDark, setCustomLogoDark] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('agency_custom_logo_dark') || null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      try {
+        setCustomLogoLight(localStorage.getItem('agency_custom_logo_light') || localStorage.getItem('agency_custom_logo') || null);
+        setCustomLogoDark(localStorage.getItem('agency_custom_logo_dark') || null);
+        setImgError(false);
+      } catch {}
+    };
+
+    window.addEventListener('agency_logo_changed', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('agency_logo_changed', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
+
   let isDark = false;
   try {
     const themeContext = useTheme();
@@ -32,6 +64,7 @@ export const HelpLogo: React.FC<HelpLogoProps> = ({
   };
 
   if (variant === 'icon') {
+    const iconSrc = (isDark ? customLogoDark : null) || customLogoLight || '/icone-help.png';
     return (
       <div 
         onClick={onClick}
@@ -39,19 +72,27 @@ export const HelpLogo: React.FC<HelpLogoProps> = ({
         title="Help Ideias Digitais"
       >
         <img
-          src="/icone-help.png"
+          src={imgError ? '/icone-help.png' : iconSrc}
           alt="Help Ideias Digitais"
-          className="w-8 h-8 object-contain transition-transform duration-200 hover:scale-105"
+          className="w-8 h-8 object-contain transition-transform duration-200 hover:scale-105 rounded-lg"
+          onError={() => setImgError(true)}
           referrerPolicy="no-referrer"
         />
       </div>
     );
   }
 
-  // Full variant: uses attached image or dark version with svg fallback
-  const imgSrc = isDark
-    ? (imgError ? '/logotipo-help-dark.svg' : '/logotipo-help-dark.png')
-    : (imgError ? '/logotipo-help-2026.svg' : '/logotipo-help-2026.png');
+  // Full variant: uses custom logo if provided, otherwise default theme images
+  let imgSrc: string;
+  if (!imgError && isDark && customLogoDark) {
+    imgSrc = customLogoDark;
+  } else if (!imgError && customLogoLight) {
+    imgSrc = customLogoLight;
+  } else {
+    imgSrc = isDark
+      ? (imgError ? '/logotipo-help-dark.svg' : '/logotipo-help-dark.png')
+      : (imgError ? '/logotipo-help-2026.svg' : '/logotipo-help-2026.png');
+  }
 
   return (
     <div 

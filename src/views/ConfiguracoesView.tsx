@@ -31,7 +31,10 @@ import {
   RefreshCw,
   Eye,
   Zap,
-  Info
+  Info,
+  Upload,
+  Image as ImageIcon,
+  RotateCcw
 } from 'lucide-react';
 import { SecuritySettingsTab } from '../components/SecuritySettingsTab';
 import { SecurityAuditView } from '../components/SecurityAuditView';
@@ -108,6 +111,102 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
   const [agencyPixKey, setAgencyPixKey] = useState(agencyInfo.pixKey || 'financeiro@helpideiasdigitais.com.br');
   const [agencyCnpj, setAgencyCnpj] = useState(agencyInfo.cnpj || '45.892.102/0001-90');
   const [agencyAddress, setAgencyAddress] = useState(agencyInfo.address || 'São Paulo - SP, Brasil');
+
+  // Customização da Logotipo do Sistema
+  const [customLogoLight, setCustomLogoLight] = useState<string>(() => {
+    try {
+      return localStorage.getItem('agency_custom_logo_light') || localStorage.getItem('agency_custom_logo') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [customLogoDark, setCustomLogoDark] = useState<string>(() => {
+    try {
+      return localStorage.getItem('agency_custom_logo_dark') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [logoInputUrl, setLogoInputUrl] = useState('');
+  const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+
+  const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isDarkMode = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setLogoUploadError('Por favor selecione um arquivo de imagem válido (PNG, SVG, JPG, WebP).');
+      return;
+    }
+
+    if (file.size > 4 * 1024 * 1024) {
+      setLogoUploadError('A imagem deve ter no máximo 4MB.');
+      return;
+    }
+
+    setLogoUploadError(null);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      if (base64) {
+        if (isDarkMode) {
+          setCustomLogoDark(base64);
+          try {
+            localStorage.setItem('agency_custom_logo_dark', base64);
+          } catch {}
+        } else {
+          setCustomLogoLight(base64);
+          try {
+            localStorage.setItem('agency_custom_logo_light', base64);
+            localStorage.setItem('agency_custom_logo', base64);
+          } catch {}
+        }
+        window.dispatchEvent(new Event('agency_logo_changed'));
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 3000);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleApplyLogoUrl = (isDarkMode = false) => {
+    if (!logoInputUrl.trim()) return;
+    const url = logoInputUrl.trim();
+    if (isDarkMode) {
+      setCustomLogoDark(url);
+      try {
+        localStorage.setItem('agency_custom_logo_dark', url);
+      } catch {}
+    } else {
+      setCustomLogoLight(url);
+      try {
+        localStorage.setItem('agency_custom_logo_light', url);
+        localStorage.setItem('agency_custom_logo', url);
+      } catch {}
+    }
+    setLogoInputUrl('');
+    setLogoUploadError(null);
+    window.dispatchEvent(new Event('agency_logo_changed'));
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
+  const handleResetLogo = () => {
+    setCustomLogoLight('');
+    setCustomLogoDark('');
+    setLogoInputUrl('');
+    setLogoUploadError(null);
+    try {
+      localStorage.removeItem('agency_custom_logo');
+      localStorage.removeItem('agency_custom_logo_light');
+      localStorage.removeItem('agency_custom_logo_dark');
+    } catch {}
+    window.dispatchEvent(new Event('agency_logo_changed'));
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+  };
 
   // Flow rules
   const [directApproval, setDirectApproval] = useState(agencyInfo.directApproval ?? true);
@@ -189,6 +288,14 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
         };
         try {
           localStorage.setItem('agency_info_config', JSON.stringify(updatedInfo));
+          if (customLogoLight) {
+            localStorage.setItem('agency_custom_logo_light', customLogoLight);
+            localStorage.setItem('agency_custom_logo', customLogoLight);
+          }
+          if (customLogoDark) {
+            localStorage.setItem('agency_custom_logo_dark', customLogoDark);
+          }
+          window.dispatchEvent(new Event('agency_logo_changed'));
         } catch {}
         setAgencyInfo(updatedInfo);
         setSavedSuccess(true);
@@ -577,6 +684,121 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
                 </span>
               </div>
 
+              {/* Seção: Logotipo Oficial do Sistema */}
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <label className="text-xs font-black text-[#142142] dark:text-white flex items-center gap-2">
+                      <ImageIcon size={15} className="text-[#fab518]" />
+                      <span>Logotipo Oficial do Sistema</span>
+                    </label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Altere o logotipo que aparece na barra lateral, propostas comerciais e no portal do cliente
+                    </p>
+                  </div>
+
+                  {(customLogoLight || customLogoDark) && (
+                    <button
+                      type="button"
+                      onClick={handleResetLogo}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-[11px] font-bold text-slate-700 dark:text-slate-200 transition-colors cursor-pointer self-start sm:self-auto"
+                      title="Voltar ao logotipo original"
+                    >
+                      <RotateCcw size={12} />
+                      <span>Restaurar Padrão</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Previews: Fundo Claro & Fundo Escuro */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* Preview Tema Claro */}
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/90 flex flex-col items-center justify-center min-h-[90px] text-center shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Prévia (Modo Claro / Orçamentos)
+                    </span>
+                    <img
+                      src={customLogoLight || '/logotipo-help-2026.png'}
+                      alt="Logotipo Claro"
+                      className="max-h-10 max-w-[180px] object-contain"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/logotipo-help-2026.png';
+                      }}
+                    />
+                  </div>
+
+                  {/* Preview Tema Escuro */}
+                  <div className="p-3.5 rounded-xl bg-[#0f172a] border border-slate-700/80 flex flex-col items-center justify-center min-h-[90px] text-center shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Prévia (Modo Escuro / Sidebar)
+                    </span>
+                    <img
+                      src={customLogoDark || customLogoLight || '/logotipo-help-dark.png'}
+                      alt="Logotipo Escuro"
+                      className="max-h-10 max-w-[180px] object-contain"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/logotipo-help-dark.png';
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Botões de Upload */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+                  <label className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-[#fab518] dark:hover:border-[#fab518] text-xs font-bold text-slate-700 dark:text-slate-200 transition-all cursor-pointer">
+                    <Upload size={14} className="text-[#fab518]" />
+                    <span>Upload de Logotipo (PNG, SVG, JPG)</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleLogoFileUpload(e, false)}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <label className="sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700/80 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 text-[11px] font-bold text-slate-700 dark:text-slate-200 transition-all cursor-pointer" title="Fazer upload de versão específica para fundo escuro">
+                    <Upload size={13} className="text-amber-400" />
+                    <span>Logo Escuro (Opcional)</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleLogoFileUpload(e, true)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* Ou inserir via link/URL */}
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Ou informe a URL da imagem:
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      value={logoInputUrl}
+                      onChange={(e) => setLogoInputUrl(e.target.value)}
+                      placeholder="https://sua-empresa.com.br/logo.png"
+                      className="flex-1 bg-white dark:bg-slate-900 text-xs text-[#142142] dark:text-white px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleApplyLogoUrl(false)}
+                      disabled={!logoInputUrl.trim()}
+                      className="px-4 py-2.5 bg-[#142142] hover:bg-[#1e3264] dark:bg-[#fab518] dark:hover:bg-[#e29f11] text-white dark:text-[#142142] rounded-xl text-xs font-bold transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shrink-0"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </div>
+
+                {logoUploadError && (
+                  <p className="text-xs text-rose-500 font-semibold animate-in fade-in">
+                    {logoUploadError}
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Nome da Agência */}
                 <div className="sm:col-span-2 space-y-1.5">
@@ -775,27 +997,56 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
                       <Type size={18} />
                     </div>
                     <div>
-                      <h3 className="text-base font-black text-[#142142] dark:text-white">
-                        Tipografia Corporativa
+                      <h3 className="text-base font-bold text-[#142142] dark:text-white">
+                        Tipografia Corporativa Global
                       </h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Família Sofia Pro & Plus Jakarta Sans
+                        Família Lufga Oficial (Light, Regular, Semibold, Bold)
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] uppercase font-bold text-slate-400">Display / Títulos</span>
-                    <span className="text-[10px] font-mono text-[#fab518] font-bold">Weight 900 • Black</span>
+                <div className="space-y-2.5">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Lufga Light (300)</span>
+                      <p className="text-sm font-lufga-light text-[#142142] dark:text-slate-200">
+                        Help Ideias Digitais — Subtítulos e anotações refinadas
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 text-slate-500 border border-slate-200 dark:border-slate-600">300</span>
                   </div>
-                  <p className="text-lg font-black text-[#142142] dark:text-white tracking-tight">
-                    Help Ideias Digitais • 2026
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed pt-1">
-                    Design tipográfico de alto contraste geométrico, otimizado para leitura dinâmica em painéis Kanban, relatórios executivos e faturamento.
-                  </p>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Lufga Regular (400)</span>
+                      <p className="text-sm font-lufga-regular text-[#142142] dark:text-slate-200">
+                        Texto corrido, inputs, descrições e interfaces de dados
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 text-slate-500 border border-slate-200 dark:border-slate-600">400</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Lufga Semibold (600)</span>
+                      <p className="text-sm font-lufga-semibold text-[#142142] dark:text-white">
+                        Hierarquia intermediária, botões, abas e ênfase visual
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 text-slate-500 border border-slate-200 dark:border-slate-600">600</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Lufga Bold (700)</span>
+                      <p className="text-sm font-lufga-bold text-[#142142] dark:text-white">
+                        Títulos executivos, métricas estratégicas e KPIs
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 text-slate-500 border border-slate-200 dark:border-slate-600">700</span>
+                  </div>
                 </div>
               </div>
             </div>

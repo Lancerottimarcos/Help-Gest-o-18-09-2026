@@ -57,6 +57,7 @@ interface DemandasViewProps {
   onUpdateColumn?: (column: KanbanColumn) => void;
   onDeleteColumn?: (columnId: string) => void;
   initialClientFilter?: string;
+  filterResetTrigger?: number;
   onUpdateDemandColumn: (id: string, newColumn: KanbanColumnId) => void;
   onMoveDemand?: (
     demandId: string,
@@ -82,6 +83,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
   onUpdateColumn,
   onDeleteColumn,
   initialClientFilter = 'todos',
+  filterResetTrigger,
   onUpdateDemandColumn,
   onMoveDemand,
   onOpenNewDemandModal,
@@ -161,7 +163,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     return kanbanColumnsData;
   });
 
-  const activeColumns = columns || localColumns;
+  const activeColumns = (columns && columns.length > 0) ? columns : localColumns;
 
   // Sincroniza estado local com as colunas fornecidas pelo componente pai (App.tsx)
   useEffect(() => {
@@ -516,10 +518,10 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
 
   // Sync initial client filter if prop changes
   useEffect(() => {
-    if (initialClientFilter) {
+    if (initialClientFilter !== undefined) {
       setSelectedClientFilter(initialClientFilter);
     }
-  }, [initialClientFilter]);
+  }, [initialClientFilter, filterResetTrigger]);
 
   // Helper to match demand type / category
   const matchesDemandType = (item: DemandItem, filter: string): boolean => {
@@ -590,7 +592,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
         ...demands.map((d) => {
           const matched = (clients || []).find((c) =>
             (d.clientId && c.id === d.clientId) ||
-            (d.client && (c.name.toLowerCase() === d.client.toLowerCase() || (c.companyName && c.companyName.toLowerCase() === d.client.toLowerCase())))
+            (d.client && c.name && (c.name.toLowerCase() === d.client.toLowerCase() || (c.companyName && c.companyName.toLowerCase() === d.client.toLowerCase())))
           );
           return matched ? matched.name : d.client;
         }),
@@ -615,7 +617,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
   demands.forEach((d) => {
     const matched = (clients || []).find((c) =>
       (d.clientId && c.id === d.clientId) ||
-      (d.client && (c.name.toLowerCase() === d.client.toLowerCase() || (c.companyName && c.companyName.toLowerCase() === d.client.toLowerCase())))
+      (d.client && c.name && (c.name.toLowerCase() === d.client.toLowerCase() || (c.companyName && c.companyName.toLowerCase() === d.client.toLowerCase())))
     );
     const resolved = matched ? matched.name : d.client;
     if (resolved) {
@@ -627,22 +629,22 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
   const filteredDemands = demands.filter((item) => {
     const itemMatchedClient = (clients || []).find((c) =>
       (item.clientId && c.id === item.clientId) ||
-      (item.client && (c.name.toLowerCase() === item.client.toLowerCase() || (c.companyName && c.companyName.toLowerCase() === item.client.toLowerCase())))
+      (item.client && c.name && (c.name.toLowerCase() === item.client.toLowerCase() || (c.companyName && c.companyName.toLowerCase() === item.client.toLowerCase())))
     );
-    const resolvedItemClient = itemMatchedClient ? (itemMatchedClient.name || itemMatchedClient.companyName) : item.client;
+    const resolvedItemClient = itemMatchedClient ? (itemMatchedClient.name || itemMatchedClient.companyName) : (item.client || '');
 
     const matchesSearch = 
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       resolvedItemClient.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.client || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.type || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.clientProject && item.clientProject.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (item.assignee && item.assignee.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      (item.assignee && item.assignee.name && item.assignee.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesClient = 
       selectedClientFilter === 'todos' || 
       resolvedItemClient.toLowerCase() === selectedClientFilter.toLowerCase() ||
-      item.client.toLowerCase() === selectedClientFilter.toLowerCase() ||
+      (item.client || '').toLowerCase() === selectedClientFilter.toLowerCase() ||
       (item.clientProject && item.clientProject.toLowerCase() === selectedClientFilter.toLowerCase()) ||
       (itemMatchedClient?.companyName && itemMatchedClient.companyName.toLowerCase() === selectedClientFilter.toLowerCase());
 
@@ -1173,7 +1175,13 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
           {/* Mobile Column Quick Jump Bar */}
           <div className="sm:hidden flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 px-0.5 mb-2.5 shrink-0">
             {activeColumns.map((col) => {
-              const colCount = filteredDemands.filter((d) => d.columnId === col.id).length;
+              const validColIds = new Set(activeColumns.map((c) => c.id));
+              const firstColId = activeColumns[0]?.id || 'ideias';
+              const colCount = filteredDemands.filter((d) => {
+                if (d.columnId === col.id) return true;
+                if (!validColIds.has(d.columnId) && col.id === firstColId) return true;
+                return false;
+              }).length;
               return (
                 <button
                   key={col.id}
@@ -1211,7 +1219,13 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
             {activeColumns.map((col) => {
-              const columnDemands = filteredDemands.filter((d) => d.columnId === col.id);
+              const validColIds = new Set(activeColumns.map((c) => c.id));
+              const firstColId = activeColumns[0]?.id || 'ideias';
+              const columnDemands = filteredDemands.filter((d) => {
+                if (d.columnId === col.id) return true;
+                if (!validColIds.has(d.columnId) && col.id === firstColId) return true;
+                return false;
+              });
               const isDragOver = dragOverColumnId === col.id;
 
               return (
