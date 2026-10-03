@@ -11,6 +11,8 @@ export interface MemberPermissions {
   inicio?: boolean;
   demandas?: boolean;
   calendario?: boolean;
+  agenda?: boolean;
+  aprovacoes?: boolean;
 }
 
 export type RestrictedPageKey = 'clientes' | 'servicos' | 'financeiro' | 'orcamentos' | 'equipe' | 'configuracoes';
@@ -203,13 +205,14 @@ export function getEffectivePermissions(
 export function canAccessPage(page: PageId, userOrMember?: UserProfile | TeamMember | null): boolean {
   if (!userOrMember) return false;
 
-  // Início, demandas operacionais, datas comemorativas, APIs, Produção, Comunicação, Agenda e Gestão são sempre acessíveis
-  if (page === 'inicio' || page === 'demandas' || page === 'calendario' || page === 'apis' || page === 'producao' || page === 'comunicacao' || page === 'agenda' || page === 'gestao') {
-    return true;
+  // Clientes autenticados têm acesso ESTRITAMENTE ao Portal do Cliente (demandas) e à Central de Aprovações
+  if ((userOrMember as UserProfile).role === 'cliente') {
+    return page === 'demandas' || page === 'aprovacoes';
   }
 
-  if (page === 'portal-cliente') {
-    return false; // Desabilitado em breve
+  // Início, demandas operacionais, datas comemorativas, APIs, Produção, Comunicação, Agenda, Gestão e Portal do Cliente são acessíveis para equipe da agência
+  if (page === 'inicio' || page === 'demandas' || page === 'calendario' || page === 'apis' || page === 'producao' || page === 'comunicacao' || page === 'agenda' || page === 'gestao' || page === 'portal-cliente') {
+    return true;
   }
 
   // Dono da agência

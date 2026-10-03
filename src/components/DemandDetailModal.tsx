@@ -27,6 +27,7 @@ interface DemandDetailModalProps {
   onDelete?: (demandId: string) => void;
   onOpenWhatsAppNotification?: (demand: DemandItem) => void;
   onOpenClientApprovalPortal?: (demand: DemandItem) => void;
+  isClientUser?: boolean;
 }
 
 export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
@@ -38,6 +39,8 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
   onClose,
   onSave,
   onDelete,
+  onOpenClientApprovalPortal,
+  isClientUser = false,
 }) => {
   const activeTeamMembers = teamMembers && teamMembers.length > 0 ? teamMembers : initialTeamMembers;
 
@@ -266,6 +269,32 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
           </button>
         </div>
 
+        {isClientUser && onOpenClientApprovalPortal && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 border border-amber-300 dark:border-amber-700/80 flex items-center justify-between gap-3 shadow-xs">
+            <div className="min-w-0">
+              <span className="text-xs font-black text-amber-900 dark:text-amber-300 block">
+                {demand.columnId === 'aprovacao' || demand.approvalStatus === 'pendente'
+                  ? '⚡ Material Aguardando Sua Aprovação'
+                  : '👁️ Central de Aprovação do Cliente'}
+              </span>
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 truncate">
+                Revise os criativos em tamanho real e tome sua decisão em 1 clique.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenClientApprovalPortal(demand);
+              }}
+              className="px-3.5 py-2 bg-[#142142] text-[#fab518] hover:bg-[#1a2d59] text-xs font-black rounded-xl transition-all cursor-pointer shrink-0 shadow-xs flex items-center gap-1.5"
+            >
+              <CheckCircle2 size={14} />
+              <span>Abrir Aprovação</span>
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSave} className="space-y-4">
           {/* Título da Demanda */}
           <div>
@@ -466,7 +495,7 @@ export const DemandDetailModal: React.FC<DemandDetailModalProps> = ({
 
           {/* Footer matching NewDemandModal */}
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2.5">
-            {onDelete ? (
+            {!isClientUser && onDelete ? (
               <button
                 type="button"
                 id="btn-trigger-delete-demand"

@@ -74,7 +74,8 @@ export const WhatsAppNotificationModal: React.FC<WhatsAppNotificationModalProps>
       const resolvedContact = client?.contactName || client?.name || demand.client;
       setCustomContactName(resolvedContact);
 
-      const portalUrl = getPublicDemandUrl(demand.id);
+      const clientUser = client?.portalUsername || (client?.name ? client.name.toLowerCase().replace(/[^a-z0-9]/g, '') : undefined);
+      const portalUrl = getPublicDemandUrl(demand.id, clientUser);
 
       const generated = buildNotificationMessage({
         templateId: currentConfig.defaultTemplateId,
@@ -95,7 +96,8 @@ export const WhatsAppNotificationModal: React.FC<WhatsAppNotificationModalProps>
 
   if (!isOpen || !demand) return null;
 
-  const portalUrl = getPublicDemandUrl(demand.id);
+  const clientUser = client?.portalUsername || (client?.name ? client.name.toLowerCase().replace(/[^a-z0-9]/g, '') : undefined);
+  const portalUrl = getPublicDemandUrl(demand.id, clientUser);
   const clientName = client?.companyName || demand.client;
   const clientEmail = client?.email;
 

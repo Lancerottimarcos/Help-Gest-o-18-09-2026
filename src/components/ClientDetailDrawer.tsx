@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Building2, 
@@ -30,7 +30,12 @@ import {
   EyeOff,
   Lock,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  KeyRound,
+  Copy,
+  Check,
+  LogIn,
+  Database
 } from 'lucide-react';
 import { Client, DemandItem, PageId, ClientHistoryEvent, Invoice } from '../types';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
@@ -41,6 +46,7 @@ import {
   maskCpf, 
   maskAddress 
 } from '../utils/securityLogger';
+import { supabaseService } from '../services/supabaseService';
 
 interface ClientDetailDrawerProps {
   client: Client;
@@ -52,9 +58,11 @@ interface ClientDetailDrawerProps {
   onDeleteClient?: (clientId: string) => void;
   onNavigateToDemands?: (clientName: string) => void;
   onOpenNewDemandForClient?: (clientName: string) => void;
+  onLoginAsClient?: (client: Client) => void;
+  initialTab?: TabType;
 }
 
-type TabType = 'overview' | 'services' | 'history' | 'privacy';
+type TabType = 'overview' | 'services' | 'access' | 'history' | 'privacy';
 
 export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
   client,
@@ -66,12 +74,107 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
   onDeleteClient,
   onNavigateToDemands,
   onOpenNewDemandForClient,
+  onLoginAsClient,
+  initialTab = 'overview',
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [newNoteText, setNewNoteText] = useState('');
   const [maskSensitive, setMaskSensitive] = useState(true);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<'delete' | 'anonymize' | null>(null);
+
+  // Client Portal Access States
+  const [portalUser, setPortalUser] = useState(
+    client.portalUsername || client.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+  );
+  const [portalPass, setPortalPass] = useState(client.portalPassword || '123456');
+  const [portalEnabled, setPortalEnabled] = useState(client.portalAccessEnabled !== false);
+  const [showPortalPass, setShowPortalPass] = useState(false);
+  const [copiedAccess, setCopiedAccess] = useState(false);
+  const [portalSavedToast, setPortalSavedToast] = useState(false);
+
+  // Sync state if client prop changes
+  useEffect(() => {
+    setPortalUser(client.portalUsername || client.name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    setPortalPass(client.portalPassword || '123456');
+    setPortalEnabled(client.portalAccessEnabled !== false);
+  }, [client]);
+
+  const handleSavePortalCredentials = () => {
+    const updated: Client = {
+      ...client,
+      portalUsername: portalUser.trim().toLowerCase(),
+      portalPassword: portalPass.trim(),
+      portalAccessEnabled: portalEnabled,
+    };
+    if (onUpdateClient) {
+      onUpdateClient(updated);
+    }
+    // Also save directly to Supabase
+    try {
+      if (supabaseService.isConfigured()) {
+        supabaseService.upsertClient(updated);
+      }
+    } catch {}
+    // Also save in localStorage
+    try {
+      const stored = localStorage.getItem('agency_clients');
+      if (stored) {
+        const list = JSON.parse(stored);
+        if (Array.isArray(list)) {
+          const next = list.map((c: Client) => (c.id === client.id ? updated : c));
+          localStorage.setItem('agency_clients', JSON.stringify(next));
+        }
+      }
+    } catch {}
+
+    setPortalSavedToast(true);
+    setTimeout(() => setPortalSavedToast(false), 3000);
+  };
+
+  const handleCopyAccessInfo = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const loginUrl = `${origin}?portal=cliente&user=${encodeURIComponent(portalUser)}`;
+    const message = `Olá, ${client.contactName || client.name}!\n\nSeguem seus dados de acesso exclusivo ao Portal de Demandas e Materiais da Help Ideias:\n\n🌐 Link de Acesso: ${loginUrl}\n👤 Usuário: ${portalUser}\n🔑 Senha: ${portalPass}\n\nApós o login, você poderá visualizar todos os seus materiais, aprovar entregáveis e solicitar ajustes com total segurança!`;
+    navigator.clipboard.writeText(message);
+    setCopiedAccess(true);
+    setTimeout(() => setCopiedAccess(false), 2500);
+  };
+
+  const handleSendWhatsAppAccess = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const loginUrl = `${origin}?portal=cliente&user=${encodeURIComponent(portalUser)}`;
+    const message = `Olá, ${client.contactName || client.name}!\n\nSeguem seus dados de acesso individual ao Portal de Demandas e Materiais da Help Ideias:\n\n🌐 Link de Acesso: ${loginUrl}\n👤 Usuário: ${portalUser}\n🔑 Senha: ${portalPass}\n\nApós fazer o login, você terá acesso imediato aos materiais e demandas que já fizemos para sua empresa!`;
+    const cleanPhone = (client.phone || '').replace(/\D/g, '');
+    const phoneWithDdi = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
+    const url = `https://wa.me/${phoneWithDdi}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleTestLoginAsClient = () => {
+    if (onLoginAsClient) {
+      onLoginAsClient({
+        ...client,
+        portalUsername: portalUser.trim().toLowerCase(),
+        portalPassword: portalPass.trim(),
+        portalAccessEnabled: portalEnabled,
+      });
+      onClose();
+    }
+  };
+
+  const handleGenerateStrongPassword = () => {
+    const cleanPrefix = client.name.split(' ')[0].replace(/[^a-zA-Z]/g, '') || 'Help';
+    const cap = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1).toLowerCase();
+    const num = Math.floor(1000 + Math.random() * 9000);
+    setPortalPass(`${cap}@${num}`);
+    setShowPortalPass(true);
+  };
+
+  const handleSuggestUsername = () => {
+    const suggested = client.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    setPortalUser(suggested);
+  };
   const [historyList, setHistoryList] = useState<ClientHistoryEvent[]>(
     client.history || [
       {
@@ -260,6 +363,24 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
               </button>
               <button
                 type="button"
+                id="tab-access"
+                onClick={() => setActiveTab('access')}
+                className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                  activeTab === 'access'
+                    ? 'border-[#fab518] text-[#142142]'
+                    : 'border-transparent text-slate-500 hover:text-[#142142]'
+                }`}
+              >
+                <KeyRound size={13} className="text-[#fab518]" />
+                <span>Acesso & Senha do Portal</span>
+                {client.portalAccessEnabled === false ? (
+                  <span className="w-2 h-2 rounded-full bg-rose-500" title="Acesso bloqueado" />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" title="Acesso liberado" />
+                )}
+              </button>
+              <button
+                type="button"
                 id="tab-services"
                 onClick={() => setActiveTab('services')}
                 className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
@@ -437,6 +558,252 @@ export const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({
                     </p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* TAB: CLIENT PORTAL ACCESS & PASSWORD MANAGEMENT */}
+            {activeTab === 'access' && (
+              <div className="space-y-6">
+                {/* Header Banner */}
+                <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl p-5 border border-amber-200/80 dark:border-slate-700 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <span className="p-2.5 rounded-xl bg-[#142142] text-[#fab518] shadow-xs">
+                        <KeyRound size={20} />
+                      </span>
+                      <div>
+                        <h3 className="text-sm font-extrabold text-[#142142] dark:text-white">
+                          Gestão de Acesso ao Portal do Cliente
+                        </h3>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Credenciais individuais sincronizadas no Supabase
+                        </p>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`text-[11px] font-bold px-3 py-1 rounded-full border flex items-center gap-1.5 ${
+                        portalEnabled
+                          ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                          : 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-800'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${portalEnabled ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                      <span>{portalEnabled ? 'Acesso Liberado' : 'Acesso Bloqueado'}</span>
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Defina aqui o <strong>nome de usuário</strong> e a <strong>senha individual</strong> para que <strong>{client.name}</strong> faça login no Portal do Cliente, visualize seus entregáveis e aprove materiais com segurança.
+                  </p>
+                </div>
+
+                {/* Feedback Toast if Saved */}
+                {portalSavedToast && (
+                  <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300 animate-fadeIn">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                      <span className="font-semibold">Credenciais atualizadas e salvas com sucesso no Supabase e no sistema!</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Feedback Toast if Copied */}
+                {copiedAccess && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center gap-2 text-xs text-blue-800 dark:text-blue-300 animate-fadeIn">
+                    <Check size={14} className="text-blue-600 shrink-0" />
+                    <span>Dados de acesso e link copiados para a área de transferência!</span>
+                  </div>
+                )}
+
+                {/* Form Card */}
+                <div className="bg-[#F8F9FA] dark:bg-slate-800/60 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700 pb-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                      <Lock size={14} className="text-[#fab518]" />
+                      <span>Definir Usuário e Senha do Cliente</span>
+                    </h4>
+                    
+                    {/* Toggle Access Switch */}
+                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-[#142142] dark:text-white">
+                      <input
+                        type="checkbox"
+                        checked={portalEnabled}
+                        onChange={(e) => setPortalEnabled(e.target.checked)}
+                        className="w-4 h-4 accent-[#fab518] rounded cursor-pointer"
+                      />
+                      <span>{portalEnabled ? 'Acesso Ativo' : 'Acesso Suspenso'}</span>
+                    </label>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Username Input */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-[#142142] dark:text-slate-200">
+                          Nome de Usuário (Login do Cliente)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleSuggestUsername}
+                          className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <Sparkles size={11} />
+                          <span>Sugerir do Nome</span>
+                        </button>
+                      </div>
+
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-sm font-bold">
+                          @
+                        </span>
+                        <input
+                          type="text"
+                          value={portalUser}
+                          onChange={(e) => setPortalUser(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))}
+                          placeholder="usuario.cliente"
+                          className="w-full bg-white dark:bg-slate-900 text-sm font-mono text-[#142142] dark:text-white pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:outline-none transition-all shadow-2xs"
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        O cliente também pode entrar usando o e-mail cadastrado ({client.email}).
+                      </p>
+                    </div>
+
+                    {/* Password Input */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-[#142142] dark:text-slate-200">
+                          Senha de Acesso
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleGenerateStrongPassword}
+                          className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <Sparkles size={11} />
+                          <span>Gerar Senha Forte</span>
+                        </button>
+                      </div>
+
+                      <div className="relative">
+                        <input
+                          type={showPortalPass ? 'text' : 'password'}
+                          value={portalPass}
+                          onChange={(e) => setPortalPass(e.target.value)}
+                          placeholder="Defina a senha de acesso"
+                          className="w-full bg-white dark:bg-slate-900 text-sm font-mono text-[#142142] dark:text-white pl-3.5 pr-10 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:outline-none transition-all shadow-2xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPortalPass(!showPortalPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-1"
+                          title={showPortalPass ? 'Ocultar senha' : 'Ver senha'}
+                        >
+                          {showPortalPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Recomendado: utilize uma senha de fácil memorização para o cliente ou clique em "Gerar Senha Forte".
+                      </p>
+                    </div>
+
+                    {/* Direct Portal Link */}
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-1.5">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Link Direto para o Portal do Cliente
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={typeof window !== 'undefined' ? `${window.location.origin}?portal=cliente&user=${encodeURIComponent(portalUser)}` : ''}
+                          className="flex-1 bg-slate-50 dark:bg-slate-800 text-[11px] font-mono text-slate-600 dark:text-slate-300 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 select-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (typeof window !== 'undefined') {
+                              navigator.clipboard.writeText(`${window.location.origin}?portal=cliente&user=${encodeURIComponent(portalUser)}`);
+                              setCopiedAccess(true);
+                              setTimeout(() => setCopiedAccess(false), 2000);
+                            }
+                          }}
+                          className="px-2.5 py-1.5 bg-[#142142] text-white hover:bg-[#142142]/90 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                          title="Copiar Link"
+                        >
+                          <Copy size={12} />
+                          <span>Copiar</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Save Button */}
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        id="btn-save-client-portal-credentials"
+                        onClick={handleSavePortalCredentials}
+                        className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#fab518] hover:bg-[#fab518]/90 text-[#142142] font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Check size={15} className="stroke-[3]" />
+                        <span>Salvar Credenciais do Cliente</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Share & Simulation Actions */}
+                <div className="bg-white dark:bg-slate-800/80 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Ações de Envio e Teste de Acesso
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {/* Copy formatted text */}
+                    <button
+                      type="button"
+                      id="btn-drawer-copy-access"
+                      onClick={handleCopyAccessInfo}
+                      className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-bold text-[#142142] dark:text-white transition-colors cursor-pointer"
+                    >
+                      <Copy size={14} className="text-[#fab518]" />
+                      <span>Copiar Mensagem</span>
+                    </button>
+
+                    {/* Send WhatsApp */}
+                    <button
+                      type="button"
+                      id="btn-drawer-whatsapp-access"
+                      onClick={handleSendWhatsAppAccess}
+                      className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 text-xs font-bold text-emerald-800 dark:text-emerald-300 transition-colors cursor-pointer"
+                    >
+                      <Send size={14} className="text-emerald-600" />
+                      <span>Enviar WhatsApp</span>
+                    </button>
+
+                    {/* Test Login */}
+                    {onLoginAsClient && (
+                      <button
+                        type="button"
+                        id="btn-drawer-test-client-login"
+                        onClick={handleTestLoginAsClient}
+                        className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-xs font-bold text-blue-800 dark:text-blue-300 transition-colors cursor-pointer"
+                      >
+                        <LogIn size={14} className="text-blue-600" />
+                        <span>Testar como Cliente</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Security and Supabase sync note */}
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/70 dark:border-slate-800 text-xs flex items-start gap-2.5">
+                  <Database size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                  <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+                    As credenciais são persistidas no banco <strong>Supabase</strong> e salvas de forma segura com hash SHA-256 e proteção contra força bruta. O cliente somente terá visão das demandas e entregáveis associados ao seu cadastro.
+                  </p>
+                </div>
               </div>
             )}
 

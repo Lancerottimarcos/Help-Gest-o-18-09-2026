@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   LayoutDashboard, 
   Users, 
@@ -22,7 +22,8 @@ import {
   Layers,
   MessageSquare,
   CalendarClock,
-  BarChart3
+  BarChart3,
+  CheckCircle2
 } from 'lucide-react';
 import { PageId, UserProfile, Client, DemandItem } from '../types';
 import { currentUser } from '../data/mockData';
@@ -138,6 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const handleMouseEnterDemandas = () => {
+    if (isClientRole) return;
     if (subBarCloseTimeoutRef.current) {
       clearTimeout(subBarCloseTimeoutRef.current);
       subBarCloseTimeoutRef.current = null;
@@ -314,56 +316,84 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setAvatarImgError(false);
   }, [activeUser.avatarUrl]);
 
-  const navItems: NavItemConfig[] = [
-    {
-      id: 'inicio',
-      label: 'Início',
-      icon: LayoutDashboard,
-    },
-    {
-      id: 'clientes',
-      label: 'Clientes',
-      icon: Users,
-    },
-    {
-      id: 'demandas',
-      label: 'Demandas',
-      icon: Kanban,
-    },
-    {
-      id: 'producao',
-      label: 'Produção',
-      icon: Layers,
-    },
-    {
-      id: 'agenda',
-      label: 'Agenda',
-      icon: CalendarClock,
-    },
-    {
-      id: 'gestao' as PageId,
-      label: 'Gestão',
-      icon: BarChart3,
-    },
-    {
-      id: 'comunicacao',
-      label: 'Comunicação',
-      icon: MessageSquare,
-    },
-    {
-      id: 'portal-cliente',
-      label: 'Portal do Cliente',
-      icon: Sparkles,
-      disabled: true,
-      badge: 'Em breve',
-      badgeColor: 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 text-[10px]',
-    },
-    {
-      id: 'configuracoes',
-      label: 'Configurações',
-      icon: Settings,
-    },
-  ];
+  const isClientRole = activeUser.role === 'cliente';
+
+  const clientScopeName = (activeUser.clientName || activeUser.name || '').trim().toLowerCase();
+  const pendingApprovalsCount = useMemo(() => {
+    if (!isClientRole) return 0;
+    return demands.filter((d) => {
+      const matchClient =
+        (d.client && d.client.trim().toLowerCase() === clientScopeName) ||
+        (d.clientId && d.clientId === activeUser.clientId);
+      const isPending = d.columnId === 'aprovacao' || d.approvalStatus === 'pendente' || (!d.approvalStatus && d.columnId === 'aprovacao');
+      return matchClient && isPending;
+    }).length;
+  }, [isClientRole, demands, clientScopeName, activeUser.clientId]);
+
+  const navItems: NavItemConfig[] = isClientRole
+    ? [
+        {
+          id: 'demandas',
+          label: 'Portal do Cliente',
+          icon: Sparkles,
+          badge: totalActiveDemands > 0 ? totalActiveDemands : undefined,
+          badgeColor: 'bg-[#fab518] text-[#142142]',
+        },
+        {
+          id: 'aprovacoes',
+          label: 'Aprovações',
+          icon: CheckCircle2,
+          badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined,
+          badgeColor: 'bg-emerald-500 text-white',
+        },
+      ]
+    : [
+        {
+          id: 'inicio',
+          label: 'Início',
+          icon: LayoutDashboard,
+        },
+        {
+          id: 'clientes',
+          label: 'Clientes',
+          icon: Users,
+        },
+        {
+          id: 'demandas',
+          label: 'Demandas',
+          icon: Kanban,
+        },
+        {
+          id: 'producao',
+          label: 'Produção',
+          icon: Layers,
+        },
+        {
+          id: 'agenda',
+          label: 'Agenda',
+          icon: CalendarClock,
+        },
+        {
+          id: 'gestao' as PageId,
+          label: 'Gestão',
+          icon: BarChart3,
+        },
+        {
+          id: 'comunicacao',
+          label: 'Comunicação',
+          icon: MessageSquare,
+        },
+        {
+          id: 'portal-cliente',
+          label: 'Portal do Cliente',
+          icon: Sparkles,
+        },
+        {
+          id: 'configuracoes',
+          label: 'Configurações',
+          icon: Settings,
+        },
+      ];
 
   return (
     <>
@@ -400,14 +430,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="w-12 h-12 rounded-full bg-slate-100/90 dark:bg-slate-800/90 flex items-center justify-center shadow-xs border border-slate-200/60 dark:border-slate-700/60 transition-transform hover:scale-105">
                   <HelpLogo 
                     variant="icon" 
-                    onClick={() => onSelectPage('inicio')} 
+                    onClick={() => onSelectPage(isClientRole ? 'demandas' : 'inicio')} 
                   />
                 </div>
               ) : (
                 <HelpLogo 
                   variant="full" 
                   size="lg" 
-                  onClick={() => onSelectPage('inicio')} 
+                  onClick={() => onSelectPage(isClientRole ? 'demandas' : 'inicio')} 
                   className="py-1"
                 />
               )}
@@ -457,14 +487,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-
-
           {/* Navigation Links List */}
           <nav className={`py-2 space-y-1.5 ${isCollapsed ? 'px-2' : 'px-3'}`} aria-label="Menu Principal">
             {!isCollapsed && (
               <div className="px-3 pb-1.5 pt-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Menu Principal
+                  {isClientRole ? 'Área do Cliente' : 'Menu Principal'}
                 </span>
               </div>
             )}
@@ -718,7 +746,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 `}
                               />
                             </span>
-                          ) : isDemandas ? (
+                          ) : isDemandas && !isClientRole ? (
                             <span
                               role="button"
                               tabIndex={0}
@@ -875,9 +903,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Current User Card */}
           <div 
-            onClick={() => onSelectPage('equipe')}
+            onClick={() => onSelectPage(isClientRole ? 'demandas' : 'equipe')}
             className={`flex items-center justify-between rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors cursor-pointer group/user ${isCollapsed ? 'justify-center p-1.5' : 'p-2'}`}
-            title={isCollapsed ? `${activeUser.name} - ${activeUser.roleLabel} (Clique para ver perfil na Equipe)` : 'Clique para ver o perfil na Equipe'}
+            title={isCollapsed ? `${activeUser.name} - ${activeUser.roleLabel}` : isClientRole ? 'Área Exclusiva do Cliente' : 'Clique para ver o perfil na Equipe'}
           >
             <div className={`flex items-center min-w-0 ${isCollapsed ? 'justify-center' : 'gap-3 flex-1'}`}>
               {activeUser.avatarUrl?.trim() && !avatarImgError ? (
@@ -941,42 +969,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </aside>
 
       {/* Secondary Sub-Bar showing registered clients on hover of Demandas */}
-      <SidebarClientsSubBar
-        isOpen={isClientsSubBarOpen}
-        onClose={() => setIsClientsSubBarOpen(false)}
-        onMouseEnter={handleMouseEnterSubBar}
-        onMouseLeave={handleMouseLeaveSubBar}
-        clients={clients}
-        demands={demands}
-        selectedClientFilter={selectedClientFilter}
-        onSelectClientDemands={(clientName) => {
-          setIsClientsSubBarOpen(false);
-          if (onSelectClientDemands) {
-            onSelectClientDemands(clientName);
-          } else {
-            onSelectPage('demandas');
-          }
-          onCloseMobile();
-        }}
-        onSelectAllDemands={() => {
-          setIsClientsSubBarOpen(false);
-          if (onSelectClientDemands) {
-            onSelectClientDemands('todos');
-          } else {
-            onSelectPage('demandas');
-          }
-          onCloseMobile();
-        }}
-        isSidebarCollapsed={isCollapsed}
-        onNavigateToClients={() => {
-          setIsClientsSubBarOpen(false);
-          onSelectPage('clientes');
-          onCloseMobile();
-        }}
-      />
+      {!isClientRole && (
+        <SidebarClientsSubBar
+          isOpen={isClientsSubBarOpen}
+          onClose={() => setIsClientsSubBarOpen(false)}
+          onMouseEnter={handleMouseEnterSubBar}
+          onMouseLeave={handleMouseLeaveSubBar}
+          clients={clients}
+          demands={demands}
+          selectedClientFilter={selectedClientFilter}
+          onSelectClientDemands={(clientName) => {
+            setIsClientsSubBarOpen(false);
+            if (onSelectClientDemands) {
+              onSelectClientDemands(clientName);
+            } else {
+              onSelectPage('demandas');
+            }
+            onCloseMobile();
+          }}
+          onSelectAllDemands={() => {
+            setIsClientsSubBarOpen(false);
+            if (onSelectClientDemands) {
+              onSelectClientDemands('todos');
+            } else {
+              onSelectPage('demandas');
+            }
+            onCloseMobile();
+          }}
+          isSidebarCollapsed={isCollapsed}
+          onNavigateToClients={() => {
+            setIsClientsSubBarOpen(false);
+            onSelectPage('clientes');
+            onCloseMobile();
+          }}
+        />
+      )}
 
       {/* Menu Flutuante de Produção ao passar o mouse (Desktop) */}
-      {isProducaoFlyoutOpen && (
+      {!isClientRole && isProducaoFlyoutOpen && (
         <div
           id="sidebar-producao-flyout"
           onMouseEnter={handleMouseEnterProducaoFlyout}
@@ -1094,7 +1124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Menu Flutuante de Gestão ao passar o mouse (Desktop) */}
-      {isGestaoFlyoutOpen && (
+      {!isClientRole && isGestaoFlyoutOpen && (
         <div
           id="sidebar-gestao-flyout"
           onMouseEnter={handleMouseEnterGestaoFlyout}

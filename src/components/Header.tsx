@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Menu, 
@@ -19,7 +19,7 @@ import {
   KeyRound
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PageId, AgencyNotification } from '../types';
+import { PageId, AgencyNotification, UserProfile } from '../types';
 import { 
   getNotificationPermission, 
   requestNotificationPermission,
@@ -28,6 +28,7 @@ import {
 
 interface HeaderProps {
   currentPage: PageId;
+  currentUser?: UserProfile;
   onOpenMobileSidebar: () => void;
   onOpenNewDemandModal?: () => void;
   searchQuery?: string;
@@ -168,10 +169,15 @@ const PAGE_TITLES: Record<PageId, { title: string; subtitle: string }> = {
     title: 'Agenda & Google Calendar',
     subtitle: 'Gestão de reuniões, briefings com clientes e videoconferências sincronizadas',
   },
+  aprovacoes: {
+    title: 'Central de Aprovações',
+    subtitle: 'Revise criativos, aprove materiais e envie feedbacks para a agência',
+  },
 };
 
 export const Header: React.FC<HeaderProps> = ({
   currentPage,
+  currentUser,
   onOpenMobileSidebar,
   onOpenNewDemandModal,
   searchQuery,
@@ -185,7 +191,19 @@ export const Header: React.FC<HeaderProps> = ({
   onRefreshSupabase,
   clientsCount,
 }) => {
-  const pageInfo = PAGE_TITLES[currentPage] || PAGE_TITLES.inicio;
+  const isClientUser = currentUser?.role === 'cliente';
+  const pageInfo = isClientUser
+    ? (currentPage === 'aprovacoes'
+        ? {
+            title: `Central de Aprovações • ${currentUser?.clientName || currentUser?.name}`,
+            subtitle: 'Revise, aprove ou solicite ajustes nos seus materiais e campanhas',
+          }
+        : {
+            title: `Portal do Cliente • ${currentUser?.clientName || currentUser?.name}`,
+            subtitle: 'Seus materiais, entregáveis e criativos em tempo real',
+          }
+      )
+    : (PAGE_TITLES[currentPage] || PAGE_TITLES.inicio);
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'security'>('all');
@@ -199,6 +217,13 @@ export const Header: React.FC<HeaderProps> = ({
     } catch {}
     return DEFAULT_NOTIFICATIONS;
   });
+
+  const displayNotifications = useMemo(() => {
+    if (!isClientUser) return notifications;
+    return notifications.filter(
+      (n) => n.type === 'approval' || n.title.toLowerCase().includes('portal') || n.title.toLowerCase().includes('materiais')
+    );
+  }, [notifications, isClientUser]);
 
   const notificationsRef = useRef<HTMLDivElement>(null);
   const mobilePopoverRef = useRef<HTMLDivElement>(null);
@@ -256,8 +281,8 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, [isNotificationsOpen]);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
-  const securityCount = notifications.filter((n) => n.type === 'security').length;
+  const unreadCount = displayNotifications.filter((n) => !n.read).length;
+  const securityCount = displayNotifications.filter((n) => n.type === 'security').length;
 
   const [browserNotifPermission, setBrowserNotifPermission] = useState<string>(() => getNotificationPermission());
 
@@ -301,7 +326,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const filteredNotifications = notifications.filter((n) => {
+  const filteredNotifications = displayNotifications.filter((n) => {
     if (activeFilter === 'unread') return !n.read;
     if (activeFilter === 'security') return n.type === 'security';
     return true;
@@ -538,18 +563,20 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="p-2.5 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800/80 text-center shrink-0">
-        <button
-          type="button"
-          onClick={() => {
-            if (onNavigate) onNavigate('configuracoes');
-            setIsNotificationsOpen(false);
-          }}
-          className="text-[11px] font-bold text-slate-500 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white transition-colors cursor-pointer py-1 touch-manipulation"
-        >
-          Configurações de Alertas e Protocolos →
-        </button>
-      </div>
+      {!isClientUser && (
+        <div className="p-2.5 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800/80 text-center shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              if (onNavigate) onNavigate('configuracoes');
+              setIsNotificationsOpen(false);
+            }}
+            className="text-[11px] font-bold text-slate-500 dark:text-slate-400 hover:text-[#142142] dark:hover:text-white transition-colors cursor-pointer py-1 touch-manipulation"
+          >
+            Configurações de Alertas e Protocolos →
+          </button>
+        </div>
+      )}
     </>
   );
 
@@ -580,6 +607,19 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right: Notifications */}
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {/* Client quick logout button */}
+        {isClientUser && onLogout && (
+          <button
+            type="button"
+            id="btn-header-client-logout"
+            onClick={onLogout}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-800 text-xs font-bold transition-colors cursor-pointer"
+            title="Sair da Área do Cliente"
+          >
+            <LogOut size={14} />
+            <span className="hidden sm:inline">Sair da Conta</span>
+          </button>
+        )}
         {/* Notifications Button & Popover */}
         <div className="relative" ref={notificationsRef}>
           <button

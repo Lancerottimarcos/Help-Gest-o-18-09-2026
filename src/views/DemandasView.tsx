@@ -40,7 +40,7 @@ import {
   Columns,
   AlertTriangle
 } from 'lucide-react';
-import { DemandItem, KanbanColumnId, Priority, Client, KanbanColumn, TeamMember } from '../types';
+import { DemandItem, KanbanColumnId, Priority, Client, KanbanColumn, TeamMember, UserProfile } from '../types';
 import { kanbanColumnsData } from '../data/mockData';
 import { DemandDetailModal } from '../components/DemandDetailModal';
 import { ApprovalNotificationConfigModal } from '../components/ApprovalNotificationConfigModal';
@@ -53,6 +53,7 @@ interface DemandasViewProps {
   clients?: Client[];
   teamMembers?: TeamMember[];
   columns?: KanbanColumn[];
+  currentUser?: UserProfile;
   onAddColumn?: (column: KanbanColumn, insertBeforeConcluded?: boolean) => void;
   onUpdateColumn?: (column: KanbanColumn) => void;
   onDeleteColumn?: (columnId: string) => void;
@@ -70,6 +71,7 @@ interface DemandasViewProps {
   onDeleteDemand?: (demandId: string) => void;
   onOpenWhatsAppNotification?: (demand: DemandItem) => void;
   onOpenClientApprovalPortal?: (demand: DemandItem) => void;
+  onNavigateToApprovals?: () => void;
   initialSelectedDemandId?: string | null;
   onClearInitialSelectedDemand?: () => void;
 }
@@ -79,6 +81,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
   clients = [],
   teamMembers = [],
   columns,
+  currentUser,
   onAddColumn,
   onUpdateColumn,
   onDeleteColumn,
@@ -91,6 +94,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
   onDeleteDemand,
   onOpenWhatsAppNotification,
   onOpenClientApprovalPortal,
+  onNavigateToApprovals,
   initialSelectedDemandId,
   onClearInitialSelectedDemand,
 }) => {
@@ -143,8 +147,14 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     return undefined;
   };
 
+  const isClientUser = currentUser?.role === 'cliente';
+  const clientScopeName = currentUser?.clientName || currentUser?.name || '';
+
   const [activeTab, setActiveTab] = useState<'quadro' | 'lista' | 'calendario' | 'gantt'>('quadro');
-  const [selectedClientFilter, setSelectedClientFilter] = useState<string>(initialClientFilter);
+  const [selectedClientFilter, setSelectedClientFilter] = useState<string>(() => {
+    if (isClientUser && clientScopeName) return clientScopeName;
+    return initialClientFilter;
+  });
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('todas');
   const [typeFilter, setTypeFilter] = useState<string>('todos');
@@ -518,10 +528,14 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
 
   // Sync initial client filter if prop changes
   useEffect(() => {
+    if (isClientUser && clientScopeName) {
+      setSelectedClientFilter(clientScopeName);
+      return;
+    }
     if (initialClientFilter !== undefined) {
       setSelectedClientFilter(initialClientFilter);
     }
-  }, [initialClientFilter, filterResetTrigger]);
+  }, [initialClientFilter, filterResetTrigger, isClientUser, clientScopeName]);
 
   // Helper to match demand type / category
   const matchesDemandType = (item: DemandItem, filter: string): boolean => {
@@ -632,6 +646,20 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
       (item.client && c.name && (c.name.toLowerCase() === item.client.toLowerCase() || (c.companyName && c.companyName.toLowerCase() === item.client.toLowerCase())))
     );
     const resolvedItemClient = itemMatchedClient ? (itemMatchedClient.name || itemMatchedClient.companyName) : (item.client || '');
+
+    // Para usuários clientes autenticados no portal, exibir estritamente suas demandas
+    if (isClientUser) {
+      const isClientMatch =
+        (currentUser?.clientId && (item.clientId === currentUser.clientId || itemMatchedClient?.id === currentUser.clientId)) ||
+        resolvedItemClient.toLowerCase() === clientScopeName.toLowerCase() ||
+        (item.client || '').toLowerCase() === clientScopeName.toLowerCase() ||
+        (itemMatchedClient?.name && itemMatchedClient.name.toLowerCase() === clientScopeName.toLowerCase()) ||
+        (itemMatchedClient?.companyName && itemMatchedClient.companyName.toLowerCase() === clientScopeName.toLowerCase());
+
+      if (!isClientMatch) {
+        return false;
+      }
+    }
 
     const matchesSearch = 
       (item.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -789,8 +817,56 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
     };
   };
 
+  const clientPendingApprovalCount = useMemo(() => {
+    if (!isClientUser) return 0;
+    return filteredDemands.filter((d) => d.columnId === 'aprovacao' || d.approvalStatus === 'pendente').length;
+  }, [isClientUser, filteredDemands]);
+
   return (
     <div className="space-y-4 sm:space-y-5 pb-6">
+      {/* Banner de Boas-Vindas Exclusivo do Cliente */}
+      {isClientUser && (
+        <div className="p-4 sm:p-5 rounded-[22px] bg-gradient-to-r from-[#142142] via-[#1a2b56] to-[#142142] text-white border border-[#fab518]/30 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-2xl bg-[#fab518]/20 border border-[#fab518]/40 flex items-center justify-center text-[#fab518] shrink-0 shadow-inner">
+              <Building2 size={22} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#fab518] text-[#142142] uppercase tracking-wider">
+                  Área do Cliente
+                </span>
+                <span className="text-xs text-slate-300 font-medium">Acesso Individual Seguro</span>
+              </div>
+              <h2 className="text-base sm:text-lg font-black text-white mt-0.5 truncate">
+                Olá, {clientScopeName}!
+              </h2>
+              <p className="text-xs text-slate-300 line-clamp-1">
+                Acompanhe abaixo o andamento de todos os materiais e produções da sua marca.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+            {clientPendingApprovalCount > 0 && onNavigateToApprovals && (
+              <button
+                type="button"
+                onClick={onNavigateToApprovals}
+                className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer animate-pulse"
+              >
+                <CheckCircle2 size={15} />
+                <span>Revisar {clientPendingApprovalCount} Aprovações</span>
+              </button>
+            )}
+            <div className="text-right">
+              <span className="text-[11px] text-slate-400 block font-medium">Materiais Disponíveis</span>
+              <span className="text-base font-extrabold text-[#fab518] tabular-nums">
+                {filteredDemands.length} {filteredDemands.length === 1 ? 'item' : 'itens'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Filter and Controls Bar */}
       <div 
         id="demandas-filter-bar"
@@ -937,26 +1013,36 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
         {/* Tier 2: Granular Select Filters (Cliente, Categoria, Prioridade) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-3.5 border-t border-slate-100 dark:border-slate-800">
           {/* Client filter dropdown */}
-          <div className="relative">
-            <Building2 size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500" />
-            <select
-              id="filter-client-select"
-              value={selectedClientFilter}
-              onChange={(e) => setSelectedClientFilter(e.target.value)}
-              className="w-full appearance-none bg-[#F8F9FA] dark:bg-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/80 text-xs font-semibold text-[#142142] dark:text-white pl-9 pr-8 py-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700 focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all cursor-pointer"
-            >
-              <option value="todos">Todos os Clientes ({demands.length})</option>
-              {allClientNames.map((clientName) => {
-                const count = countByClient[clientName] || 0;
-                return (
-                  <option key={clientName} value={clientName}>
-                    {clientName} ({count})
-                  </option>
-                );
-              })}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 dark:text-slate-400" />
-          </div>
+          {isClientUser ? (
+            <div className="flex items-center gap-2.5 bg-gradient-to-r from-amber-500/10 to-amber-500/5 dark:from-[#fab518]/15 dark:to-transparent border border-[#fab518]/30 px-3.5 py-2 rounded-xl text-xs font-bold text-[#142142] dark:text-[#fab518] shadow-2xs">
+              <Building2 size={15} className="text-[#fab518] shrink-0" />
+              <div className="truncate">
+                <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-400 block leading-tight">Sua Empresa</span>
+                <span className="truncate block font-black text-xs">{clientScopeName}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="relative">
+              <Building2 size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500" />
+              <select
+                id="filter-client-select"
+                value={selectedClientFilter}
+                onChange={(e) => setSelectedClientFilter(e.target.value)}
+                className="w-full appearance-none bg-[#F8F9FA] dark:bg-slate-800 hover:bg-slate-100/90 dark:hover:bg-slate-700/80 text-xs font-semibold text-[#142142] dark:text-white pl-9 pr-8 py-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700 focus:border-[#fab518] focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all cursor-pointer"
+              >
+                <option value="todos">Todos os Clientes ({demands.length})</option>
+                {allClientNames.map((clientName) => {
+                  const count = countByClient[clientName] || 0;
+                  return (
+                    <option key={clientName} value={clientName}>
+                      {clientName} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 dark:text-slate-400" />
+            </div>
+          )}
 
           {/* Type filter dropdown */}
           <div className="relative">
@@ -1343,73 +1429,77 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                         </div>
                       )}
 
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={onOpenNewDemandModal}
-                          className="p-1 rounded-lg text-slate-400 hover:text-[#142142] dark:hover:text-[#fab518] hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                          title={`Adicionar demanda em ${col.title}`}
-                          aria-label="Adicionar demanda"
-                        >
-                          <Plus size={15} className="stroke-[2.5]" />
-                        </button>
-
-                        <div className="relative column-menu-container">
+                      {!isClientUser && (
+                        <div className="flex items-center gap-0.5 shrink-0">
                           <button
                             type="button"
-                            onClick={() => setColumnMenuOpenId(columnMenuOpenId === col.id ? null : col.id)}
-                            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 p-1 rounded-lg cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors"
-                            title="Opções da coluna"
+                            onClick={onOpenNewDemandModal}
+                            className="p-1 rounded-lg text-slate-400 hover:text-[#142142] dark:hover:text-[#fab518] hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title={`Adicionar demanda em ${col.title}`}
+                            aria-label="Adicionar demanda"
                           >
-                            <MoreVertical size={14} />
+                            <Plus size={15} className="stroke-[2.5]" />
                           </button>
 
-                          {columnMenuOpenId === col.id && (
-                            <div className="absolute right-0 top-full mt-1 z-30 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 text-xs font-semibold animate-in fade-in zoom-in-95 duration-100">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setColumnToEdit(col);
-                                  setIsAddColumnModalOpen(true);
-                                  setColumnMenuOpenId(null);
-                                }}
-                                className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer transition-colors"
-                              >
-                                <Edit size={13} className="text-slate-400" />
-                                <span>Renomear / Editar Coluna</span>
-                              </button>
+                          <div className="relative column-menu-container">
+                            <button
+                              type="button"
+                              onClick={() => setColumnMenuOpenId(columnMenuOpenId === col.id ? null : col.id)}
+                              className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 p-1 rounded-lg cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors"
+                              title="Opções da coluna"
+                            >
+                              <MoreVertical size={14} />
+                            </button>
 
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setColumnToDelete(col);
-                                  setColumnMenuOpenId(null);
-                                }}
-                                className="w-full px-3 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-2 cursor-pointer transition-colors border-t border-slate-100 dark:border-slate-700"
-                              >
-                                <Trash2 size={13} className="text-red-500" />
-                                <span>Excluir Coluna</span>
-                              </button>
-                            </div>
-                          )}
+                            {columnMenuOpenId === col.id && (
+                              <div className="absolute right-0 top-full mt-1 z-30 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 text-xs font-semibold animate-in fade-in zoom-in-95 duration-100">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setColumnToEdit(col);
+                                    setIsAddColumnModalOpen(true);
+                                    setColumnMenuOpenId(null);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer transition-colors"
+                                >
+                                  <Edit size={13} className="text-slate-400" />
+                                  <span>Renomear / Editar Coluna</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setColumnToDelete(col);
+                                    setColumnMenuOpenId(null);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-2 cursor-pointer transition-colors border-t border-slate-100 dark:border-slate-700"
+                                >
+                                  <Trash2 size={13} className="text-red-500" />
+                                  <span>Excluir Coluna</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     {/* "+ Nova demanda" action button */}
-                    <button
-                      type="button"
-                      onClick={onOpenNewDemandModal}
-                      className={`
-                        w-full py-2 px-3 rounded-xl text-xs font-bold text-white shadow-2xs hover:shadow-xs
-                        flex items-center justify-center gap-1.5 transition-all active:scale-98 cursor-pointer
-                        ${col.buttonBg}
-                      `}
-                    >
-                      <Plus size={13} className="stroke-[2.5]" />
-                      <span>Nova demanda</span>
-                    </button>
+                    {!isClientUser && (
+                      <button
+                        type="button"
+                        onClick={onOpenNewDemandModal}
+                        className={`
+                          w-full py-2 px-3 rounded-xl text-xs font-bold text-white shadow-2xs hover:shadow-xs
+                          flex items-center justify-center gap-1.5 transition-all active:scale-98 cursor-pointer
+                          ${col.buttonBg}
+                        `}
+                      >
+                        <Plus size={13} className="stroke-[2.5]" />
+                        <span>Nova demanda</span>
+                      </button>
+                    )}
                   </div>
 
                 {/* Cards List (Virtualized with react-window) */}
@@ -1522,7 +1612,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                 </div>
               </form>
             </div>
-          ) : (
+          ) : !isClientUser ? (
             <button
               type="button"
               id="btn-kanban-add-column-card"
@@ -1544,7 +1634,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
                 </span>
               </div>
             </button>
-          )}
+          ) : null}
         </div>
       </div>
       )}
@@ -1708,6 +1798,7 @@ export const DemandasView: React.FC<DemandasViewProps> = ({
           onClose={() => setEditingDemand(null)}
           onOpenWhatsAppNotification={onOpenWhatsAppNotification}
           onOpenClientApprovalPortal={onOpenClientApprovalPortal}
+          isClientUser={isClientUser}
           onSave={(updatedDemand) => {
             if (onSaveDemand) {
               onSaveDemand(updatedDemand);

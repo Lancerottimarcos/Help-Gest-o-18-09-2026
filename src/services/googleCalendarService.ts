@@ -56,6 +56,8 @@ export interface CreateAppointmentInput {
   attendeesEmails?: string[];
 }
 
+export const GOOGLE_MEET_INSTANT_URL = 'https://meet.google.com/new';
+
 /**
  * Initial sample appointments for digital agency operations
  */
@@ -71,7 +73,7 @@ export const INITIAL_AGENCY_APPOINTMENTS: AgencyAppointment[] = [
     startTime: '10:00',
     endDate: new Date().toISOString().split('T')[0],
     endTime: '11:00',
-    meetLink: 'https://meet.google.com/hel-pide-ias',
+    meetLink: GOOGLE_MEET_INSTANT_URL,
     location: 'Google Meet',
     attendees: [
       { email: 'marcos@helpideias.com.br', name: 'Marcos Lancerotti', responseStatus: 'accepted' },
@@ -91,7 +93,7 @@ export const INITIAL_AGENCY_APPOINTMENTS: AgencyAppointment[] = [
     startTime: '14:30',
     endDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
     endTime: '15:30',
-    meetLink: 'https://meet.google.com/doc-clin-ica',
+    meetLink: GOOGLE_MEET_INSTANT_URL,
     location: 'Google Meet',
     attendees: [
       { email: 'contato@drmarcelo.com.br', name: 'Dr. Marcelo', responseStatus: 'needsAction' }
@@ -169,12 +171,28 @@ export function getLocalAppointments(): AgencyAppointment[] {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         // Return stored items, strictly filtering out any deleted or cancelled ones
-        return parsed.filter((a: AgencyAppointment) => {
-          if (!a || a.status === 'cancelled') return false;
-          if (a.id && deletedIds.has(a.id)) return false;
-          if (a.googleEventId && deletedIds.has(a.googleEventId)) return false;
-          return true;
-        });
+        return parsed
+          .filter((a: AgencyAppointment) => {
+            if (!a || a.status === 'cancelled') return false;
+            if (a.id && deletedIds.has(a.id)) return false;
+            if (a.googleEventId && deletedIds.has(a.googleEventId)) return false;
+            return true;
+          })
+          .map((a: AgencyAppointment) => {
+            // Replace any invalid fake randomized meeting codes with official instant room
+            if (
+              a.meetLink &&
+              (a.meetLink.includes('hel-pide-ias') ||
+                a.meetLink.includes('doc-clin-ica') ||
+                (!a.syncedWithGoogle && a.meetLink.startsWith('https://meet.google.com/') && a.meetLink !== GOOGLE_MEET_INSTANT_URL))
+            ) {
+              return {
+                ...a,
+                meetLink: GOOGLE_MEET_INSTANT_URL,
+              };
+            }
+            return a;
+          });
       }
     }
   } catch (err) {
@@ -225,6 +243,44 @@ function inferCategory(summary?: string, description?: string): AppointmentCateg
 }
 
 /**
+ * Polls Google Calendar API with short backoff to retrieve asynchronously generated Google Meet conference data
+ */
+async function fetchEventWithConferenceRetry(
+  eventId: string,
+  token: string,
+  maxAttempts = 3
+): Promise<GoogleCalendarApiEvent | null> {
+  const url = new URL(`${GOOGLE_CALENDAR_API_BASE}/${encodeURIComponent(eventId)}`);
+  url.searchParams.set('conferenceDataVersion', '1');
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // Wait between attempts (600ms, 1000ms)
+    await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 600 : 1000));
+    try {
+      const res = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+      if (res.ok) {
+        const eventData: GoogleCalendarApiEvent = await res.json();
+        const hasMeet = Boolean(
+          eventData.hangoutLink ||
+          eventData.conferenceData?.entryPoints?.some((ep) => ep.entryPointType === 'video')
+        );
+        if (hasMeet) {
+          return eventData;
+        }
+      }
+    } catch (e) {
+      console.warn('Error during conferenceData polling:', e);
+    }
+  }
+  return null;
+}
+
+/**
  * Converts a Google Calendar API event into an AgencyAppointment
  */
 export function mapGoogleEventToAppointment(
@@ -240,11 +296,22 @@ export function mapGoogleEventToAppointment(
   const endDate = endRaw.includes('T') ? endRaw.split('T')[0] : startDate;
   const endTime = endRaw.includes('T') ? endRaw.split('T')[1].substring(0, 5) : '10:00';
 
-  // Find Meet link
+  // Find Meet link from Google event properties
   let meetLink = event.hangoutLink;
   if (!meetLink && event.conferenceData?.entryPoints) {
     const videoEntry = event.conferenceData.entryPoints.find((ep) => ep.entryPointType === 'video');
     if (videoEntry) meetLink = videoEntry.uri;
+  }
+  // Also check if Meet link was passed in location or description
+  if (!meetLink) {
+    const meetRegex = /https:\/\/meet\.google\.com\/[a-z0-9-]+/i;
+    const matchLoc = event.location?.match(meetRegex);
+    const matchDesc = event.description?.match(meetRegex);
+    if (matchLoc) {
+      meetLink = matchLoc[0];
+    } else if (matchDesc) {
+      meetLink = matchDesc[0];
+    }
   }
 
   // Try to match with existing client
@@ -416,6 +483,7 @@ export async function createGoogleCalendarAppointment(
 
   // If no Google token is active, save as local appointment
   if (!token) {
+    const localMeetUrl = input.addGoogleMeet ? GOOGLE_MEET_INSTANT_URL : undefined;
     const localApt: AgencyAppointment = {
       id: `local-${Date.now()}`,
       title: input.title,
@@ -427,7 +495,8 @@ export async function createGoogleCalendarAppointment(
       startTime: input.startTime,
       endDate: input.endDate,
       endTime: input.endTime,
-      location: input.location || (input.addGoogleMeet ? 'Google Meet (Pendente Sincronização)' : 'Presencial'),
+      meetLink: localMeetUrl,
+      location: localMeetUrl ? 'Google Meet' : (input.location || 'Presencial'),
       attendees: attendeesList.map((a) => ({ email: a.email, responseStatus: 'needsAction' as const })),
       status: 'confirmed',
       syncedWithGoogle: false,
@@ -455,14 +524,14 @@ export async function createGoogleCalendarAppointment(
       dateTime: new Date(endDateTime).toISOString(),
       timeZone,
     },
-    location: input.location || '',
+    location: input.location || (input.addGoogleMeet ? 'Google Meet' : ''),
     attendees: attendeesList,
   };
 
   if (input.addGoogleMeet) {
     body.conferenceData = {
       createRequest: {
-        requestId: `meet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        requestId: `meet-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
         conferenceSolutionKey: {
           type: 'hangoutsMeet',
         },
@@ -499,11 +568,31 @@ export async function createGoogleCalendarAppointment(
       };
     }
 
-    const createdEvent: GoogleCalendarApiEvent = await res.json();
+    let createdEvent: GoogleCalendarApiEvent = await res.json();
+
+    // Check if Google Meet conference was created immediately or is pending asynchronously
+    const hasMeetLink = Boolean(
+      createdEvent.hangoutLink ||
+      createdEvent.conferenceData?.entryPoints?.some((ep) => ep.entryPointType === 'video')
+    );
+
+    if (input.addGoogleMeet && !hasMeetLink && createdEvent.id) {
+      const refreshed = await fetchEventWithConferenceRetry(createdEvent.id, token);
+      if (refreshed) {
+        createdEvent = refreshed;
+      }
+    }
+
     const mapped = mapGoogleEventToAppointment(createdEvent);
     mapped.category = input.category;
     mapped.clientId = input.clientId;
     mapped.clientName = input.clientName;
+
+    // If Google could not provision an asynchronous room, fallback to Google Meet instant room launcher
+    if (input.addGoogleMeet && !mapped.meetLink) {
+      mapped.meetLink = GOOGLE_MEET_INSTANT_URL;
+      mapped.location = 'Google Meet';
+    }
 
     // Persist in local cache
     const current = getLocalAppointments();
@@ -561,6 +650,8 @@ export async function updateGoogleCalendarAppointment(
     const current = getLocalAppointments();
     const updated = current.map((a) => {
       if (a.id === appointmentId) {
+        const existingMeet = a.meetLink;
+        const newMeet = input.addGoogleMeet ? (existingMeet || GOOGLE_MEET_INSTANT_URL) : undefined;
         return {
           ...a,
           title: input.title,
@@ -572,7 +663,8 @@ export async function updateGoogleCalendarAppointment(
           startTime: input.startTime,
           endDate: input.endDate,
           endTime: input.endTime,
-          location: input.location || a.location,
+          meetLink: newMeet,
+          location: newMeet ? 'Google Meet' : (input.location || a.location || 'Presencial'),
           attendees: attendeesList.map((at) => ({ email: at.email, responseStatus: 'needsAction' as const })),
           lastSyncedAt: new Date().toISOString(),
         };
@@ -598,14 +690,14 @@ export async function updateGoogleCalendarAppointment(
         dateTime: new Date(endDateTime).toISOString(),
         timeZone,
       },
-      location: input.location || '',
+      location: input.location || (input.addGoogleMeet ? 'Google Meet' : ''),
       attendees: attendeesList,
     };
 
     if (input.addGoogleMeet) {
       patchBody.conferenceData = {
         createRequest: {
-          requestId: `meet-${Date.now()}`,
+          requestId: `meet-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
           conferenceSolutionKey: { type: 'hangoutsMeet' },
         },
       };
@@ -632,12 +724,30 @@ export async function updateGoogleCalendarAppointment(
       return { success: false, error: err.error?.message || 'Falha ao atualizar evento no Google.' };
     }
 
-    const updatedEvent: GoogleCalendarApiEvent = await res.json();
+    let updatedEvent: GoogleCalendarApiEvent = await res.json();
+
+    const hasMeetLink = Boolean(
+      updatedEvent.hangoutLink ||
+      updatedEvent.conferenceData?.entryPoints?.some((ep) => ep.entryPointType === 'video')
+    );
+
+    if (input.addGoogleMeet && !hasMeetLink && updatedEvent.id) {
+      const refreshed = await fetchEventWithConferenceRetry(updatedEvent.id, token);
+      if (refreshed) {
+        updatedEvent = refreshed;
+      }
+    }
+
     const mapped = mapGoogleEventToAppointment(updatedEvent);
     mapped.id = appointmentId;
     mapped.category = input.category;
     mapped.clientId = input.clientId;
     mapped.clientName = input.clientName;
+
+    if (input.addGoogleMeet && !mapped.meetLink) {
+      mapped.meetLink = GOOGLE_MEET_INSTANT_URL;
+      mapped.location = 'Google Meet';
+    }
 
     const current = getLocalAppointments();
     const newItems = current.map((item) => (item.id === appointmentId ? mapped : item));

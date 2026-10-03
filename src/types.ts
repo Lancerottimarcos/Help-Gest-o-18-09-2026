@@ -13,7 +13,8 @@ export type PageId =
   | 'apis'
   | 'producao'
   | 'gestao'
-  | 'comunicacao';
+  | 'comunicacao'
+  | 'aprovacoes';
 
 export type UserRole = 'proprietario' | 'colaborador' | 'cliente';
 
@@ -28,6 +29,7 @@ export interface MemberPermissions {
   demandas?: boolean;
   calendario?: boolean;
   agenda?: boolean;
+  aprovacoes?: boolean;
 }
 
 export interface UserProfile {
@@ -40,6 +42,8 @@ export interface UserProfile {
   avatarUrl: string;
   isMaster?: boolean;
   permissions?: MemberPermissions;
+  clientId?: string;
+  clientName?: string;
 }
 
 export type Priority = 'baixa' | 'media' | 'alta' | 'urgente';
@@ -154,6 +158,11 @@ export interface Client {
   lgpdConsentPurpose?: string;
   isAnonymized?: boolean;
   anonymizedAt?: string;
+  // Acesso Individual do Cliente ao Sistema (Usuário e Senha)
+  portalUsername?: string;
+  portalPassword?: string;
+  portalAccessEnabled?: boolean;
+  portalLastLogin?: string;
 }
 
 export interface Service {

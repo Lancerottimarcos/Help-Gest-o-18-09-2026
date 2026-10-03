@@ -16,6 +16,7 @@ import { OrcamentosView } from './views/OrcamentosView';
 import { EquipeView } from './views/EquipeView';
 import { ConfiguracoesView } from './views/ConfiguracoesView';
 import { PortalClienteView } from './views/PortalClienteView';
+import { ClientApprovalsView } from './views/ClientApprovalsView';
 import { CalendarioView } from './views/CalendarioView';
 import { ApisView } from './views/ApisView';
 import { ComunicacaoView } from './views/ComunicacaoView';
@@ -55,7 +56,18 @@ export interface LayoutProps {
 }
 
 export function Layout({ children, onLogout }: LayoutProps) {
-  const [currentPage, setCurrentPage] = useState<PageId>('inicio');
+  const [currentPage, setCurrentPage] = useState<PageId>(() => {
+    try {
+      const saved = localStorage.getItem('help_agency_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.role === 'cliente') {
+          return 'demandas';
+        }
+      }
+    } catch {}
+    return 'inicio';
+  });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const [isNewDemandModalOpen, setIsNewDemandModalOpen] = useState(false);
@@ -163,17 +175,24 @@ export function Layout({ children, onLogout }: LayoutProps) {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed?.name) {
-          const isMarcos =
+          const isClient = parsed.role === 'cliente';
+          const isMarcos = !isClient && (
             (parsed.name.toLowerCase().includes('marcos') && parsed.name.toLowerCase().includes('lancerotti')) ||
             parsed.email?.toLowerCase() === 'lancerottirmarcos@gmail.com' ||
-            parsed.username === 'lancerotti';
+            parsed.username === 'lancerotti'
+          );
           return {
-            id: parsed.id || (isMarcos ? 'usr-1' : `usr-${parsed.username || Date.now()}`),
+            id: parsed.id || (isClient ? `client-user-${parsed.clientId || '1'}` : isMarcos ? 'usr-1' : `usr-${parsed.username || Date.now()}`),
             name: parsed.name,
-            email: parsed.email || (isMarcos ? 'lancerottirmarcos@gmail.com' : `${parsed.username || 'usuario'}@ideiasdigitais.com.br`),
+            email: parsed.email || (isClient ? `${parsed.username || 'cliente'}@cliente.com` : isMarcos ? 'lancerottirmarcos@gmail.com' : `${parsed.username || 'usuario'}@ideiasdigitais.com.br`),
             role: (parsed.role as UserRole) || (isMarcos ? 'proprietario' : 'colaborador'),
-            roleLabel: parsed.roleLabel || (isMarcos ? 'Proprietário da Agência' : 'Colaborador'),
+            roleLabel: parsed.roleLabel || (isClient ? `Cliente • ${parsed.clientName || parsed.name}` : isMarcos ? 'Proprietário da Agência' : 'Colaborador'),
             avatarUrl: parsed.avatarUrl || currentUser.avatarUrl,
+            username: parsed.username,
+            clientId: parsed.clientId,
+            clientName: parsed.clientName,
+            isMaster: isClient ? false : parsed.isMaster,
+            permissions: parsed.permissions,
           };
         }
       }
@@ -249,9 +268,41 @@ export function Layout({ children, onLogout }: LayoutProps) {
     }
   }, [teamMembers, currentUserProfile.id, currentUserProfile.email, currentUserProfile.role, currentUserProfile.name, currentUserProfile.avatarUrl]);
   const [activities, setActivities] = useState<ClientActivity[]>(initialRecentActivities);
-  const [selectedClientForKanban, setSelectedClientForKanban] = useState<string>('todos');
+  const [selectedClientForKanban, setSelectedClientForKanban] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('help_agency_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.role === 'cliente' && (parsed.clientName || parsed.name)) {
+          return parsed.clientName || parsed.name;
+        }
+      }
+    } catch {}
+    return 'todos';
+  });
   const [kanbanFilterTrigger, setKanbanFilterTrigger] = useState<number>(0);
-  const [selectedDemandIdForKanban, setSelectedDemandIdForKanban] = useState<string | null>(null);
+
+  // Trava clientes exclusivamente no Portal do Cliente (demandas) e na Central de Aprovações
+  useEffect(() => {
+    if (effectiveUser.role === 'cliente') {
+      if (currentPage !== 'demandas' && currentPage !== 'aprovacoes') {
+        setCurrentPage('demandas');
+      }
+      const clientName = effectiveUser.clientName || effectiveUser.name;
+      if (clientName && selectedClientForKanban !== clientName) {
+        setSelectedClientForKanban(clientName);
+      }
+    }
+  }, [effectiveUser.role, effectiveUser.clientName, effectiveUser.name, currentPage, selectedClientForKanban]);
+  const [selectedDemandIdForKanban, setSelectedDemandIdForKanban] = useState<string | null>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('demandId') || params.get('id') || null;
+      }
+    } catch {}
+    return null;
+  });
 
   const isServerDbLoadedRef = useRef(false);
   const lastLocalDemandUpdateRef = useRef<number>(0);
@@ -1477,9 +1528,14 @@ export function Layout({ children, onLogout }: LayoutProps) {
         statusLabel: 'Aprovado pelo Cliente',
       };
 
-      setDemands((prev) =>
-        prev.map((item) => (item.id === demandId ? approvedDemand : item))
-      );
+      setDemands((prev) => {
+        const next = prev.map((item) => (item.id === demandId ? approvedDemand : item));
+        try {
+          localStorage.setItem('agency_demands', JSON.stringify(next));
+        } catch {}
+        serverDbService.saveDatabase({ demands: next }, true);
+        return next;
+      });
       supabaseService.upsertDemand(approvedDemand);
 
       const newActivity: ClientActivity = {
@@ -1523,9 +1579,14 @@ export function Layout({ children, onLogout }: LayoutProps) {
         approvalFeedback: feedback,
       };
 
-      setDemands((prev) =>
-        prev.map((item) => (item.id === demandId ? rejectedDemand : item))
-      );
+      setDemands((prev) => {
+        const next = prev.map((item) => (item.id === demandId ? rejectedDemand : item));
+        try {
+          localStorage.setItem('agency_demands', JSON.stringify(next));
+        } catch {}
+        serverDbService.saveDatabase({ demands: next }, true);
+        return next;
+      });
       supabaseService.upsertDemand(rejectedDemand);
 
       const newActivity: ClientActivity = {
@@ -1571,9 +1632,14 @@ export function Layout({ children, onLogout }: LayoutProps) {
         commentsCount: (demand.commentsCount || 0) + 1,
       };
 
-      setDemands((prev) =>
-        prev.map((item) => (item.id === demandId ? changeDemand : item))
-      );
+      setDemands((prev) => {
+        const next = prev.map((item) => (item.id === demandId ? changeDemand : item));
+        try {
+          localStorage.setItem('agency_demands', JSON.stringify(next));
+        } catch {}
+        serverDbService.saveDatabase({ demands: next }, true);
+        return next;
+      });
       supabaseService.upsertDemand(changeDemand);
 
       const newActivity: ClientActivity = {
@@ -1666,9 +1732,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
     try {
       localStorage.setItem('agency_clients', JSON.stringify(newClients));
     } catch {}
-    if (isServerDbLoadedRef.current) {
-      serverDbService.saveDatabase({ clients: newClients });
-    }
+    serverDbService.saveDatabase({ clients: newClients }, true);
 
     // 2. Cascade update all associated demands
     setDemands((prevDemands) => {
@@ -1975,6 +2039,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
             clients={clients}
             teamMembers={teamMembers}
             columns={kanbanColumns}
+            currentUser={effectiveUser}
             onAddColumn={handleAddColumn}
             onUpdateColumn={handleUpdateColumn}
             onDeleteColumn={handleDeleteColumn}
@@ -1989,6 +2054,7 @@ export function Layout({ children, onLogout }: LayoutProps) {
             onDeleteDemand={handleDeleteDemand}
             onOpenWhatsAppNotification={(demand) => setWhatsAppDemand(demand)}
             onOpenClientApprovalPortal={(demand) => setClientPortalDemand(demand)}
+            onNavigateToApprovals={() => setCurrentPage('aprovacoes')}
           />
         );
       case 'calendario':
@@ -2016,6 +2082,37 @@ export function Layout({ children, onLogout }: LayoutProps) {
             onDeleteMultipleClients={handleDeleteMultipleClients}
             supabaseSyncStatus={supabaseSyncStatus}
             onRefreshSupabase={() => handleSyncWithSupabase(false)}
+            onLoginAsClient={(client) => {
+              const clientUser: UserProfile = {
+                id: `client-user-${client.id}`,
+                clientId: client.id,
+                clientName: client.name,
+                username: client.portalUsername || client.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+                name: client.contactName || client.name,
+                email: client.email,
+                role: 'cliente',
+                roleLabel: `Cliente • ${client.name}`,
+                avatarUrl: client.avatar,
+                isMaster: false,
+                permissions: {
+                  clientes: false,
+                  servicos: false,
+                  financeiro: false,
+                  orcamentos: false,
+                  equipe: false,
+                  configuracoes: false,
+                  inicio: false,
+                  demandas: true,
+                  calendario: false,
+                },
+              };
+              setCurrentUserProfile(clientUser);
+              setSelectedClientForKanban(client.name);
+              setCurrentPage('demandas');
+              try {
+                localStorage.setItem('help_agency_user', JSON.stringify(clientUser));
+              } catch {}
+            }}
             onSelectClientDemands={(clientName) => {
               setSelectedClientForKanban(clientName);
               setCurrentPage('demandas');
@@ -2114,26 +2211,22 @@ export function Layout({ children, onLogout }: LayoutProps) {
         );
       case 'portal-cliente':
         return (
-          <div className="flex-1 p-6 md:p-8 flex items-center justify-center min-h-[60vh]">
-            <div className="max-w-md w-full text-center bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                <Sparkles size={28} />
-              </div>
-              <h2 className="text-lg font-bold text-[#142142] dark:text-white mb-2">
-                Portal do Cliente (Em Breve)
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
-                Esta funcionalidade está temporariamente desativada e será disponibilizada no futuro.
-              </p>
-              <button
-                type="button"
-                onClick={() => setCurrentPage('inicio')}
-                className="px-4 py-2 bg-[#142142] dark:bg-[#fab518] text-white dark:text-[#142142] rounded-xl text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer"
-              >
-                Voltar ao Início
-              </button>
-            </div>
-          </div>
+          <PortalClienteView
+            demands={demands}
+            clients={clients}
+            onClientApprovalAction={handleClientApprovalAction}
+            onOpenWhatsAppNotification={(demand) => setWhatsAppDemand(demand)}
+            onOpenDemandModal={(demand) => {
+              setSelectedDemandIdForKanban(demand.id);
+              setCurrentPage('demandas');
+            }}
+            onUpdateClient={handleUpdateClient}
+            onSelectClientDemands={(clientName) => {
+              setSelectedClientForKanban(clientName);
+              setKanbanFilterTrigger((prev) => prev + 1);
+              setCurrentPage('demandas');
+            }}
+          />
         );
       case 'apis':
         return (
@@ -2159,7 +2252,45 @@ export function Layout({ children, onLogout }: LayoutProps) {
             clients={clients}
           />
         );
+      case 'aprovacoes':
+        return (
+          <ClientApprovalsView
+            demands={demands}
+            clients={clients}
+            currentUser={effectiveUser}
+            onClientApprovalAction={handleClientApprovalAction}
+            onOpenClientApprovalPortal={(demand) => setClientPortalDemand(demand)}
+            onNavigateToPortal={() => setCurrentPage('demandas')}
+            onOpenWhatsAppNotification={(demand) => setWhatsAppDemand(demand)}
+          />
+        );
       default:
+        if (effectiveUser.role === 'cliente') {
+          return (
+            <DemandasView
+              demands={demands}
+              clients={clients}
+              teamMembers={teamMembers}
+              columns={kanbanColumns}
+              currentUser={effectiveUser}
+              onAddColumn={handleAddColumn}
+              onUpdateColumn={handleUpdateColumn}
+              onDeleteColumn={handleDeleteColumn}
+              initialClientFilter={selectedClientForKanban}
+              filterResetTrigger={kanbanFilterTrigger}
+              initialSelectedDemandId={selectedDemandIdForKanban}
+              onClearInitialSelectedDemand={() => setSelectedDemandIdForKanban(null)}
+              onUpdateDemandColumn={handleUpdateDemandColumn}
+              onMoveDemand={handleMoveDemand}
+              onOpenNewDemandModal={() => setIsNewDemandModalOpen(true)}
+              onSaveDemand={handleSaveDemand}
+              onDeleteDemand={handleDeleteDemand}
+              onOpenWhatsAppNotification={(demand) => setWhatsAppDemand(demand)}
+              onOpenClientApprovalPortal={(demand) => setClientPortalDemand(demand)}
+              onNavigateToApprovals={() => setCurrentPage('aprovacoes')}
+            />
+          );
+        }
         return (
           <InicioView
             onNavigate={setCurrentPage}
@@ -2340,6 +2471,34 @@ export function Layout({ children, onLogout }: LayoutProps) {
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
+      if (typeof window !== 'undefined') {
+        const search = window.location.search.toLowerCase();
+        const params = new URLSearchParams(window.location.search);
+        const isClientPortalAccess = 
+          params.get('portal') === 'cliente' || 
+          params.get('login') === 'cliente' ||
+          params.get('area') === 'cliente' ||
+          search.includes('portal=cliente') || 
+          search.includes('login=cliente') ||
+          search.includes('area=cliente') ||
+          search.includes('login=client');
+
+        if (isClientPortalAccess) {
+          // Link específico de acesso do cliente: verifica se já está logado como este cliente
+          const savedUser = localStorage.getItem('help_agency_user');
+          if (savedUser) {
+            try {
+              const parsed = JSON.parse(savedUser);
+              const requestedUser = params.get('user') || params.get('usuario');
+              if (parsed?.role === 'cliente' && (!requestedUser || parsed.username?.toLowerCase() === requestedUser.toLowerCase())) {
+                return true;
+              }
+            } catch {}
+          }
+          // Força a tela de login para o cliente inserir usuário e senha
+          return false;
+        }
+      }
       return localStorage.getItem('help_agency_auth') === 'true';
     } catch {
       return false;
@@ -2393,10 +2552,36 @@ export default function App() {
 
       const dId = extractPublicDemandId();
       setPublicPortalDemandId(dId);
+
+      try {
+        const search = window.location.search.toLowerCase();
+        const isClientPortalAccess = 
+          search.includes('portal=cliente') || 
+          search.includes('login=cliente') ||
+          search.includes('area=cliente') ||
+          search.includes('login=client');
+
+        if (isClientPortalAccess) {
+          const savedUser = localStorage.getItem('help_agency_user');
+          if (savedUser) {
+            try {
+              const parsed = JSON.parse(savedUser);
+              if (parsed?.role !== 'cliente') {
+                setIsAuthenticated(false);
+              }
+            } catch {
+              setIsAuthenticated(false);
+            }
+          } else {
+            setIsAuthenticated(false);
+          }
+        }
+      } catch {}
     };
 
     window.addEventListener('popstate', handleUrlChange);
     window.addEventListener('hashchange', handleUrlChange);
+    handleUrlChange();
     return () => {
       window.removeEventListener('popstate', handleUrlChange);
       window.removeEventListener('hashchange', handleUrlChange);

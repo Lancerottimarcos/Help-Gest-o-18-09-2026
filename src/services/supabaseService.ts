@@ -92,6 +92,9 @@ ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS lgpd_consent_date TEXT;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS lgpd_consent_purpose TEXT;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS is_anonymized BOOLEAN DEFAULT false;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS anonymized_at TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS portal_username TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS portal_password TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS portal_access_enabled BOOLEAN DEFAULT true;
 
 -- Atualiza a função de trigger para ser tolerante a falhas (impede quebrar caso updated_at falte em alguma tabela)
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
@@ -759,6 +762,9 @@ export const supabaseService = {
         lgpdConsentPurpose: row.lgpd_consent_purpose || undefined,
         isAnonymized: Boolean(row.is_anonymized),
         anonymizedAt: row.anonymized_at || undefined,
+        portalUsername: row.portal_username || undefined,
+        portalPassword: row.portal_password || undefined,
+        portalAccessEnabled: row.portal_access_enabled !== false,
       }));
     } catch (e: any) {
       recordSyncFailure('FETCH_CLIENTS', e?.message || e, e);
@@ -812,6 +818,9 @@ export const supabaseService = {
         lgpd_consent_purpose: client.lgpdConsentPurpose || null,
         is_anonymized: Boolean(client.isAnonymized),
         anonymized_at: client.anonymizedAt || null,
+        portal_username: client.portalUsername || null,
+        portal_password: client.portalPassword || null,
+        portal_access_enabled: client.portalAccessEnabled !== false,
       };
 
       const { error } = await resilientSupabaseUpsert(supabase, 'clients', payload);
@@ -1401,6 +1410,9 @@ export const supabaseService = {
           lgpd_consent_purpose: c.lgpdConsentPurpose || null,
           is_anonymized: Boolean(c.isAnonymized),
           anonymized_at: c.anonymizedAt || null,
+          portal_username: c.portalUsername || null,
+          portal_password: c.portalPassword || null,
+          portal_access_enabled: c.portalAccessEnabled !== false,
         }));
 
         const { error } = await resilientSupabaseUpsert(supabase, 'clients', clientPayloads);

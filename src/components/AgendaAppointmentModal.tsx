@@ -12,14 +12,25 @@ import {
   Check,
   Search,
   Trash2,
+  MessageCircle,
+  Phone,
+  Copy,
 } from 'lucide-react';
 import { AgencyAppointment, AppointmentCategory, Client } from '../types';
 import { CreateAppointmentInput } from '../services/googleCalendarService';
+import {
+  openAppointmentWhatsApp,
+  buildAppointmentWhatsAppMessage,
+} from '../utils/appointmentWhatsAppUtils';
 
 interface AgendaAppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (input: CreateAppointmentInput, editingId?: string, googleEventId?: string) => Promise<boolean>;
+  onSave: (
+    input: CreateAppointmentInput,
+    editingId?: string,
+    googleEventId?: string
+  ) => Promise<AgencyAppointment | null | boolean>;
   onDelete?: (appointment: AgencyAppointment) => void;
   editingAppointment: AgencyAppointment | null;
   clients: Client[];
@@ -76,6 +87,9 @@ export const AgendaAppointmentModal: React.FC<AgendaAppointmentModalProps> = ({
   const [attendeeEmailInput, setAttendeeEmailInput] = useState('');
   const [attendeesList, setAttendeesList] = useState<string[]>([]);
   const [description, setDescription] = useState('');
+  const [sendWhatsAppOnSave, setSendWhatsAppOnSave] = useState(true);
+  const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [isCopiedWhatsApp, setIsCopiedWhatsApp] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -83,12 +97,15 @@ export const AgendaAppointmentModal: React.FC<AgendaAppointmentModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setErrorMessage('');
+      setIsCopiedWhatsApp(false);
       if (editingAppointment) {
         setTitle(editingAppointment.title);
         setCategory(editingAppointment.category || 'briefing');
         setClientId(editingAppointment.clientId || '');
         const clientFound = clients.find((c) => c.id === editingAppointment.clientId);
         setClientSearch(clientFound ? clientFound.name : editingAppointment.clientName || '');
+        setWhatsappPhone(clientFound?.phone || '');
+        setSendWhatsAppOnSave(Boolean(clientFound?.phone));
         setStartDate(editingAppointment.startDate);
         setStartTime(editingAppointment.startTime || '10:00');
         setEndDate(editingAppointment.endDate || editingAppointment.startDate);
@@ -103,6 +120,8 @@ export const AgendaAppointmentModal: React.FC<AgendaAppointmentModalProps> = ({
         setCategory('briefing');
         setClientId('');
         setClientSearch('');
+        setWhatsappPhone('');
+        setSendWhatsAppOnSave(true);
         setStartDate(defaultDate);
         setStartTime('10:00');
         setEndDate(defaultDate);
@@ -127,6 +146,11 @@ export const AgendaAppointmentModal: React.FC<AgendaAppointmentModalProps> = ({
     setClientId(client.id);
     setClientSearch(client.name);
     setIsClientDropdownOpen(false);
+
+    if (client.phone) {
+      setWhatsappPhone(client.phone);
+      setSendWhatsAppOnSave(true);
+    }
 
     // Auto-suggest meeting title if empty
     if (!title.trim()) {
@@ -185,13 +209,39 @@ export const AgendaAppointmentModal: React.FC<AgendaAppointmentModalProps> = ({
         attendeesEmails: attendeesList,
       };
 
-      const success = await onSave(
+      const saveResult = await onSave(
         payload,
         editingAppointment?.id,
         editingAppointment?.googleEventId
       );
 
-      if (success) {
+      if (saveResult) {
+        // If it's an online meeting and WhatsApp send is active
+        if (addGoogleMeet && sendWhatsAppOnSave && whatsappPhone.trim()) {
+          const appointmentObj: AgencyAppointment | null =
+            typeof saveResult === 'object' ? saveResult : null;
+
+          const aptForMessage: AgencyAppointment = appointmentObj || {
+            id: editingAppointment?.id || 'temp',
+            title: payload.title,
+            category: payload.category,
+            clientId: payload.clientId,
+            clientName: payload.clientName,
+            description: payload.description,
+            startDate: payload.startDate,
+            startTime: payload.startTime,
+            endDate: payload.endDate,
+            endTime: payload.endTime,
+            meetLink: 'https://meet.google.com/new',
+            location: 'Google Meet',
+            attendees: [],
+            syncedWithGoogle: false,
+            status: 'confirmed',
+          };
+
+          openAppointmentWhatsApp(aptForMessage, whatsappPhone, payload.clientName);
+        }
+
         onClose();
       }
     } catch (err: any) {
@@ -420,6 +470,31 @@ export const AgendaAppointmentModal: React.FC<AgendaAppointmentModalProps> = ({
               </label>
             </div>
 
+            {addGoogleMeet && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-emerald-800 dark:text-emerald-300 text-xs">
+                <Video size={14} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <div className="min-w-0 flex-1">
+                  {editingAppointment?.meetLink ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-mono text-[11px] font-semibold">{editingAppointment.meetLink}</span>
+                      <a
+                        href={editingAppointment.meetLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 dark:text-emerald-300 underline shrink-0"
+                      >
+                        Testar Meet
+                      </a>
+                    </div>
+                  ) : (
+                    <span className="text-[11px]">
+                      Um link de videoconferência do <strong>Google Meet</strong> será gerado automaticamente ao salvar o compromisso.
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {!addGoogleMeet && (
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
@@ -438,6 +513,94 @@ export const AgendaAppointmentModal: React.FC<AgendaAppointmentModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* WhatsApp Notification Card for Online Meetings */}
+          {addGoogleMeet && (
+            <div className="p-3.5 rounded-xl border border-emerald-500/30 dark:border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#25D366]/15 text-[#25D366] flex items-center justify-center font-bold">
+                    <MessageCircle size={17} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-[#142142] dark:text-white flex items-center gap-1.5">
+                      <span>Enviar Google Meet via WhatsApp</span>
+                      <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-[#25D366]/15 text-[#142142] dark:text-[#25D366] border border-[#25D366]/30">
+                        WhatsApp do Cliente
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Dispara mensagem com o link da reunião gerado diretamente no WhatsApp
+                    </div>
+                  </div>
+                </div>
+
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sendWhatsAppOnSave}
+                    onChange={(e) => setSendWhatsAppOnSave(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-[#25D366]"></div>
+                </label>
+              </div>
+
+              {sendWhatsAppOnSave && (
+                <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40 space-y-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                      <span>Número de WhatsApp do Cliente:</span>
+                      {clientSearch && <span className="text-[10.5px] font-semibold text-emerald-700 dark:text-emerald-400">{clientSearch}</span>}
+                    </label>
+                    <div className="relative">
+                      <Phone size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={whatsappPhone}
+                        onChange={(e) => setWhatsappPhone(e.target.value)}
+                        placeholder="Ex: (41) 99999-9999 ou 41999999999"
+                        className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700/80 bg-white dark:bg-slate-900 text-xs text-[#142142] dark:text-white focus:outline-none focus:border-[#25D366] font-mono"
+                      />
+                    </div>
+                    {!whatsappPhone.trim() && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 block">
+                        Informe o número com DDD para abrir a conversa no WhatsApp ao salvar.
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Immediate WhatsApp send if already has a meeting link */}
+                  {editingAppointment?.meetLink && whatsappPhone.trim() && (
+                    <div className="pt-1 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openAppointmentWhatsApp(editingAppointment, whatsappPhone, clientSearch)}
+                        className="px-3 py-1.5 bg-[#25D366] hover:bg-[#20ba59] text-white text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <MessageCircle size={13} />
+                        <span>Abrir WhatsApp do Cliente Agora</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const msg = buildAppointmentWhatsAppMessage(editingAppointment, clientSearch);
+                          navigator.clipboard.writeText(msg);
+                          setIsCopiedWhatsApp(true);
+                          setTimeout(() => setIsCopiedWhatsApp(false), 2000);
+                        }}
+                        className="px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-medium rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        {isCopiedWhatsApp ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                        <span>{isCopiedWhatsApp ? 'Mensagem Copiada!' : 'Copiar Texto'}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Attendees */}
           <div>

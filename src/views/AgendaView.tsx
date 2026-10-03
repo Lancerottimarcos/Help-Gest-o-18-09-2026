@@ -24,8 +24,10 @@ import {
   Link2,
   CalendarClock,
   Layers,
+  MessageCircle,
 } from 'lucide-react';
 import { AgencyAppointment, AppointmentCategory, Client, UserProfile } from '../types';
+import { openAppointmentWhatsApp } from '../utils/appointmentWhatsAppUtils';
 import {
   initGoogleCalendarAuth,
   signInWithGoogleCalendar,
@@ -284,7 +286,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({ currentUser, clients }) 
     input: CreateAppointmentInput,
     editingId?: string,
     googleEventId?: string
-  ): Promise<boolean> => {
+  ): Promise<AgencyAppointment | null> => {
     setIsLoading(true);
     try {
       if (editingId) {
@@ -298,13 +300,13 @@ export const AgendaView: React.FC<AgendaViewProps> = ({ currentUser, clients }) 
             type: 'success',
             message: 'Compromisso atualizado com sucesso na agenda!',
           });
-          return true;
+          return res.appointment;
         } else {
           setStatusFeedback({
             type: 'error',
             message: res.error || 'Falha ao atualizar agendamento.',
           });
-          return false;
+          return null;
         }
       } else {
         // Create new
@@ -314,16 +316,16 @@ export const AgendaView: React.FC<AgendaViewProps> = ({ currentUser, clients }) 
           setStatusFeedback({
             type: 'success',
             message: res.appointment.meetLink
-              ? 'Compromisso agendado com link do Google Meet gerado automaticamente!'
+              ? 'Compromisso agendado com link do Google Meet gerado com sucesso!'
               : 'Compromisso agendado com sucesso na agenda!',
           });
-          return true;
+          return res.appointment;
         } else {
           setStatusFeedback({
             type: 'error',
             message: res.error || 'Falha ao criar agendamento.',
           });
-          return false;
+          return null;
         }
       }
     } catch (err: any) {
@@ -331,7 +333,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({ currentUser, clients }) 
         type: 'error',
         message: err.message || 'Erro inesperado ao salvar compromisso.',
       });
-      return false;
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -970,6 +972,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({ currentUser, clients }) 
                             <div className="flex items-center gap-1 min-w-0 flex-1 truncate">
                               <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-current"></span>
                               <span className="font-mono text-[9.5px] opacity-80 shrink-0">{event.startTime}</span>
+                              {event.meetLink && <Video size={10} className="shrink-0 text-emerald-600 dark:text-emerald-400" />}
                               <span className="truncate">{event.title}</span>
                             </div>
 
@@ -1113,17 +1116,38 @@ export const AgendaView: React.FC<AgendaViewProps> = ({ currentUser, clients }) 
                 </div>
               </div>
 
-              {/* Direct Meet / Join button */}
+              {/* Direct Meet / Join button & WhatsApp send */}
               {nextAppointment.meetLink ? (
-                <a
-                  href={nextAppointment.meetLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Video size={15} />
-                  <span>Entrar no Google Meet</span>
-                </a>
+                <div className="space-y-2">
+                  <a
+                    href={nextAppointment.meetLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Video size={15} />
+                    <span>Entrar no Google Meet</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const matched = clients.find(
+                        (c) => c.id === nextAppointment.clientId || c.name === nextAppointment.clientName
+                      );
+                      openAppointmentWhatsApp(
+                        nextAppointment,
+                        matched?.phone || '',
+                        nextAppointment.clientName
+                      );
+                    }}
+                    className="w-full py-2 px-3 bg-white/10 hover:bg-[#25D366] text-white hover:text-[#142142] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/20"
+                    title="Enviar link do Google Meet para o WhatsApp do cliente"
+                  >
+                    <MessageCircle size={14} className="text-[#25D366] group-hover:text-inherit" />
+                    <span>Enviar Meet no WhatsApp</span>
+                  </button>
+                </div>
               ) : (
                 <div className="text-[11px] text-slate-300 bg-white/10 p-2 rounded-xl text-center">
                   Reunião Presencial: {nextAppointment.location || 'Help Agência'}
@@ -1318,6 +1342,21 @@ export const AgendaView: React.FC<AgendaViewProps> = ({ currentUser, clients }) 
               <Video size={13} />
               <span>Google Meet</span>
             </a>
+          )}
+
+          {apt.meetLink && (
+            <button
+              type="button"
+              onClick={() => {
+                const matched = clients.find((c) => c.id === apt.clientId || c.name === apt.clientName);
+                openAppointmentWhatsApp(apt, matched?.phone || '', apt.clientName);
+              }}
+              className="px-2.5 py-1.5 bg-[#25D366]/10 hover:bg-[#25D366] text-emerald-700 dark:text-emerald-400 hover:text-white rounded-xl border border-emerald-500/25 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Enviar link do Google Meet para o WhatsApp do cliente"
+            >
+              <MessageCircle size={13} />
+              <span className="hidden md:inline">WhatsApp</span>
+            </button>
           )}
 
           {apt.htmlLink && (

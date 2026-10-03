@@ -1,8 +1,8 @@
 // Security Protocols & Real-Time Cyber Defense Engine
 // Help Ideias Digitais - Anti-Intrusion, Antivirus, and Malware Prevention Layer
 
-import { TeamMember, MemberPermissions } from '../types';
-import { initialTeamMembers } from '../data/mockData';
+import { TeamMember, MemberPermissions, Client } from '../types';
+import { initialTeamMembers, initialClients } from '../data/mockData';
 
 export interface SecurityLogEntry {
   id: string;
@@ -937,10 +937,12 @@ export async function computeSha256(text: string): Promise<string> {
 
 export interface AuthenticatedUserPayload {
   id?: string;
+  clientId?: string;
+  clientName?: string;
   username: string;
   name: string;
   email: string;
-  role: 'proprietario' | 'colaborador';
+  role: 'proprietario' | 'colaborador' | 'cliente';
   roleLabel: string;
   avatarUrl?: string;
   isMaster: boolean;
@@ -979,6 +981,7 @@ export async function validateMasterCredentials(
   isValid: boolean; 
   usernameMatched: boolean; 
   passwordMatched: boolean;
+  accountDisabled?: boolean;
   authenticatedUser?: AuthenticatedUserPayload;
 }> {
   const cleanUser = (userInput || '').trim().toLowerCase().replace(/^@/, '');
@@ -1135,6 +1138,126 @@ export async function validateMasterCredentials(
     console.error('Erro na validação de credencial de colaborador:', err);
   }
 
+  // 3. Verificação de Acesso do Cliente Individual (Portal do Cliente)
+  try {
+    let clients: Client[] = initialClients;
+    try {
+      const storedClients = localStorage.getItem('agency_clients');
+      if (storedClients) {
+        const parsed = JSON.parse(storedClients);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          clients = parsed;
+        }
+      }
+    } catch {}
+
+    const normalize = (val?: string) => 
+      (val || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/^@/, '');
+
+    const targetUser = normalize(cleanUser);
+
+    let matchedClient = clients.find((c) => {
+      const pUser = normalize(c.portalUsername);
+      const cEmail = normalize(c.email);
+      const cName = normalize(c.name);
+      const compName = normalize(c.companyName);
+      const slug = normalize(c.name).replace(/[^a-z0-9]/g, '');
+      return (
+        (pUser && pUser === targetUser) ||
+        (cEmail && cEmail === targetUser) ||
+        (slug && slug === targetUser) ||
+        (cName && cName === targetUser) ||
+        (compName && compName === targetUser)
+      );
+    });
+
+    // Se não encontrou no cache local, tenta buscar do banco central do servidor (/api/database)
+    if (!matchedClient && typeof window !== 'undefined' && window.fetch) {
+      try {
+        const res = await fetch('/api/database');
+        if (res.ok) {
+          const dbData = await res.json();
+          if (dbData.data?.clients && Array.isArray(dbData.data.clients) && dbData.data.clients.length > 0) {
+            clients = dbData.data.clients;
+            try {
+              localStorage.setItem('agency_clients', JSON.stringify(clients));
+            } catch {}
+            matchedClient = clients.find((c: Client) => {
+              const pUser = normalize(c.portalUsername);
+              const cEmail = normalize(c.email);
+              const cName = normalize(c.name);
+              const compName = normalize(c.companyName);
+              const slug = normalize(c.name).replace(/[^a-z0-9]/g, '');
+              return (
+                (pUser && pUser === targetUser) ||
+                (cEmail && cEmail === targetUser) ||
+                (slug && slug === targetUser) ||
+                (cName && cName === targetUser) ||
+                (compName && compName === targetUser)
+              );
+            });
+          }
+        }
+      } catch {}
+    }
+
+    if (matchedClient) {
+      if (matchedClient.portalAccessEnabled === false) {
+        return {
+          isValid: false,
+          usernameMatched: true,
+          passwordMatched: false,
+          accountDisabled: true,
+        };
+      }
+
+      const inputHash = await computeSha256(passInput);
+      const configuredPassword = (matchedClient.portalPassword || '123456').trim();
+      const rawTrimmed = passInput.trim();
+      const passwordMatched = rawTrimmed === configuredPassword || 
+                              passInput === configuredPassword ||
+                              inputHash === configuredPassword ||
+                              (configuredPassword === '123456' && (rawTrimmed === '123456' || passInput === '123456'));
+
+      return {
+        isValid: passwordMatched,
+        usernameMatched: true,
+        passwordMatched,
+        authenticatedUser: passwordMatched ? {
+          id: `client-user-${matchedClient.id}`,
+          clientId: matchedClient.id,
+          clientName: matchedClient.name,
+          username: matchedClient.portalUsername || matchedClient.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+          name: matchedClient.contactName || matchedClient.name,
+          email: matchedClient.email,
+          role: 'cliente',
+          roleLabel: `Cliente • ${matchedClient.name}`,
+          avatarUrl: matchedClient.avatar,
+          isMaster: false,
+          permissions: {
+            clientes: false,
+            servicos: false,
+            financeiro: false,
+            orcamentos: false,
+            equipe: false,
+            configuracoes: false,
+            inicio: false,
+            demandas: true,
+            calendario: false,
+            aprovacoes: true,
+          },
+        } : undefined
+      };
+    }
+  } catch (err) {
+    console.error('Erro na validação de credencial de cliente:', err);
+  }
+
   return {
     isValid: false,
     usernameMatched: false,
@@ -1284,6 +1407,38 @@ export function findUserForPasswordRecovery(identifier: string): PasswordRecover
     };
   }
 
+  // 3. Busca na lista de clientes cadastrados
+  try {
+    let clients: Client[] = initialClients;
+    const storedClients = localStorage.getItem('agency_clients');
+    if (storedClients) {
+      const parsed = JSON.parse(storedClients);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        clients = parsed;
+      }
+    }
+
+    const client = clients.find(c => {
+      const pUser = (c.portalUsername || '').trim().toLowerCase().replace(/^@/, '');
+      const cEmail = (c.email || '').trim().toLowerCase();
+      const cName = (c.name || '').trim().toLowerCase();
+      const compName = (c.companyName || '').trim().toLowerCase();
+      return pUser === clean || cEmail === clean || cName === clean || compName === clean;
+    });
+
+    if (client) {
+      return {
+        found: true,
+        name: client.contactName || client.name,
+        email: client.email || 'cliente@portal.com.br',
+        username: client.portalUsername || client.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        roleLabel: `Cliente • ${client.name}`,
+        isOwner: false,
+        securityCode,
+      };
+    }
+  } catch {}
+
   return null;
 }
 
@@ -1312,23 +1467,22 @@ export async function executePasswordReset(
       } catch {}
     }
 
-    let updated = false;
+    let updatedTeam = false;
     team = team.map(m => {
       const mEmail = (m.email || '').trim().toLowerCase();
       const mUser = (m.username || '').trim().toLowerCase().replace(/^@/, '');
       if (mEmail === user.email.toLowerCase() || mUser === user.username.toLowerCase() || (user.isOwner && isOwnerOrMarcos(m))) {
-        updated = true;
+        updatedTeam = true;
         return { ...m, password: newPass };
       }
       return m;
     });
 
-    if (updated) {
+    if (updatedTeam) {
       try {
         localStorage.setItem('agency_team_members', JSON.stringify(team));
       } catch {}
 
-      // Sincroniza com base central do servidor se disponível
       try {
         fetch('/api/database', {
           method: 'POST',
@@ -1337,6 +1491,33 @@ export async function executePasswordReset(
         }).catch(() => {});
       } catch {}
     }
+
+    // Atualiza também no cadastro do cliente se for cliente
+    try {
+      let clients: Client[] = initialClients;
+      const storedClients = localStorage.getItem('agency_clients');
+      if (storedClients) {
+        const parsed = JSON.parse(storedClients);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          clients = parsed;
+        }
+      }
+
+      let updatedClient = false;
+      clients = clients.map(c => {
+        const cEmail = (c.email || '').trim().toLowerCase();
+        const pUser = (c.portalUsername || '').trim().toLowerCase().replace(/^@/, '');
+        if (cEmail === user.email.toLowerCase() || pUser === user.username.toLowerCase()) {
+          updatedClient = true;
+          return { ...c, portalPassword: newPass };
+        }
+        return c;
+      });
+
+      if (updatedClient) {
+        localStorage.setItem('agency_clients', JSON.stringify(clients));
+      }
+    } catch {}
 
     addSecurityLog({
       eventType: 'login_success',

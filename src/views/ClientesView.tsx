@@ -30,11 +30,16 @@ import {
   Camera,
   Image,
   X,
-  Sparkles
+  Sparkles,
+  Eye,
+  EyeOff,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 import { Client, DemandItem } from '../types';
 import { ClientDetailDrawer } from '../components/ClientDetailDrawer';
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
+import { ClientPasswordManagerModal } from '../components/ClientPasswordManagerModal';
 
 export const PRESET_AVATARS = [
   { label: 'Empresarial 1', url: 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=150&auto=format&fit=crop&q=80' },
@@ -66,6 +71,7 @@ interface ClientesViewProps {
   onDeleteMultipleClients?: (clientIds: string[]) => void;
   onSelectClientDemands?: (clientName: string) => void;
   onOpenNewDemandForClient?: (clientName: string) => void;
+  onLoginAsClient?: (client: Client) => void;
   supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
   onRefreshSupabase?: () => void;
 }
@@ -79,12 +85,15 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   onDeleteMultipleClients,
   onSelectClientDemands,
   onOpenNewDemandForClient,
+  onLoginAsClient,
   supabaseSyncStatus = 'idle',
   onRefreshSupabase,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [drawerTab, setDrawerTab] = useState<'overview' | 'services' | 'access' | 'history' | 'privacy'>('overview');
   const [showModal, setShowModal] = useState(false);
+  const [isPasswordManagerOpen, setIsPasswordManagerOpen] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
 
   // New Client States (Full field matching user images)
@@ -113,6 +122,12 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   const [newClientAvatarUrlInput, setNewClientAvatarUrlInput] = useState('');
   const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
 
+  // New Client Portal Access States
+  const [newClientPortalUser, setNewClientPortalUser] = useState('');
+  const [newClientPortalPass, setNewClientPortalPass] = useState('');
+  const [newClientPortalEnabled, setNewClientPortalEnabled] = useState(true);
+  const [showNewPass, setShowNewPass] = useState(false);
+
   // Edit Client States
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
@@ -137,6 +152,10 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   const [editAvatar, setEditAvatar] = useState('');
   const [editAvatarUrlInput, setEditAvatarUrlInput] = useState('');
   const [isDraggingEditAvatar, setIsDraggingEditAvatar] = useState(false);
+  const [editPortalUser, setEditPortalUser] = useState('');
+  const [editPortalPass, setEditPortalPass] = useState('');
+  const [editPortalEnabled, setEditPortalEnabled] = useState(true);
+  const [showEditPass, setShowEditPass] = useState(false);
 
   // Helper for avatar file upload
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
@@ -214,6 +233,10 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     setEditMonthlyFee(client.monthlyFee || 0);
     setEditAvatar(client.avatar || '');
     setEditAvatarUrlInput('');
+    setEditPortalUser(client.portalUsername || client.name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    setEditPortalPass(client.portalPassword || '123456');
+    setEditPortalEnabled(client.portalAccessEnabled !== false);
+    setShowEditPass(false);
   };
 
   const handleDeleteClient = (clientId: string) => {
@@ -265,6 +288,9 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
       avatar: editAvatar.trim() || editingClient.avatar || 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=120&auto=format&fit=crop&q=80',
       status: editStatus,
       monthlyFee: editingClient.monthlyFee || 0,
+      portalUsername: editPortalUser.trim().toLowerCase().replace(/^@/, '') || undefined,
+      portalPassword: editPortalPass.trim() || '123456',
+      portalAccessEnabled: editPortalEnabled,
     };
 
     if (onUpdateClient) {
@@ -397,6 +423,20 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            id="btn-open-password-manager"
+            onClick={() => setIsPasswordManagerOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#142142] dark:bg-slate-800 hover:bg-[#1f315e] dark:hover:bg-slate-700 text-white font-bold text-xs sm:text-sm shadow-xs transition-all cursor-pointer border border-[#fab518]/40"
+            title="Gerenciar senhas e acessos ao portal individualmente para cada cliente"
+          >
+            <KeyRound size={15} className="text-[#fab518]" />
+            <span>Gestão de Senhas</span>
+            <span className="w-5 h-5 rounded-full bg-[#fab518] text-[#142142] text-[10px] font-black flex items-center justify-center">
+              {clients.length}
+            </span>
+          </button>
+
           {onRefreshSupabase && (
             <button
               type="button"
@@ -522,7 +562,10 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
             <div
               key={client.id}
               id={`client-card-${client.id}`}
-              onClick={() => setSelectedClient(client)}
+              onClick={() => {
+                setSelectedClient(client);
+                setDrawerTab('overview');
+              }}
               className={`bg-white dark:bg-[#0f172a] rounded-[28px] border card-elevation-subtle flex flex-col justify-between cursor-pointer group overflow-hidden transition-all ${
                 isSelected
                   ? 'border-[#fab518] ring-2 ring-[#fab518]/30 bg-[#fab518]/5 dark:bg-[#fab518]/10'
@@ -639,11 +682,25 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
 
             {/* Bottom Footer */}
             <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">
-                Ver detalhes
-              </span>
+              <button
+                type="button"
+                id={`btn-client-access-${client.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedClient(client);
+                  setDrawerTab('access');
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-[#142142] dark:text-[#fab518] hover:bg-[#fab518] hover:text-[#142142] dark:hover:bg-[#fab518] dark:hover:text-[#142142] text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-amber-200/80 dark:border-amber-800/60"
+                title={`Gerenciar Usuário e Senha de ${client.name}`}
+              >
+                <KeyRound size={12} className="text-[#fab518] shrink-0" />
+                <span>Portal & Senha</span>
+              </button>
 
               <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">
+                  Ver detalhes
+                </span>
                 <span className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 group-hover:bg-[#142142] dark:group-hover:bg-[#fab518] group-hover:text-[#fab518] dark:group-hover:text-[#142142] flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors">
                   <ChevronRight size={15} />
                 </span>
@@ -661,8 +718,22 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
         <ClientDetailDrawer
           client={selectedClient}
           demands={demands}
+          initialTab={drawerTab}
           onClose={() => setSelectedClient(null)}
           onEditClient={() => handleOpenEdit(selectedClient)}
+          onUpdateClient={(updated) => {
+            setSelectedClient(updated);
+            if (onUpdateClient) {
+              onUpdateClient(updated);
+            }
+          }}
+          onDeleteClient={(clientId) => {
+            setSelectedClient(null);
+            if (onDeleteClient) {
+              onDeleteClient(clientId);
+            }
+          }}
+          onLoginAsClient={onLoginAsClient}
           onNavigateToDemands={(clientName) => {
             if (onSelectClientDemands) {
               onSelectClientDemands(clientName);
@@ -1762,6 +1833,85 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                 </div>
               </div>
 
+              {/* Seção: Acesso ao Portal do Cliente (Usuário e Senha no Supabase) */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3 bg-amber-50/40 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200/60 dark:border-amber-900/40">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <KeyRound size={15} className="text-[#fab518]" />
+                    <span className="text-xs font-black text-[#142142] dark:text-white uppercase tracking-wider">
+                      Acesso ao Portal do Cliente (Supabase)
+                    </span>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={editPortalEnabled}
+                      onChange={(e) => setEditPortalEnabled(e.target.checked)}
+                      className="w-4 h-4 accent-[#fab518] rounded cursor-pointer"
+                    />
+                    <span>{editPortalEnabled ? 'Acesso Ativo' : 'Acesso Bloqueado'}</span>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-xs font-bold text-[#142142] dark:text-slate-200 mb-1">
+                      Usuário do Portal
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">
+                        @
+                      </span>
+                      <input
+                        type="text"
+                        value={editPortalUser}
+                        onChange={(e) => setEditPortalUser(e.target.value.toLowerCase())}
+                        placeholder="usuario.cliente"
+                        className="w-full bg-white dark:bg-slate-900 text-sm font-mono text-[#142142] dark:text-white pl-7 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-[#142142] dark:text-slate-200">
+                        Senha de Acesso
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cleanPrefix = editName.split(' ')[0].replace(/[^a-zA-Z]/g, '') || 'Help';
+                          const cap = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1).toLowerCase();
+                          const num = Math.floor(1000 + Math.random() * 9000);
+                          setEditPortalPass(`${cap}@${num}`);
+                          setShowEditPass(true);
+                        }}
+                        className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer flex items-center gap-0.5"
+                      >
+                        <Sparkles size={11} />
+                        <span>Gerar Forte</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showEditPass ? 'text' : 'password'}
+                        value={editPortalPass}
+                        onChange={(e) => setEditPortalPass(e.target.value)}
+                        placeholder="Senha de acesso"
+                        className="w-full bg-white dark:bg-slate-900 text-sm font-mono text-[#142142] dark:text-white pl-3 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-[#fab518] focus:outline-none transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPass(!showEditPass)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                      >
+                        {showEditPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Actions */}
               <div 
                 id="edit-client-modal-actions"
@@ -1829,6 +1979,16 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
             </p>
           ) : undefined
         }
+      />
+      {/* Dedicated Client Password & Portal Access Management Modal */}
+      <ClientPasswordManagerModal
+        isOpen={isPasswordManagerOpen}
+        onClose={() => setIsPasswordManagerOpen(false)}
+        clients={clients}
+        onUpdateClient={onUpdateClient || (() => {})}
+        onLoginAsClient={onLoginAsClient}
+        onRefreshSupabase={onRefreshSupabase}
+        supabaseSyncStatus={supabaseSyncStatus}
       />
     </div>
   );

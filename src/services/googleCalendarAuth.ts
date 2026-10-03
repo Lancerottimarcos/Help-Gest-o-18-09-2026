@@ -18,12 +18,15 @@ export const CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
 ];
 
-const provider = new GoogleAuthProvider();
-CALENDAR_SCOPES.forEach((scope) => provider.addScope(scope));
-provider.setCustomParameters({
-  prompt: 'select_account',
-  access_type: 'offline',
-});
+// Create fresh GoogleAuthProvider with requested Workspace scopes
+export const createGoogleCalendarProvider = () => {
+  const p = new GoogleAuthProvider();
+  CALENDAR_SCOPES.forEach((scope) => p.addScope(scope));
+  p.setCustomParameters({
+    prompt: 'select_account',
+  });
+  return p;
+};
 
 // Flag to indicate if we are in the middle of a sign-in flow
 let isSigningIn = false;
@@ -93,6 +96,7 @@ export const signInWithGoogleCalendar = async (): Promise<{
 } | null> => {
   try {
     isSigningIn = true;
+    const provider = createGoogleCalendarProvider();
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {

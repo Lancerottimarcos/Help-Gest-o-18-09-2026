@@ -32,10 +32,13 @@ export function getPublicProposalUrl(proposalId: string): string {
   return `${baseUrl}/?portal=orcamento&proposalId=${cleanId}`;
 }
 
-export function getPublicDemandUrl(demandId: string): string {
+export function getPublicDemandUrl(demandId: string, clientUsername?: string): string {
   const baseUrl = getPublicPortalBaseUrl();
   const cleanId = encodeURIComponent((demandId || '').trim());
-  return `${baseUrl}/?portal=aprovacao&demandId=${cleanId}`;
+  if (clientUsername) {
+    return `${baseUrl}/?login=cliente&user=${encodeURIComponent(clientUsername)}&demandId=${cleanId}`;
+  }
+  return `${baseUrl}/?login=cliente&demandId=${cleanId}`;
 }
 
 /**
@@ -128,6 +131,15 @@ export function extractPublicDemandId(): string | null {
 
   try {
     const params = new URLSearchParams(window.location.search);
+    const portalParam = params.get('portal');
+    const loginParam = params.get('login');
+    const areaParam = params.get('area');
+
+    // Se o link é direcionado para a tela de login do cliente, deve exigir autenticação
+    if (portalParam === 'cliente' || loginParam === 'cliente' || areaParam === 'cliente') {
+      return null;
+    }
+
     if (params.get('portal') === 'aprovacao' && (params.get('demandId') || params.get('id'))) {
       return (params.get('demandId') || params.get('id'))!.trim();
     }
